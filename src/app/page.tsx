@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
 
-export default function EntryPage() {
+function EntryPageContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const sId = searchParams.get("session")
@@ -25,5 +25,18 @@ export default function EntryPage() {
             <Loader2 className="animate-spin text-blue-500" size={40} />
             <p className="text-sm font-bold tracking-widest uppercase opacity-50">{status}</p>
         </div>
+    )
+}
+
+export default function EntryPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex flex-col items-center justify-center h-screen bg-zinc-950 text-white gap-4">
+                <Loader2 className="animate-spin text-blue-500" size={40} />
+                <p className="text-sm font-bold tracking-widest uppercase opacity-50">Loading...</p>
+            </div>
+        }>
+            <EntryPageContent />
+        </Suspense>
     )
 }
