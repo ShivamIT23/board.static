@@ -92,7 +92,7 @@ export const students = mysqlTable('students', {
   password: varchar('password', { length: 255 }).notNull(),
   contact: varchar('contact', { length: 20 }),
 
-  teacherId: int('teacher_id').notNull(),   // teacher who owns student
+  teacherId: varchar('teacher_id', { length: 255 }).notNull(),   // teacher who owns student
   adminId: int('admin_id').default(0),      // institute/admin
 
   status: tinyint('status').default(1),
@@ -107,7 +107,7 @@ export const students = mysqlTable('students', {
 export const userPackages = mysqlTable('user_packages', {
   id: int('id').primaryKey().autoincrement(),
 
-  userId: int('user_id').notNull(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
   packageId: int('package_id').notNull(),
 
   price: int('price').notNull(), // snapshot of price at purchase
@@ -129,7 +129,7 @@ export const userPackages = mysqlTable('user_packages', {
 export const payments = mysqlTable('payments', {
   id: int('id').primaryKey().autoincrement(),
 
-  userId: int('user_id').notNull(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
   userPackageId: int('user_package_id').notNull(),
 
   amount: int('amount').notNull(), // in paise (₹100 = 10000)
@@ -150,7 +150,7 @@ export const classes = mysqlTable('classes', {
   id: int('id').autoincrement().primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   description: varchar('description', { length: 500 }),
-  teacherId: int('teacher_id').notNull(),
+  teacherId: varchar('teacher_id', { length: 255 }).notNull(),
   teacherLink : varchar('teacher_link', { length: 255 }),
   studentLink : varchar('student_link', { length: 255 }),
 
@@ -177,7 +177,7 @@ export const classes = mysqlTable('classes', {
 
 export const notifications = mysqlTable('notifications', {
   id: int('id').primaryKey().autoincrement(),
-  userId: int('user_id').notNull(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
   title: varchar('title', { length: 255 }).notNull(),
   message: varchar('message', { length: 500 }).notNull(),
   type: varchar('type', { length: 50 }).default('info'), // info, success, warning, error
@@ -197,7 +197,7 @@ export const userPackagesRelations = relations(userPackages, ({ one }) => ({
 
 export const contact = mysqlTable('contact', {
   id: int('id').primaryKey().autoincrement(),
-  userId: int('user_id'),
+  userId: varchar('user_id', { length: 255 }),
   name: varchar('name', { length: 255 }),
   email: varchar('email', { length: 255 }),
   subject: varchar('subject', { length: 255 }).notNull(),
@@ -209,7 +209,7 @@ export const contact = mysqlTable('contact', {
 
 export const support = mysqlTable('support', {
   id: int('id').primaryKey().autoincrement(),
-  userId: int('user_id').notNull(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
   subject: varchar('subject', { length: 255 }).notNull(),
   message: text('message').notNull(),
   status: mysqlEnum("status", ["open", "processing", "closed"]).default('open'), 
@@ -225,4 +225,14 @@ export const supportChats = mysqlTable('support_chats', {
   message: text('message').notNull(),
   type: mysqlEnum("type", ["user", "admin"]),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const classVisitors = mysqlTable('class_visitors', {
+  id: int('id').primaryKey().autoincrement(),
+  classId: int('class_id').notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  email: varchar('email', { length: 255 }),
+  ipAddress: varchar('ip_address', { length: 45 }),
+  userAgent: text('user_agent'),
+  joinedAt: timestamp('joined_at').defaultNow(),
 });
