@@ -275,3 +275,15 @@ export const classVisitors = mysqlTable('tb_class_visitors', {
   userAgent: text('user_agent'),
   joinedAt: timestamp('joined_at').defaultNow(),
 });
+
+
+export const classesRelations = relations(classes, ({ many }) => ({
+  visitors: many(classVisitors),
+}));
+
+export const classVisitorsRelations = relations(classVisitors, ({ one }) => ({
+  class: one(classes, {
+    fields: [classVisitors.classId],
+    references: [classes.id],
+  }),
+}));
