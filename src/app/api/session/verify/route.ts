@@ -1,5 +1,4 @@
-import { db, classes } from "@/db";
-import { eq } from "drizzle-orm";
+import { db } from "@/db";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -11,9 +10,9 @@ export async function POST(req: Request) {
         }
 
         // 1. Check if it's a teacher slug
-        const teacherSession = await db.query.classes.findFirst({
-            where: eq(classes.teacherLink, slug.includes("/") ? slug : `*/live/${slug}`) // Support both full URL and just slug
-        });
+        // const teacherSession = await db.query.classes.findFirst({
+        //     where: eq(classes.teacherLink, slug.includes("/") ? slug : `*/live/${slug}`) // Support both full URL and just slug
+        // });
 
         // Better way: search by slug explicitly if we had a slug field
         // Since we have teacherLink as a full URL, we use like

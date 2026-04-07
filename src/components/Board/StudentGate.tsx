@@ -37,7 +37,7 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
             } else {
                 toast.error(result.error || "Access denied to this session");
             }
-        } catch (error) {
+        } catch {
             toast.error("An error occurred. Please try again.");
         } finally {
             setLoading(false);
@@ -46,17 +46,17 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-md p-4 animate-in fade-in duration-500">
-            <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl shadow-black/50 overflow-hidden relative">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 -mr-16 -mt-16 rounded-full blur-3xl" />
-                
+            <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-[5px] p-8 shadow-2xl shadow-black/50 overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-[#6366f1]/10 -mr-16 -mt-16 rounded-[5px] blur-3xl" />
+
                 <div className="relative text-center space-y-6">
                     <div className="flex flex-col items-center">
-                        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20 mb-4 transform -rotate-3 hover:rotate-0 transition-transform">
-                            <span className="text-white font-black text-3xl italic">T</span>
-                        </div>
-                        <h2 className="text-2xl font-black text-white tracking-tight">{className}</h2>
-                        <div className="inline-block px-3 py-1 bg-zinc-800 rounded-full text-[10px] font-black uppercase tracking-widest text-zinc-400 mt-2 border border-zinc-700">
-                           {isRestricted ? "🔐 Restricted Classroom" : "📖 Open Classroom"}
+                        {/* <div className="w-16 h-16 bg-[#6366f1] rounded-[5px] flex items-center justify-center shadow-lg shadow-[#6366f1]/20 mb-4 transform rotate-0 hover:rotate-0 transition-transform">
+                            <span className="text-white font-black text-3xl">T</span>
+                        </div> */}
+                        <h2 className="text-4xl font-black text-white tracking-tight">{className}</h2>
+                        <div className="inline-block px-3 py-1 bg-zinc-800 rounded-[5px] text-[10px] font-black uppercase tracking-widest text-zinc-400 mt-2 border border-zinc-700">
+                            {isRestricted ? "🔐 Restricted Classroom" : "📖 Open Classroom"}
                         </div>
                     </div>
 
@@ -72,7 +72,7 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
                                         required
                                         type="text"
                                         placeholder="Name to identify you"
-                                        className="w-full h-14 bg-zinc-950/50 border border-zinc-800 rounded-2xl pl-12 pr-4 text-sm font-bold text-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition-all placeholder:text-zinc-700"
+                                        className="w-full h-14 bg-zinc-950/50 border border-zinc-800 rounded-[5px] pl-12 pr-4 text-sm font-bold text-white focus:ring-2 focus:ring-[#6366f1] focus:border-transparent outline-none transition-all placeholder:text-zinc-700"
                                         value={details.name}
                                         onChange={(e) => setDetails({ ...details, name: e.target.value })}
                                         disabled={loading}
@@ -92,7 +92,7 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
                                             required
                                             type="email"
                                             placeholder="your@email.com"
-                                            className="w-full h-14 bg-zinc-950/50 border border-zinc-800 rounded-2xl pl-12 pr-4 text-sm font-bold text-white focus:ring-2 focus:ring-blue-600 outline-none transition-all placeholder:text-zinc-700"
+                                            className="w-full h-14 bg-zinc-950/50 border border-zinc-800 rounded-[5px] pl-12 pr-4 text-sm font-bold text-white focus:ring-2 focus:ring-[#6366f1] outline-none transition-all placeholder:text-zinc-700"
                                             value={details.email}
                                             onChange={(e) => setDetails({ ...details, email: e.target.value })}
                                             disabled={loading}
@@ -109,7 +109,7 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
                                             required
                                             type="password"
                                             placeholder="••••••••"
-                                            className="w-full h-14 bg-zinc-950/50 border border-zinc-800 rounded-2xl pl-12 pr-4 text-sm font-bold text-white focus:ring-2 focus:ring-blue-600 outline-none transition-all placeholder:text-zinc-700"
+                                            className="w-full h-14 bg-zinc-950/50 border border-zinc-800 rounded-2xl pl-12 pr-4 text-sm font-bold text-white focus:ring-2 focus:ring-[#6366f1] outline-none transition-all placeholder:text-zinc-700"
                                             value={details.password}
                                             onChange={(e) => setDetails({ ...details, password: e.target.value })}
                                             disabled={loading}
@@ -122,7 +122,7 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full h-14 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-black rounded-2xl flex items-center justify-center gap-2 transform active:scale-95 transition-all shadow-lg shadow-blue-900/40 relative overflow-hidden group"
+                            className="w-full h-14 bg-[#6366f1] hover:bg-blue-500 disabled:opacity-50 text-white font-black rounded-[5px] flex items-center justify-center gap-2 transform active:scale-95 transition-all shadow-lg shadow-blue-900/40 relative overflow-hidden group"
                         >
                             {loading ? (
                                 <Loader2 className="animate-spin" size={20} />
@@ -135,7 +135,7 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
                     </form>
 
                     <div className="pt-2">
-                        <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-tighter">Powered by TutorArc Cloud</p>
+                        <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-wide">Powered by TutorArc Digital</p>
                     </div>
                 </div>
             </div>

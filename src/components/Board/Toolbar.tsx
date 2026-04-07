@@ -1,7 +1,10 @@
 "use client"
 
 import React from "react"
-import { Pencil, Eraser, MousePointer2, Palette } from "lucide-react"
+import {
+    Pencil, Eraser, MousePointer2,
+    // Palette
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ToolbarProps {
@@ -19,22 +22,22 @@ interface ToolbarProps {
 export default function Toolbar({
     tool,
     setTool,
-    role,
-    color,
-    setColor,
-    boardColor,
-    setBoardColor,
+    // role,
+    // color,
+    // setColor,
+    // boardColor,
+    // setBoardColor,
     brushSize,
     setBrushSize
 }: ToolbarProps) {
-    const penColors = ["#FFFFFF", "#FEF08A", "#86EFAC", "#93C5FD", "#FCA5A5", "#F0ABFC"]
-    const backgroundColors = ["#18181b", "#000000", "#1e1b4b", "#064e3b", "#450a0a"]
+    // const penColors = ["#FFFFFF", "#FEF08A", "#86EFAC", "#93C5FD", "#FCA5A5", "#F0ABFC"]
+    // const backgroundColors = ["#18181b", "#000000", "#1e1b4b", "#064e3b", "#450a0a"]
 
     // Compact array of brush sizes
     const brushSizes = [2, 4, 8, 12, 16, 20]
 
     return (
-        <nav className="w-20 flex flex-col items-center py-6 bg-sidebar border-r border-border gap-3 z-30 shrink-0 h-full max-h-screen overflow-y-auto custom-scrollbar">
+        <nav className="w-14 flex flex-col items-center py-3 bg-sidebar border-r border-border gap-3 z-30 shrink-0 h-full max-h-screen overflow-y-auto custom-scrollbar">
             {/* Tools Section */}
             <div className="flex flex-col gap-2">
                 <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground mb-1 text-center">Tools</span>

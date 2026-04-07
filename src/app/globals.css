@@ -118,7 +118,18 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --animate-pulse-scale: pulse-scale 2s ease-in-out infinite;
+
+  @keyframes pulse-scale {
+    0%, 100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.08);
+    }
+  }
 }
+
 
 @media (prefers-color-scheme: dark) {
   :root {

@@ -22,7 +22,7 @@ export default async function LiveSlugPage({
     if (teacherSession) {
         return (
             <div className="flex flex-col h-screen overflow-hidden">
-                <MainBoard sessionId={teacherSession.sessionId} role="teacher" userName="Teacher" />
+                <MainBoard duration={teacherSession.duration || 10} sessionId={teacherSession.sessionId} role="teacher" userName="Teacher" />
             </div>
         );
     }
@@ -40,20 +40,21 @@ export default async function LiveSlugPage({
         // If not authenticated via gate or main site join, show the gate
         if (!authData) {
             return (
-                <StudentGate 
-                    sessionId={studentSession.sessionId} 
-                    isRestricted={studentSession.isRestricted === 1} 
-                    className={studentSession.name} 
+                <StudentGate
+                    sessionId={studentSession.sessionId}
+                    isRestricted={studentSession.isRestricted === 1}
+                    className={studentSession.name}
                 />
             );
         }
 
         return (
             <div className="flex flex-col h-screen overflow-hidden">
-                <MainBoard 
-                    sessionId={studentSession.sessionId} 
-                    role="student" 
-                    userName={authData.name} 
+                <MainBoard
+                    duration={studentSession.duration || 10}
+                    sessionId={studentSession.sessionId}
+                    role="student"
+                    userName={authData.name}
                 />
             </div>
         );

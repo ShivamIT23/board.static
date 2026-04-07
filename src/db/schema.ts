@@ -2,23 +2,64 @@ import { mysqlTable, int, varchar, timestamp, tinyint, datetime, text } from 'dr
 import { relations, sql } from 'drizzle-orm';
 import { mysqlEnum } from 'drizzle-orm/mysql-core';
 
-export const users = mysqlTable('users', {
-  id: int('id').primaryKey().autoincrement(),
+
+
+export const users = mysqlTable('tb_users', {
+  id: varchar('id', { length: 255 }).primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   email: varchar('email', { length: 255 }).notNull().unique(),
-  password: varchar('password', { length: 255 }).notNull(),
+  emailVerified: tinyint('email_verified').default(0).notNull(), // better-auth
+  password: varchar('password', { length: 255 }), // can be null for social login
   contact: varchar('contact', { length: 20 }),
-  image: varchar('image', { length: 255 }).default('/uploads/0.png').notNull(),
-  enableTwoFactorAuth : tinyint('enable_two_factor_auth').default(0).notNull(),
-  authType: mysqlEnum("auth_type", ["email", "phone"]).default('email').notNull(),
   apiKey: varchar('api_key', { length: 255 }),
   adminId: int('admin_id').default(0),
-  designation: varchar('designation', { length: 255 }).default('Educator').notNull(),
   status: tinyint('status').default(1),
   hide: tinyint('hide').default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+  image: varchar('image', { length: 255 }).default('/uploads/0.png').notNull(),
+  twoFactorEnabled: tinyint('two_factor_enabled').default(0).notNull(),
+  twoFactorSecret: text('two_factor_secret'),
+  twoFactorBackupCodes: text('two_factor_backup_codes'),
+  authType: mysqlEnum("auth_type", ["email", "phone"]).default('email').notNull(),
+  designation: varchar('designation', { length: 255 }).default('Educator').notNull(),
+  passwordUpdateAt: timestamp('password_updated_at'),
+});
+
+export const sessions = mysqlTable('tb_sessions', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => users.id),
+  token: varchar('token', { length: 255 }).notNull().unique(),
+  expiresAt: timestamp('expires_at').notNull(),
+  ipAddress: varchar('ip_address', { length: 45 }),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+});
+
+export const accounts = mysqlTable('tb_accounts', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => users.id),
+  accountId: varchar('account_id', { length: 255 }).notNull(),
+  providerId: varchar('provider_id', { length: 255 }).notNull(),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  idToken: text('id_token'),
+  accessTokenExpiresAt: timestamp('access_token_expires_at'),
+  refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
+  scope: text('scope'),
+  password: text('password'), // for credentials
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+});
+
+export const verifications = mysqlTable('tb_verifications', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  identifier: varchar('identifier', { length: 255 }).notNull(),
+  value: varchar('value', { length: 255 }).notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
-  passwordUpdateAt: timestamp('password_updated_at'),
 });
 
 // export const admins = mysqlTable('admins',{
@@ -32,23 +73,22 @@ export const users = mysqlTable('users', {
 //   hide: tinyint('hide').default(0),
 //   createdAt: timestamp('created_at').defaultNow(),
 //   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
-  // passwordUpdateAt: timestamp('password_updated_at'),
 // })
 
-export const packages = mysqlTable('packages',{
+export const packages = mysqlTable('tb_packages',{
   id: int('id').primaryKey().autoincrement(),
   name: varchar('name', { length: 255 }).notNull(),
   price: int('price').notNull(),
-  paymentCurrency: varchar('payment_currency', { length: 10 }).default('USD').notNull(),
   description: varchar('description', { length: 255 }).notNull(),
-  highlighted: tinyint('highlighted').default(0),
   status: tinyint('status').default(1),
   hide: tinyint('hide').default(0),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+  highlighted: tinyint('highlighted').default(0),
+  paymentCurrency: varchar('payment_currency', { length: 10 }).default('USD').notNull(),
 })
 
-export const discounts = mysqlTable('discounts', {
+export const discounts = mysqlTable('tb_discounts', {
   id: int('id').primaryKey().autoincrement(),
   packageId: int('package_id').notNull(),
   code: varchar('code', { length: 100 }).notNull(),
@@ -63,20 +103,20 @@ export const discounts = mysqlTable('discounts', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-export const leads = mysqlTable('leads', {
+export const leads = mysqlTable('tb_leads', {
   id: int('id').primaryKey().autoincrement(),
   contact: varchar('contact', { length: 255 }).notNull(),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-export const features = mysqlTable('features', {
+export const features = mysqlTable('tb_features', {
   id: int('id').primaryKey().autoincrement(),
   name: varchar('name', { length: 100 }).notNull(), // e.g. "recording"
   label: varchar('label', { length: 255 }).notNull(), // "Class Recording"
   type: varchar('type', { length: 50 }).notNull(), // boolean | limit | text
 });
 
-export const packageFeatures = mysqlTable('package_features', {
+export const packageFeatures = mysqlTable('tb_package_features', {
   id: int('id').primaryKey().autoincrement(),
   packageId: int('package_id').notNull(),
   featureId: int('feature_id').notNull(),
@@ -84,7 +124,7 @@ export const packageFeatures = mysqlTable('package_features', {
   value: varchar('value', { length: 255 }), // flexible
 });
 
-export const students = mysqlTable('students', {
+export const students = mysqlTable('tb_students', {
   id: int('id').primaryKey().autoincrement(),
 
   name: varchar('name', { length: 255 }).notNull(),
@@ -104,7 +144,7 @@ export const students = mysqlTable('students', {
   passwordUpdateAt: timestamp('password_updated_at'),
 });
 
-export const userPackages = mysqlTable('user_packages', {
+export const userPackages = mysqlTable('tb_user_packages', {
   id: int('id').primaryKey().autoincrement(),
 
   userId: varchar('user_id', { length: 255 }).notNull(),
@@ -126,7 +166,7 @@ export const userPackages = mysqlTable('user_packages', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-export const payments = mysqlTable('payments', {
+export const payments = mysqlTable('tb_payments', {
   id: int('id').primaryKey().autoincrement(),
 
   userId: varchar('user_id', { length: 255 }).notNull(),
@@ -146,36 +186,35 @@ export const payments = mysqlTable('payments', {
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
 });
 
-export const classes = mysqlTable('classes', {
+export const classes = mysqlTable('tb_classes', {
   id: int('id').autoincrement().primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   description: varchar('description', { length: 500 }),
   teacherId: varchar('teacher_id', { length: 255 }).notNull(),
-  teacherLink : varchar('teacher_link', { length: 255 }),
-  studentLink : varchar('student_link', { length: 255 }),
-
-  adminId: int('admin_id').default(0),
-
-  sessionId: varchar('session_id', { length: 255 }).notNull(),
-  teacherToken: varchar('teacher_token', { length: 255 }),
-  studentToken: varchar('student_token', { length: 255 }),
-
-
-  isRestricted: tinyint('is_restricted').default(0),
-  teacherPresent: tinyint('teacher_present').default(0),
-  
-  startTime: datetime('start_time', { mode: 'date' }),
-  duration: int('duration').default(60), // in minutes
-  
-  status: mysqlEnum("status", ["scheduled", "started", "completed", "cancelled"]).default('scheduled'),
-
   hide: tinyint('hide').default(0),
 
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+  teacherLink : varchar('teacher_link', { length: 255 }),
+  studentLink : varchar('student_link', { length: 255 }),
+  
+  startTime: datetime('start_time', { mode: 'date' }),
+  duration: int('duration').default(60), // in minutes
+
+  adminId: int('admin_id').default(0),
+
+  sessionId: varchar('session_id', { length: 255 }).notNull(),
+  isRestricted: tinyint('is_restricted').default(0),
+  status: mysqlEnum("status", ["scheduled", "started", "completed", "cancelled"]).default('scheduled'),
+
+  teacherToken: varchar('teacher_token', { length: 255 }),
+  studentToken: varchar('student_token', { length: 255 }),
+
+  teacherPresent: tinyint('teacher_present').default(0),
+  
 });
 
-export const notifications = mysqlTable('notifications', {
+export const notifications = mysqlTable('tb_notifications', {
   id: int('id').primaryKey().autoincrement(),
   userId: varchar('user_id', { length: 255 }).notNull(),
   title: varchar('title', { length: 255 }).notNull(),
@@ -195,7 +234,7 @@ export const userPackagesRelations = relations(userPackages, ({ one }) => ({
   }),
 }));
 
-export const contact = mysqlTable('contact', {
+export const contact = mysqlTable('tb_contact', {
   id: int('id').primaryKey().autoincrement(),
   userId: varchar('user_id', { length: 255 }),
   name: varchar('name', { length: 255 }),
@@ -207,27 +246,27 @@ export const contact = mysqlTable('contact', {
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
 });
 
-export const support = mysqlTable('support', {
+export const support = mysqlTable('tb_support', {
   id: int('id').primaryKey().autoincrement(),
   userId: varchar('user_id', { length: 255 }).notNull(),
   subject: varchar('subject', { length: 255 }).notNull(),
   message: text('message').notNull(),
-  status: mysqlEnum("status", ["open", "processing", "closed"]).default('open'), 
-  priority: mysqlEnum('priority', ['low', 'medium', 'high']).default('medium'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+  status: mysqlEnum("status", ["open", "processing", "closed"]).default('open'), 
+  priority: mysqlEnum('priority', ['low', 'medium', 'high']).default('medium'),
 });
 
-export const supportChats = mysqlTable('support_chats', {
+export const supportChats = mysqlTable('tb_support_chats', {
   id: int('id').primaryKey().autoincrement(),
   supportId: int('support_id').notNull(),
   status: mysqlEnum("status", ["open", "processing", "closed"]).default('open'),
   message: text('message').notNull(),
-  type: mysqlEnum("type", ["user", "admin"]),
+  type: mysqlEnum("type", ["user", "admin"]).default('user'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-export const classVisitors = mysqlTable('class_visitors', {
+export const classVisitors = mysqlTable('tb_class_visitors', {
   id: int('id').primaryKey().autoincrement(),
   classId: int('class_id').notNull(),
   name: varchar('name', { length: 255 }).notNull(),

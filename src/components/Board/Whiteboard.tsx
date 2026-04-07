@@ -1,7 +1,10 @@
 "use client"
 
 import React, { useEffect, useRef } from "react"
-import { Canvas, PencilBrush, util, FabricObject, TEvent } from "fabric"
+import {
+    Canvas, PencilBrush,  //util,
+    FabricObject, TEvent
+} from "fabric"
 
 interface WhiteboardProps {
     sessionId: string
