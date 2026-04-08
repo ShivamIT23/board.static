@@ -7,6 +7,8 @@ import Whiteboard from "./Whiteboard"
 import ChatRoom from "./ChatRoom"
 import ThemeToggle from "../theme-toggle"
 import { SocketProvider } from "../providers/socket-provider"
+import { LogOut } from "lucide-react"
+import { leaveSession } from "@/app/actions/auth"
 
 interface RoomUser {
     user_id: string
@@ -31,7 +33,7 @@ export default function MainBoard({ duration, sessionId, role, userName, userId,
     const [color, setColor] = useState("#FFFFFF")
     const [boardColor, setBoardColor] = useState("#18181b")
     const [brushSize, setBrushSize] = useState(3)
-    const [isLocked, ] = useState(false)
+    const [isLocked,] = useState(false)
     const [timeLeft, setTimeLeft] = useState(duration)
     const [userCount, setUserCount] = useState(1)
     const [roomUsers, setRoomUsers] = useState<RoomUser[]>([])
@@ -155,10 +157,23 @@ export default function MainBoard({ duration, sessionId, role, userName, userId,
                                 <p className="text-sm text-foreground font-bold mb-1">{userName}</p>
                                 <p className="text-[10px] text-muted-foreground font-bold capitalize tracking-widest leading-none">({role})</p>
                             </div>
-                            <div className="w-10 h-10 bg-linear-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-black">
+                            <div className="w-10 h-10 bg-linear-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg">
                                 {userName.charAt(0).toUpperCase()}
                             </div>
                         </div>
+
+                        <button
+                            onClick={() => {
+                                if (confirm("Are you sure you want to leave this session?")) {
+                                    leaveSession(sessionId);
+                                }
+                            }}
+                            className="flex items-center gap-2 px-4 h-10 bg-red-500 dark:bg-red-500/60 hover:bg-red-500/80 dark:hover:bg-red-500 text-white rounded-lg transition-all duration-300 font-bold text-xs ring-1 ring-red-500/20 hover:ring-red-500 shadow-sm group"
+                            title="Leave Session"
+                        >
+                            <LogOut size={16} className="group-hover:-translate-x-0.5 transition-transform" />
+                            <span>Leave</span>
+                        </button>
                     </div>
                 </header>
 
