@@ -1,5 +1,5 @@
-import { db, classes } from "@/db";
-import { like } from "drizzle-orm";
+import { db, classes, classVisitors } from "@/db";
+import { like, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import MainBoard from "@/components/Board/MainBoard";
 import StudentGate from "@/components/Board/StudentGate";
@@ -22,7 +22,13 @@ export default async function LiveSlugPage({
     if (teacherSession) {
         return (
             <div className="flex flex-col h-screen overflow-hidden">
-                <MainBoard duration={teacherSession.duration || 10} sessionId={teacherSession.sessionId} role="teacher" userName="Teacher" />
+                <MainBoard 
+                    duration={teacherSession.duration || 10} 
+                    sessionId={teacherSession.sessionId} 
+                    role="teacher" 
+                    userName="Teacher"
+                    userId={`teacher-${teacherSession.teacherId}`}
+                />
             </div>
         );
     }
@@ -35,9 +41,16 @@ export default async function LiveSlugPage({
     if (studentSession) {
         const cookieStore = await cookies();
         const authCookie = cookieStore.get(`board_auth_${studentSession.sessionId}`);
-        const authData = authCookie ? JSON.parse(authCookie.value) : null;
+        let authData = authCookie ? JSON.parse(authCookie.value) : null;
 
-        // If not authenticated via gate or main site join, show the gate
+        // Verify visitor exists (Prevents ghost ID errors)
+        if (authData?.visitorId) {
+            const visitorExists = await db.query.classVisitors.findFirst({
+                where: eq(classVisitors.id, authData.visitorId)
+            });
+            if (!visitorExists) authData = null;
+        }
+
         if (!authData) {
             return (
                 <StudentGate
@@ -55,6 +68,8 @@ export default async function LiveSlugPage({
                     sessionId={studentSession.sessionId}
                     role="student"
                     userName={authData.name}
+                    userId={studentSession.isRestricted ? authData.email : authData.name}
+                    visitorId={authData.visitorId}
                 />
             </div>
         );

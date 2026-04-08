@@ -3,15 +3,28 @@
 import React, { useState, useEffect, useRef } from "react"
 import { MessageCircle, Send, Minimize2, User2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useSocket } from "../providers/socket-provider"
 
 interface ChatMessage {
+    id?: string
     user: { name: string; isTeacher: boolean }
     message: string
     timestamp: number
 }
 
+interface RoomUser {
+    user_id: string
+    username: string
+    socket_id: string
+    isMuted?: boolean
+    mediaState?: { audio: boolean; video: boolean }
+}
+
 interface ChatRoomProps {
     userCount: number
+    roomUsers: RoomUser[]
+    setRoomUsers: (users: RoomUser[]) => void
+    setUserCount: (count: number) => void
     role: "teacher" | "student"
     userName: string
     sessionId: string
@@ -22,9 +35,11 @@ interface Visitor {
     name: string;
     email: string | null;
     joinedAt: string;
+    isOnline?: boolean;
 }
 
-export default function ChatRoom({ userCount, role, userName, sessionId }: ChatRoomProps) {
+export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCount, role, userName, sessionId }: ChatRoomProps) {
+    const { socket } = useSocket()
     const [messages, setMessages] = useState<ChatMessage[]>([])
     const [inputMessage, setInputMessage] = useState("")
     const [isOpen, setIsOpen] = useState(true)
@@ -33,6 +48,30 @@ export default function ChatRoom({ userCount, role, userName, sessionId }: ChatR
     const [isLoadingVisitors, setIsLoadingVisitors] = useState(false)
     const scrollRef = useRef<HTMLDivElement>(null)
     const visitorsRef = useRef<HTMLDivElement>(null)
+
+    // Socket listeners
+    useEffect(() => {
+        if (!socket) return
+
+        socket.on("chat", ({ payload }: { payload: ChatMessage }) => {
+            setMessages((prev) => [...prev, payload])
+        })
+
+        socket.on("chat_history", ({ payload }: { payload: ChatMessage[] }) => {
+            setMessages(payload)
+        })
+
+        socket.on("room_users", ({ payload }: { payload: { count: number; users: RoomUser[] } }) => {
+            setUserCount(payload.count)
+            setRoomUsers(payload.users)
+        })
+
+        return () => {
+            socket.off("chat")
+            socket.off("chat_history")
+            socket.off("room_users")
+        }
+    }, [socket, setRoomUsers, setUserCount])
 
     useEffect(() => {
         // Close visitors list when clicking outside
@@ -62,8 +101,7 @@ export default function ChatRoom({ userCount, role, userName, sessionId }: ChatR
     }
 
     const toggleVisitors = () => {
-        if (role !== "teacher") return
-        if (!showVisitors) {
+        if (!showVisitors && role === "teacher") {
             fetchVisitors()
         }
         setShowVisitors(!showVisitors)
@@ -78,15 +116,11 @@ export default function ChatRoom({ userCount, role, userName, sessionId }: ChatR
 
     const sendMessage = (e: React.FormEvent) => {
         e.preventDefault()
-        if (!inputMessage.trim()) return
+        if (!inputMessage.trim() || !socket) return
 
-        // Directly add message to local state in static mode
-        const newMessage: ChatMessage = {
-            message: inputMessage,
-            user: { name: userName, isTeacher: role === "teacher" },
-            timestamp: Date.now()
-        }
-        setMessages((prev: ChatMessage[]) => [...prev, newMessage])
+        socket.emit("chat", {
+            payload: { message: inputMessage }
+        })
         setInputMessage("")
     }
 
@@ -118,47 +152,70 @@ export default function ChatRoom({ userCount, role, userName, sessionId }: ChatR
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />{userCount}<User2 size={16} />
                     </button>
 
-                    {/* Visitors Dropdown */}
-                    {showVisitors && role === "teacher" && (
+                    {/* Visitors/Online Users Dropdown */}
+                    {showVisitors && (
                         <div
                             ref={visitorsRef}
-                            className="absolute top-10 right-0 w-44 bg-card border border-border rounded-[5px] shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200"
+                            className="absolute top-10 right-0 w-52 bg-card border border-border rounded-[5px] shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200"
                         >
-                            {/* <div className="p-3 border-b border-border bg-muted/50">
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Session Visitors</h3>
-                            </div> */}
+                            <div className="p-3 border-b border-border bg-muted/50">
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                    {role === "teacher" ? "Online & Visitors" : "Online Users"}
+                                </h3>
+                            </div>
                             <div className="max-h-64 overflow-y-auto custom-scrollbar">
-                                {isLoadingVisitors ? (
-                                    <div className="p-8 flex justify-center">
-                                        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                {/* Online Users Section */}
+                                <div className="py-2 border-b border-border">
+                                    <div className="px-3 mb-1">
+                                        <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-tighter">Online ({roomUsers.length})</span>
                                     </div>
-                                ) : visitors.length === 0 ? (
-                                    <div className="p-6 text-center text-[10px] text-muted-foreground font-bold uppercase tracking-widest leading-relaxed">
-                                        No visitors recorded
-                                    </div>
-                                ) : (
-                                    <div className="py-2">
-                                        {visitors.map((visitor) => (
-                                            <div key={visitor.id} className="px-2 py-1 hover:bg-muted/50 transition-colors group">
+                                    {roomUsers.length === 0 ? (
+                                        <div className="px-3 py-2 text-[10px] text-muted-foreground italic">No one online</div>
+                                    ) : role === "teacher" ? (
+                                        roomUsers.map((user) => (
+                                            <div key={user.socket_id} className="px-3 py-1.5 hover:bg-muted/50 transition-colors flex items-center gap-2 group">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                                 <div className="flex flex-col">
                                                     <span className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">
-                                                        {visitor.name}
+                                                        {user.username} {user.socket_id === socket?.id && "(You)"}
                                                     </span>
-                                                    <div className="flex items-center justify-between mt-0.5">
-                                                        <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
-                                                            {visitor.email || "No email"}
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="px-3 py-3 text-[10px] text-muted-foreground leading-relaxed flex flex-col gap-1">
+                                            <p className="font-bold text-zinc-400">Student List is Private</p>
+                                            <p className="opacity-60 text-[9px]">Individual names are only visible to the instructor.</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Historical Visitors (Teacher only) */}
+                                {role === "teacher" && (
+                                    <div className="py-2">
+                                        <div className="px-3 mb-1">
+                                            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter">Past Visitors</span>
+                                        </div>
+                                        {isLoadingVisitors ? (
+                                            <div className="p-4 flex justify-center">
+                                                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                            </div>
+                                        ) : visitors.filter(v => !roomUsers.some(ru => ru.username === v.name)).length === 0 ? (
+                                            <div className="px-3 py-2 text-[10px] text-muted-foreground italic">No other visitors</div>
+                                        ) : (
+                                            visitors.filter(v => !roomUsers.some(ru => ru.username === v.name)).map((visitor) => (
+                                                <div key={visitor.id} className="px-3 py-1.5 hover:bg-muted/50 transition-colors group">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-bold text-muted-foreground group-hover:text-foreground transition-colors">
+                                                            {visitor.name}
                                                         </span>
-                                                        <span className="text-[8px] text-muted-foreground font-black opacity-60">
-                                                            {new Date(visitor.joinedAt).toLocaleTimeString([], {
-                                                                hour: '2-digit',
-                                                                minute: '2-digit',
-                                                                timeZone: 'UTC'
-                                                            })}
+                                                        <span className="text-[8px] text-muted-foreground opacity-60">
+                                                            Last seen: {new Date(visitor.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                         </span>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            ))
+                                        )}
                                     </div>
                                 )}
                             </div>

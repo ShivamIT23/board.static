@@ -1,28 +1,43 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useMemo } from "react"
 // Import new sub-components
 import Toolbar from "./Toolbar"
 import Whiteboard from "./Whiteboard"
 import ChatRoom from "./ChatRoom"
 import ThemeToggle from "../theme-toggle"
+import { SocketProvider } from "../providers/socket-provider"
+
+interface RoomUser {
+    user_id: string
+    username: string
+    socket_id: string
+    isMuted?: boolean
+    mediaState?: { audio: boolean; video: boolean }
+}
 
 interface MainBoardProps {
     duration: number
     sessionId: string
     role: "teacher" | "student"
     userName: string
+    userId?: string
+    visitorId?: number
 }
 
-export default function MainBoard({ duration, sessionId, role, userName }: MainBoardProps) {
+export default function MainBoard({ duration, sessionId, role, userName, userId, visitorId }: MainBoardProps) {
     // Board State
     const [tool, setTool] = useState("pencil")
     const [color, setColor] = useState("#FFFFFF")
     const [boardColor, setBoardColor] = useState("#18181b")
     const [brushSize, setBrushSize] = useState(3)
-    const [isLocked, setIsLocked] = useState(false)
+    const [isLocked, ] = useState(false)
     const [timeLeft, setTimeLeft] = useState(duration)
-    const [userCount, setUserCount] = useState(1) // Static count for preview
+    const [userCount, setUserCount] = useState(1)
+    const [roomUsers, setRoomUsers] = useState<RoomUser[]>([])
+
+    // Socket server URL
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5001"
 
     const timeLeftRef = useRef(timeLeft);
     useEffect(() => {
@@ -94,82 +109,98 @@ export default function MainBoard({ duration, sessionId, role, userName }: MainB
     }
 
 
+    const user = useMemo(() => ({
+        id: userId || "guest",
+        name: userName,
+        isTeacher: role === "teacher",
+        visitorId
+    }), [userId, userName, role, visitorId]);
+
     return (
-        <div className="flex flex-col w-screen h-screen bg-background text-foreground overflow-hidden font-sans">
-            {/* Minimal Board Header */}
-            <header className="h-14 border-b border-border bg-header flex items-center justify-between px-3 z-40 shrink-0">
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                        {/* <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+        <SocketProvider
+            url={socketUrl}
+            roomId={sessionId}
+            user={user}
+        >
+            <div className="flex flex-col w-screen h-screen bg-background text-foreground overflow-hidden font-sans">
+                {/* Minimal Board Header */}
+                <header className="h-14 border-b border-border bg-header flex items-center justify-between px-3 z-40 shrink-0">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            {/* <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                             <span className="text-white font-black text-lg ">B</span>
                         </div> */}
-                        <span className="text-primary font-bold tracking-tighter text-xl">Board</span>
+                            <span className="text-primary font-bold tracking-tighter text-xl">Board</span>
+                        </div>
+                        {role == "teacher" && <>
+                            <div className="h-6 w-px bg-border mx-2" />
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest leading-none mb-1">Active Session</span>
+                                <span className="text-xs text-foreground font-medium">{sessionId}</span>
+                            </div>
+                        </>
+                        }
                     </div>
-                    {role == "teacher" && <>
-                        <div className="h-6 w-px bg-border mx-2" />
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest leading-none mb-1">Active Session</span>
-                            <span className="text-xs text-foreground font-medium">{sessionId}</span>
-                        </div>
-                    </>
-                    }
-                </div>
 
-                <div className="flex items-center gap-6">
-                    <ThemeToggle />
-                    <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1.5 px-1 py-0.5 bg-muted rounded-[5px] border border-border">
+                    <div className="flex items-center gap-6">
+                        <ThemeToggle />
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 px-1 py-0.5 bg-muted rounded-[5px] border border-border">
 
-                            <span className={`text-sm font-black uppercase tracking-widest ${timeLeft < 5 ? 'text-red-500 animate-pulse-scale' : 'text-green-600 dark:text-green-500'}`}>{formatMinutesToMMSS(timeLeft)}</span>
+                                <span className={`text-sm font-black uppercase tracking-widest ${timeLeft < 5 ? 'text-red-500 animate-pulse-scale' : 'text-green-600 dark:text-green-500'}`}>{formatMinutesToMMSS(timeLeft)}</span>
+                            </div>
                         </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <div className="text-right">
-                            <p className="text-sm text-foreground font-bold mb-1">{userName}</p>
-                            <p className="text-[10px] text-muted-foreground font-bold capitalize tracking-widest leading-none">({role})</p>
-                        </div>
-                        <div className="w-10 h-10 bg-linear-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-black">
-                            {userName.charAt(0).toUpperCase()}
+                        <div className="flex items-center gap-3">
+                            <div className="text-right">
+                                <p className="text-sm text-foreground font-bold mb-1">{userName}</p>
+                                <p className="text-[10px] text-muted-foreground font-bold capitalize tracking-widest leading-none">({role})</p>
+                            </div>
+                            <div className="w-10 h-10 bg-linear-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-black">
+                                {userName.charAt(0).toUpperCase()}
+                            </div>
                         </div>
                     </div>
-                </div>
-            </header>
+                </header>
 
-            <div className="flex flex-1 overflow-hidden">
-                {/* 1. Sidebar Tools */}
-                <Toolbar
-                    tool={tool}
-                    setTool={setTool}
-                    role={role}
-                    color={color}
-                    setColor={setColor}
-                    boardColor={boardColor}
-                    setBoardColor={updateBoardBackground}
-                    brushSize={brushSize}
-                    setBrushSize={setBrushSize}
-                />
-
-                {/* 2. Main Drawing Canvas */}
-                <div className="flex-1 overflow-hidden relative">
-                    <Whiteboard
-                        sessionId={sessionId}
-                        role={role}
+                <div className="flex flex-1 overflow-hidden">
+                    {/* 1. Sidebar Tools */}
+                    <Toolbar
                         tool={tool}
+                        setTool={setTool}
+                        role={role}
                         color={color}
+                        setColor={setColor}
                         boardColor={boardColor}
+                        setBoardColor={updateBoardBackground}
                         brushSize={brushSize}
-                        isLocked={isLocked}
+                        setBrushSize={setBrushSize}
+                    />
+
+                    {/* 2. Main Drawing Canvas */}
+                    <div className="flex-1 overflow-hidden relative">
+                        <Whiteboard
+                            sessionId={sessionId}
+                            role={role}
+                            tool={tool}
+                            color={color}
+                            boardColor={boardColor}
+                            brushSize={brushSize}
+                            isLocked={isLocked}
+                        />
+                    </div>
+
+                    {/* 3. Real-time Chat Panel */}
+                    <ChatRoom
+                        userCount={userCount}
+                        roomUsers={roomUsers}
+                        setRoomUsers={setRoomUsers}
+                        setUserCount={setUserCount}
+                        role={role}
+                        userName={userName}
+                        sessionId={sessionId}
                     />
                 </div>
-
-                {/* 3. Real-time Chat Panel */}
-                <ChatRoom
-                    userCount={userCount}
-                    role={role}
-                    userName={userName}
-                    sessionId={sessionId}
-                />
             </div>
-        </div>
+        </SocketProvider>
     )
 }

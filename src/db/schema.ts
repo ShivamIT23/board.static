@@ -274,11 +274,28 @@ export const classVisitors = mysqlTable('tb_class_visitors', {
   ipAddress: varchar('ip_address', { length: 45 }),
   userAgent: text('user_agent'),
   joinedAt: timestamp('joined_at').defaultNow(),
+  isActive: tinyint('is_active').default(1),
 });
 
+export const classChats = mysqlTable('tb_class_chats', {
+  id: int('id').primaryKey().autoincrement(),
+  sessionId: varchar('session_id', { length: 255 }).notNull(),
+  userName: varchar('user_name', { length: 255 }).notNull(),
+  isTeacher: tinyint('is_teacher').default(0),
+  message: text('message').notNull(),
+  timestamp: timestamp('timestamp').defaultNow().notNull(),
+});
 
 export const classesRelations = relations(classes, ({ many }) => ({
   visitors: many(classVisitors),
+  chats: many(classChats),
+}));
+
+export const classChatsRelations = relations(classChats, ({ one }) => ({
+  class: one(classes, {
+    fields: [classChats.sessionId],
+    references: [classes.sessionId],
+  }),
 }));
 
 export const classVisitorsRelations = relations(classVisitors, ({ one }) => ({

@@ -12,6 +12,8 @@ interface StudentGateProps {
 
 export default function StudentGate({ sessionId, isRestricted, className }: StudentGateProps) {
     const [loading, setLoading] = useState(false);
+    const [entering, setEntering] = useState(false);
+    const [error, setError] = useState("");
     const [details, setDetails] = useState({
         name: "",
         email: "",
@@ -21,6 +23,7 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
     const handleJoin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        setError("");
 
         try {
             const result = await verifyStudent({
@@ -31,15 +34,20 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
             });
 
             if (result.success) {
+                setEntering(true);
                 toast.success(`Welcome to ${className}! Entering...`);
-                // Reload the page to catch the new cookie
-                window.location.reload();
+                // Wait a bit to let the user see the "Entering" state
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
             } else {
                 toast.error(result.error || "Access denied to this session");
+                setError(result.error || "Access denied to this session");
+                setLoading(false);
             }
         } catch {
             toast.error("An error occurred. Please try again.");
-        } finally {
+            setError("Something went wrong. Please try again.");
             setLoading(false);
         }
     };
@@ -74,7 +82,10 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
                                         placeholder="Name to identify you"
                                         className="w-full h-14 bg-zinc-950/50 border border-zinc-800 rounded-[5px] pl-12 pr-4 text-sm font-bold text-white focus:ring-2 focus:ring-[#6366f1] focus:border-transparent outline-none transition-all placeholder:text-zinc-700"
                                         value={details.name}
-                                        onChange={(e) => setDetails({ ...details, name: e.target.value })}
+                                        onChange={(e) => {
+                                            setDetails({ ...details, name: e.target.value })
+                                            if (error) setError("")
+                                        }}
                                         disabled={loading}
                                         autoFocus
                                     />
@@ -94,7 +105,10 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
                                             placeholder="your@email.com"
                                             className="w-full h-14 bg-zinc-950/50 border border-zinc-800 rounded-[5px] pl-12 pr-4 text-sm font-bold text-white focus:ring-2 focus:ring-[#6366f1] outline-none transition-all placeholder:text-zinc-700"
                                             value={details.email}
-                                            onChange={(e) => setDetails({ ...details, email: e.target.value })}
+                                            onChange={(e) => {
+                                                setDetails({ ...details, email: e.target.value })
+                                                if (error) setError("")
+                                            }}
                                             disabled={loading}
                                         />
                                     </div>
@@ -109,9 +123,12 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
                                             required
                                             type="password"
                                             placeholder="••••••••"
-                                            className="w-full h-14 bg-zinc-950/50 border border-zinc-800 rounded-2xl pl-12 pr-4 text-sm font-bold text-white focus:ring-2 focus:ring-[#6366f1] outline-none transition-all placeholder:text-zinc-700"
+                                            className="w-full h-14 bg-zinc-950/50 border border-zinc-800 rounded-[5px] pl-12 pr-4 text-sm font-bold text-white focus:ring-2 focus:ring-[#6366f1] outline-none transition-all placeholder:text-zinc-700"
                                             value={details.password}
-                                            onChange={(e) => setDetails({ ...details, password: e.target.value })}
+                                            onChange={(e) => {
+                                                setDetails({ ...details, password: e.target.value })
+                                                if (error) setError("")
+                                            }}
                                             disabled={loading}
                                         />
                                     </div>
@@ -119,12 +136,20 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
                             </div>
                         )}
 
+                        {error && (
+                            <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[11px] font-bold py-3 px-4 rounded-[5px] animate-in slide-in-from-top-1 duration-300 text-center">
+                                {error}
+                            </div>
+                        )}
+
                         <button
                             type="submit"
-                            disabled={loading}
+                            disabled={loading || entering}
                             className="w-full h-14 bg-[#6366f1] hover:bg-blue-500 disabled:opacity-50 text-white font-black rounded-[5px] flex items-center justify-center gap-2 transform active:scale-95 transition-all shadow-lg shadow-blue-900/40 relative overflow-hidden group"
                         >
-                            {loading ? (
+                            {entering ? (
+                                <>Entering class... <Loader2 className="animate-spin" size={20} /></>
+                            ) : loading ? (
                                 <Loader2 className="animate-spin" size={20} />
                             ) : (
                                 <>
