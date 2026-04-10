@@ -283,6 +283,7 @@ export const classChats = mysqlTable('tb_class_chats', {
   userName: varchar('user_name', { length: 255 }).notNull(),
   isTeacher: tinyint('is_teacher').default(0),
   message: text('message').notNull(),
+  attachments: text('attachments'),
   timestamp: timestamp('timestamp').defaultNow().notNull(),
 });
 

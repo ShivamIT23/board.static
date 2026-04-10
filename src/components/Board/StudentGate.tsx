@@ -80,6 +80,7 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
                                         required
                                         type="text"
                                         placeholder="Name to identify you"
+                                        suppressHydrationWarning
                                         className="w-full h-14 bg-zinc-950/50 border border-zinc-800 rounded-[5px] pl-12 pr-4 text-sm font-bold text-white focus:ring-2 focus:ring-[#6366f1] focus:border-transparent outline-none transition-all placeholder:text-zinc-700"
                                         value={details.name}
                                         onChange={(e) => {
@@ -103,6 +104,7 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
                                             required
                                             type="email"
                                             placeholder="your@email.com"
+                                            suppressHydrationWarning
                                             className="w-full h-14 bg-zinc-950/50 border border-zinc-800 rounded-[5px] pl-12 pr-4 text-sm font-bold text-white focus:ring-2 focus:ring-[#6366f1] outline-none transition-all placeholder:text-zinc-700"
                                             value={details.email}
                                             onChange={(e) => {
@@ -123,6 +125,7 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
                                             required
                                             type="password"
                                             placeholder="••••••••"
+                                            suppressHydrationWarning
                                             className="w-full h-14 bg-zinc-950/50 border border-zinc-800 rounded-[5px] pl-12 pr-4 text-sm font-bold text-white focus:ring-2 focus:ring-[#6366f1] outline-none transition-all placeholder:text-zinc-700"
                                             value={details.password}
                                             onChange={(e) => {
@@ -145,6 +148,7 @@ export default function StudentGate({ sessionId, isRestricted, className }: Stud
                         <button
                             type="submit"
                             disabled={loading || entering}
+                            suppressHydrationWarning
                             className="w-full h-14 bg-[#6366f1] hover:bg-blue-500 disabled:opacity-50 text-white font-black rounded-[5px] flex items-center justify-center gap-2 transform active:scale-95 transition-all shadow-lg shadow-blue-900/40 relative overflow-hidden group"
                         >
                             {entering ? (

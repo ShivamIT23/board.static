@@ -39,7 +39,7 @@ export default function MainBoard({ duration, sessionId, role, userName, userId,
     const [roomUsers, setRoomUsers] = useState<RoomUser[]>([])
 
     // Socket server URL
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5001"
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3005"
 
     const timeLeftRef = useRef(timeLeft);
     useEffect(() => {
