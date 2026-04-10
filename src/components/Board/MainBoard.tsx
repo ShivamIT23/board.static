@@ -189,6 +189,10 @@ export default function MainBoard({ duration, sessionId, role, userName, userId,
                         setBoardColor={updateBoardBackground}
                         brushSize={brushSize}
                         setBrushSize={setBrushSize}
+                        onClearCanvas={role === "teacher" ? () => {
+                            // Will be handled by ClearCanvasEmitter below
+                            document.dispatchEvent(new CustomEvent("clear-canvas-emit"))
+                        } : undefined}
                     />
 
                     {/* 2. Main Drawing Canvas */}

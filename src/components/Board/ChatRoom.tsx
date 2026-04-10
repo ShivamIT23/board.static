@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from "react"
-import { MessageCircle, Send, Minimize2, User2, Paperclip, FileText, X, Download, Settings, MessageSquare, MessageSquareOff, File as FileIcon, FileX, Lock } from "lucide-react"
+import { MessageCircle, Send, Minimize2, User2, Paperclip, FileText, X, Download, Settings, MessageSquare, MessageSquareOff, File as FileIcon, FileX, Lock, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSocket } from "../providers/socket-provider"
 import { getHistoricalChats } from "@/app/actions/auth"
@@ -70,8 +70,10 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
     })
     const [showSettings, setShowSettings] = useState(false)
     const scrollRef = useRef<HTMLDivElement>(null)
+    const isLoadMoreAction = useRef(false)
     const visitorsRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const [showScrollButton, setShowScrollButton] = useState(false)
 
     // Socket listeners
     useEffect(() => {
@@ -205,8 +207,12 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
 
     useEffect(() => {
         // Only auto-scroll to bottom if we are not loading more messages
-        if (scrollRef.current && !isLoadingMore) {
+        if (scrollRef.current && !isLoadingMore && !isLoadMoreAction.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+        }
+        // Reset the flag after processing the update
+        if (!isLoadingMore) {
+            isLoadMoreAction.current = false
         }
     }, [messages, isLoadingMore])
 
@@ -239,6 +245,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
 
                 // Capture scroll height before prepending
                 const scrollHeight = scrollRef.current?.scrollHeight || 0
+                isLoadMoreAction.current = true
 
                 setMessages((prev) => [...data.data, ...prev])
 
@@ -256,6 +263,22 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
             console.error("Load more error:", error)
         } finally {
             setIsLoadingMore(false)
+        }
+    }
+
+    const handleScroll = () => {
+        if (!scrollRef.current) return
+        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
+        // If user is more than 300px from bottom, show the button
+        setShowScrollButton(scrollHeight - scrollTop - clientHeight > 300)
+    }
+
+    const scrollToBottom = () => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTo({
+                top: scrollRef.current.scrollHeight,
+                behavior: 'smooth'
+            })
         }
     }
 
@@ -500,7 +523,11 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
             )}
 
             {/* Messages Stack */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-muted/30">
+            <div 
+                ref={scrollRef} 
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto p-6 flex flex-col space-y-6 bg-muted/30 relative"
+            >
                 {canLoadMore && messages.length > 0 && (
                     <div className="flex justify-center pb-2">
                         <button
@@ -588,6 +615,16 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                         </div>
                     ))
                 )}
+                
+                {showScrollButton && (
+                    <button
+                        onClick={scrollToBottom}
+                        className="sticky bottom-0 ml-auto z-50 p-1.5 bg-secondary text-primary-background rounded-[5px] shadow-2xl hover:scale-110 active:scale-95 transition-all animate-in fade-in zoom-in duration-300 border border-white/20 backdrop-blur-sm"
+                        title="Scroll to bottom"
+                    >
+                        <ChevronDown size={24} className="animate-bounce pt-1" />
+                    </button>
+                )}
             </div>
 
             {/* Typing Indicator */}
@@ -629,7 +666,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                         </button>
                     </div>
                 )}
-                {!roomSettings.chatEnabled && role === "student" ? (
+                {(!roomSettings.chatEnabled && role === "student" && roomUsers.find(u => u.socket_id === socket?.id)?.textEnabled !== true) ? (
                     <div className="h-14 flex items-center justify-center bg-muted text-muted-foreground text-[10px] font-bold uppercase tracking-widest gap-2">
                         <Lock size={14} /> Chat Disabled by Instructor
                     </div>
@@ -650,28 +687,27 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}
                                 disabled={
-                                    (!roomSettings.attachmentsEnabled && role === "student") || 
-                                    !roomSettings.chatEnabled || 
-                                    (roomUsers.find(u => u.socket_id === socket?.id)?.attachmentsEnabled === false && role === "student")
+                                    (role === "student" && roomUsers.find(u => u.socket_id === socket?.id)?.attachmentsEnabled === false)
                                 }
                                 className={cn(
                                     "w-10 h-10 flex items-center justify-center transition-colors hover:bg-background/50 rounded",
-                                    ((!roomSettings.attachmentsEnabled || roomUsers.find(u => u.socket_id === socket?.id)?.attachmentsEnabled === false) && role === "student") 
+                                    (role === "student" && roomUsers.find(u => u.socket_id === socket?.id)?.attachmentsEnabled === false) 
                                         ? "text-muted-foreground/30 cursor-not-allowed" 
                                         : "text-muted-foreground hover:text-primary"
                                 )}
-                                title={(!roomSettings.attachmentsEnabled && role === "student") ? "Files disabled globally" : "Attach file"}
+                                title={(role === "student" && roomUsers.find(u => u.socket_id === socket?.id)?.attachmentsEnabled === false) ? "Files disabled" : "Attach file"}
                             >
-                                {((!roomSettings.attachmentsEnabled || roomUsers.find(u => u.socket_id === socket?.id)?.attachmentsEnabled === false) && role === "student") ? <FileX size={20} /> : <Paperclip size={20} />}
+                                {(role === "student" && roomUsers.find(u => u.socket_id === socket?.id)?.attachmentsEnabled === false) ? <FileX size={20} /> : <Paperclip size={20} />}
                             </button>
                             <input
                                 type="text"
                                 value={inputMessage}
                                 onChange={(e) => setInputMessage(e.target.value)}
-                                disabled={(!roomSettings.chatEnabled && role === "student") || (roomUsers.find(u => u.socket_id === socket?.id)?.textEnabled === false && role === "student")}
+                                disabled={
+                                    role === "student" && roomUsers.find(u => u.socket_id === socket?.id)?.textEnabled === false
+                                }
                                 placeholder={
-                                    !roomSettings.chatEnabled ? "Chat is disabled" :
-                                    (roomUsers.find(u => u.socket_id === socket?.id)?.textEnabled === false && role === "student") ? "Your message permission is revoked" :
+                                    (role === "student" && roomUsers.find(u => u.socket_id === socket?.id)?.textEnabled === false) ? "Chat is disabled" :
                                     selectedFile ? "Add a caption..." : "Send a message..."
                                 }
                                 className="flex-1 h-10 px-3 bg-transparent text-sm font-medium outline-none text-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed"
@@ -682,9 +718,8 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                             disabled={Boolean(
                                 (!inputMessage.trim() && !selectedFile) ||
                                 !socket ||
-                                (!roomSettings.chatEnabled && role === "student") ||
-                                (roomUsers.find(u => u.socket_id === socket?.id)?.textEnabled === false && !selectedFile && role === "student") ||
-                                (roomUsers.find(u => u.socket_id === socket?.id)?.attachmentsEnabled === false && selectedFile && role === "student")
+                                (role === "student" && roomUsers.find(u => u.socket_id === socket?.id)?.textEnabled === false && !selectedFile) ||
+                                (role === "student" && roomUsers.find(u => u.socket_id === socket?.id)?.attachmentsEnabled === false && selectedFile)
                             )}
                             className="w-14 h-full flex items-center justify-center bg-[#6366F1] text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
                         >

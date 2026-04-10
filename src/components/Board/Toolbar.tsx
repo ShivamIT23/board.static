@@ -2,8 +2,7 @@
 
 import React from "react"
 import {
-    Pencil, Eraser, MousePointer2,
-    // Palette
+    Pencil, Eraser, MousePointer2, Trash2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -17,18 +16,20 @@ interface ToolbarProps {
     setBoardColor: (color: string) => void
     brushSize: number
     setBrushSize: (size: number) => void
+    onClearCanvas?: () => void
 }
 
 export default function Toolbar({
     tool,
     setTool,
-    // role,
+    role,
     // color,
     // setColor,
     // boardColor,
     // setBoardColor,
     brushSize,
-    setBrushSize
+    setBrushSize,
+    onClearCanvas
 }: ToolbarProps) {
     // const penColors = ["#FFFFFF", "#FEF08A", "#86EFAC", "#93C5FD", "#FCA5A5", "#F0ABFC"]
     // const backgroundColors = ["#18181b", "#000000", "#1e1b4b", "#064e3b", "#450a0a"]
@@ -63,6 +64,24 @@ export default function Toolbar({
                     <Eraser size={20} />
                 </button>
             </div>
+
+            {/* Clear Canvas - Teacher Only */}
+            {/* {role === "teacher" && onClearCanvas && (
+                <>
+                    <div className="w-10 h-px bg-border -mt-1" />
+                    <button
+                        onClick={() => {
+                            if (confirm("Clear the canvas for all users?")) {
+                                onClearCanvas()
+                            }
+                        }}
+                        className="px-3 rounded-xl transition-all duration-300 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        title="Clear Canvas (All Users)"
+                    >
+                        <Trash2 size={20} />
+                    </button>
+                </>
+            )} */}
 
             {/* <div className="w-10 h-px bg-border" /> */}
 
