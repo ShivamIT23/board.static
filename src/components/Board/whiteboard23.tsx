@@ -108,7 +108,6 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
             const pt = canvas.getScenePoint(opt.e)
             const norm = toNorm(pt.x, pt.y, canvas.width, canvas.height)
 
-            /*
             socket.emit("stroke_draw", {
                 roomId: sessionId,
                 payload: {
@@ -121,7 +120,6 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
                         : brushSize / canvas.width,
                 },
             })
-            */
         })
 
         canvas.on("mouse:move", (opt) => {
@@ -129,7 +127,6 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
             const pt = canvas.getScenePoint(opt.e)
             const norm = toNorm(pt.x, pt.y, canvas.width, canvas.height)
 
-            /*
             socket.emit("stroke_draw", {
                 roomId: sessionId,
                 payload: {
@@ -138,12 +135,10 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
                     point: norm,
                 },
             })
-            */
         })
 
         canvas.on("mouse:up", () => {
             if (!localStrokeIdRef.current) return
-            /*
             socket.emit("stroke_draw", {
                 roomId: sessionId,
                 payload: {
@@ -152,7 +147,6 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
                     point: { x: 0, y: 0 },
                 },
             })
-            */
             localStrokeIdRef.current = null
         })
 
@@ -170,7 +164,6 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
         // and never gets shifted by Fabric's internal transforms.
         // ─────────────────────────────────────────────────────────
 
-        /*
         const handleStrokeDraw = ({ payload }: { payload: StrokePayload }) => {
             const { id, type, point, color: sColor, width: sWidth } = payload
 
@@ -257,7 +250,6 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
             socket.emit("clear_canvas", { roomId: sessionId })
         }
         document.addEventListener("clear-canvas-emit", handleClearEmit)
-        */
 
         // ── Resize ───────────────────────────────────────────────
         const handleResize = () => {
@@ -271,9 +263,9 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
         window.addEventListener("resize", handleResize)
 
         return () => {
-            // socket.off("stroke_draw", handleStrokeDraw)
-            // socket.off("clear_canvas", handleClearCanvas)
-            // document.removeEventListener("clear-canvas-emit", handleClearEmit)
+            socket.off("stroke_draw", handleStrokeDraw)
+            socket.off("clear_canvas", handleClearCanvas)
+            document.removeEventListener("clear-canvas-emit", handleClearEmit)
             canvas.dispose()
             window.removeEventListener("resize", handleResize)
         }
