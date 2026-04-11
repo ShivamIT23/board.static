@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useLayoutEffect, useRef } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { MessageCircle, Send, Minimize2, User2, Paperclip, FileText, X, Download, Settings, MessageSquare, MessageSquareOff, File as FileIcon, FileX, Lock, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSocket } from "../providers/socket-provider"
@@ -70,16 +70,10 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
     })
     const [showSettings, setShowSettings] = useState(false)
     const scrollRef = useRef<HTMLDivElement>(null)
-
-    // Scroll restoration and auto-bottom tracking
-    const scrollRestorationPending = useRef<{ prevScrollHeight: number; prevScrollTop: number } | null>(null)
-    const firstMessageIdRef = useRef<number | null>(null)
-    const lastMessageIdRef = useRef<number | null>(null)
-
+    const isLoadMoreAction = useRef(false)
     const visitorsRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [showScrollButton, setShowScrollButton] = useState(false)
-    const [isAtBottom, setIsAtBottom] = useState(true)
 
     // Socket listeners
     useEffect(() => {
@@ -165,6 +159,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                 const data = await getHistoricalChats(sessionId)
                 if (data.status === 'success' && Array.isArray(data.data)) {
                     setMessages(data.data)
+                    // If we got fewer than 80 messages, we've likely hit the bottom of history
                     if (data.data.length < 80) {
                         setCanLoadMore(false)
                     }
@@ -177,6 +172,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
     }, [sessionId])
 
     useEffect(() => {
+        // Close visitors list when clicking outside
         function handleClickOutside(event: MouseEvent) {
             if (visitorsRef.current && !visitorsRef.current.contains(event.target as Node)) {
                 setShowVisitors(false)
@@ -209,41 +205,16 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
         setShowVisitors(!showVisitors)
     }
 
-    // --- Robust Scroll Management ---
-    useLayoutEffect(() => {
-        if (!scrollRef.current || messages.length === 0) return
-
-        const currentFirstId = messages[0].timestamp
-        const currentLastId = messages[messages.length - 1].timestamp
-
-        const isInitialLoad = firstMessageIdRef.current === null
-        const isPrepend = !isInitialLoad && currentFirstId !== firstMessageIdRef.current && currentLastId === lastMessageIdRef.current
-        const isAppend = !isInitialLoad && currentLastId !== lastMessageIdRef.current
-
-        if (isPrepend && scrollRestorationPending.current) {
-            // Load more: Restore position
-            const { prevScrollHeight, prevScrollTop } = scrollRestorationPending.current
-            const newScrollHeight = scrollRef.current.scrollHeight
-            scrollRef.current.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight)
-            scrollRestorationPending.current = null
-        } else if (isInitialLoad && isOpen) {
-            // First load: Always scroll to bottom
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-        } else if (isAppend && isAtBottom && isOpen) {
-            // New message: Only scroll to bottom if user was already at bottom
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-        }
-
-        // Update tracking refs
-        firstMessageIdRef.current = currentFirstId
-        lastMessageIdRef.current = currentLastId
-    }, [messages, isOpen, isAtBottom])
-
     useEffect(() => {
-        if (isOpen) {
-            scrollToBottom();
+        // Only auto-scroll to bottom if we are not loading more messages
+        if (scrollRef.current && !isLoadingMore && !isLoadMoreAction.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
         }
-    }, [isOpen])
+        // Reset the flag after processing the update
+        if (!isLoadingMore) {
+            isLoadMoreAction.current = false
+        }
+    }, [messages, isLoadingMore])
 
     const toggleSetting = (type: "chat" | "attachments") => {
         if (!socket || role !== "teacher") return
@@ -258,18 +229,10 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
         socket.emit(event, { roomId: sessionId, payload: { userId, enabled: !currentEnabled } })
     }
 
-    // --- FIX 2: Set snapshot before setMessages, clear flag after DOM paint ---
     const loadMore = async () => {
-        if (!socket || isLoadingMore || !canLoadMore || messages.length === 0) return
+        if (!socket || isLoadingMore || !canLoadMore) return
 
         setIsLoadingMore(true)
-
-        const container = scrollRef.current
-        scrollRestorationPending.current = {
-            prevScrollHeight: container?.scrollHeight ?? 0,
-            prevScrollTop: container?.scrollTop ?? 0,
-        }
-
         const oldestTimestamp = messages[0].timestamp
 
         try {
@@ -277,19 +240,27 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
             if (data.status === 'success' && Array.isArray(data.data)) {
                 if (data.data.length === 0) {
                     setCanLoadMore(false)
-                    scrollRestorationPending.current = null
                     return
                 }
 
+                // Capture scroll height before prepending
+                const scrollHeight = scrollRef.current?.scrollHeight || 0
+                isLoadMoreAction.current = true
+
                 setMessages((prev) => [...data.data, ...prev])
-                // Restoration happens in the useLayoutEffect below — do NOT clear flags here.
+
+                // Restore scroll position after React updates the DOM
+                setTimeout(() => {
+                    if (scrollRef.current) {
+                        const newScrollHeight = scrollRef.current.scrollHeight
+                        scrollRef.current.scrollTop = newScrollHeight - scrollHeight
+                    }
+                }, 0)
             } else {
                 setCanLoadMore(false)
-                scrollRestorationPending.current = null
             }
         } catch (error) {
             console.error("Load more error:", error)
-            scrollRestorationPending.current = null
         } finally {
             setIsLoadingMore(false)
         }
@@ -298,17 +269,8 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
     const handleScroll = () => {
         if (!scrollRef.current) return
         const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
-
-        // Check if user is at the bottom (with a small 10px buffer)
-        setIsAtBottom(scrollHeight - scrollTop - clientHeight < 10)
-
-        // Show scroll to bottom button if user is scrolling up
+        // If user is more than 300px from bottom, show the button
         setShowScrollButton(scrollHeight - scrollTop - clientHeight > 300)
-
-        // Infinite scroll: load more messages when near top
-        if (scrollTop < 50 && canLoadMore && !isLoadingMore && messages.length > 0) {
-            loadMore()
-        }
     }
 
     const scrollToBottom = () => {
@@ -326,6 +288,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
         const backendUrl = process.env.NEXT_PUBLIC_MAIN_BACKEND_URL || "http://localhost:5002"
         return `${backendUrl}${url.startsWith("/") ? "" : "/"}${url}`
     }
+
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
@@ -397,7 +360,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
 
     return (
         <aside className="w-80 flex flex-col bg-card border-l border-border transition-all duration-300 z-30 shrink-0 h-full relative">
-            <div className="h-10 flex items-center justify-between px-6 border-b border-border shrink-0">
+            <div className="h-14 flex items-center justify-between px-6 border-b border-border shrink-0">
                 <span className="text-sm font-black uppercase tracking-[0.2em] text-muted-foreground">Chat</span>
                 <div className="flex items-center gap-2 relative">
                     <button
@@ -412,6 +375,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />{userCount}<User2 size={16} />
                     </button>
 
+                    {/* Visitors/Online Users Dropdown */}
                     {showVisitors && (
                         <div
                             ref={visitorsRef}
@@ -562,16 +526,17 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
             <div
                 ref={scrollRef}
                 onScroll={handleScroll}
-                className="flex-1 overflow-y-auto p-0 flex flex-col space-y-4 bg-muted/30 relative"
+                className="flex-1 overflow-y-auto p-6 flex flex-col space-y-6 bg-muted/30 relative"
             >
-                {/* Infinite Scroll Loading Indicator */}
-                {isLoadingMore && canLoadMore && (
-                    <div className="h-12 flex items-center justify-center shrink-0">
-                        <div className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                            <div className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                            <div className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce" />
-                        </div>
+                {canLoadMore && messages.length > 0 && (
+                    <div className="flex justify-center pb-2">
+                        <button
+                            onClick={loadMore}
+                            disabled={isLoadingMore}
+                            className="text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
+                        >
+                            {isLoadingMore ? "Loading..." : "Load older messages"}
+                        </button>
                     </div>
                 )}
                 {messages.length === 0 ? (
@@ -582,26 +547,39 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                         <p className="text-[10px] font-black uppercase tracking-[0.3em]">No Chats</p>
                     </div>
                 ) : (
-                    messages.map((msg, i) => {
-                        const isSelf = msg.user.name === userName
-                        const timeStr = new Date(msg.timestamp).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit'
-                        })
-                        const AttachmentsBlock = () => (
-                            <>
+                    messages.map((msg, i) => (
+                        <div key={i} className={cn(
+                            "flex flex-col max-w-[85%]",
+                            msg.user.name === userName ? "items-end ml-auto" : "items-start"
+                        )}>
+                            <div className="flex items-center gap-2 mb-1 px-1">
+                                <span className={cn(
+                                    "text-[9px] font-black uppercase tracking-widest",
+                                    msg.user.isTeacher ? "text-primary font-bold" : "text-muted-foreground"
+                                )}>
+                                    {msg.user.name} {msg.user.isTeacher && "(Instructor)"}
+                                </span>
+                                <span className="text-[8px] text-muted-foreground font-bold">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                            <div className={cn(
+                                "px-4 py-3 rounded-[5px] text-sm font-medium leading-relaxed shadow-sm",
+                                msg.user.name === userName
+                                    ? "bg-primary text-primary-foreground rounded-tr-none"
+                                    : "bg-card border border-border text-foreground rounded-tl-none"
+                            )}>
+                                {msg.message && <p className="mb-2 last:mb-0">{msg.message}</p>}
+
                                 {msg.attachments && msg.attachments.length > 0 && (
-                                    <div className={`space-y-2 mt-2 w-fit ${isSelf ? "ml-auto" : "mr-auto"}`}>
+                                    <div className="space-y-2 mt-2">
                                         {msg.attachments.map((att) => (
-                                            <div key={att.id} className="overflow-hidden rounded-[3px] border border-border">
+                                            <div key={att.id} className="overflow-hidden rounded-md border border-border/20">
                                                 {att.type === "image" ? (
                                                     <div className="relative group">
                                                         {/* eslint-disable-next-line @next/next/no-img-element */}
                                                         <img
                                                             src={resolveAttachmentUrl(att.url)}
                                                             alt={att.name}
-                                                            className="max-w-full max-h-[160px] h-auto rounded-[3px] cursor-zoom-in hover:opacity-95 transition-opacity"
+                                                            className="max-w-full h-auto rounded-md cursor-zoom-in hover:opacity-95 transition-opacity"
                                                             onClick={() => window.open(resolveAttachmentUrl(att.url), '_blank')}
                                                         />
                                                         <a
@@ -617,77 +595,31 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                                                         href={resolveAttachmentUrl(att.url)}
                                                         download={att.name}
                                                         className={cn(
-                                                            "flex items-center gap-3 p-3 text-xs transition-colors",
-                                                            isSelf
-                                                                ? "bg-primary/10 hover:bg-primary/15 text-primary border-t border-primary/20"
-                                                                : "bg-muted hover:bg-muted/80 text-foreground border-t border-border"
+                                                            "flex items-center gap-3 p-3 text-xs hover:bg-black/5 transition-colors",
+                                                            msg.user.name === userName ? "text-primary-foreground bg-white/10" : "text-foreground bg-muted"
                                                         )}
                                                     >
-                                                        <FileText size={24} className={cn("shrink-0", isSelf ? "text-primary" : "text-muted-foreground")} />
+                                                        <FileText size={24} className="shrink-0 opacity-80" />
                                                         <div className="flex flex-col min-w-0 flex-1">
-                                                            <span className="font-bold truncate text-foreground">{att.name}</span>
-                                                            <span className="text-muted-foreground text-[10px]">{(att.size ? (att.size / 1024).toFixed(1) : 0)} KB</span>
+                                                            <span className="font-bold truncate">{att.name}</span>
+                                                            <span className="opacity-60">{(att.size ? (att.size / 1024).toFixed(1) : 0)} KB</span>
                                                         </div>
-                                                        <Download size={16} className={cn("shrink-0", isSelf ? "text-primary" : "text-muted-foreground")} />
+                                                        <Download size={16} className="shrink-0 opacity-60" />
                                                     </a>
                                                 )}
                                             </div>
                                         ))}
                                     </div>
                                 )}
-                            </>
-                        )
-
-                        return (
-                            <div key={i} className={cn(
-                                "flex flex-col w-full",
-                                isSelf ? "ml-auto items-end" : "mr-auto items-start"
-                            )}>
-                                <div className={cn(
-                                    "overflow-hidden border-b border-border w-full",
-                                    isSelf
-                                        ? "border-r-2 border-r-primary"
-                                        : msg.user.isTeacher
-                                            ? "border-l-2 border-l-amber-500"
-                                            : "border-l-2 border-l-emerald-500"
-                                )}>
-                                    <div className={cn(
-                                        "flex items-center justify-between px-3 py-2 border-b border-border/50",
-                                        isSelf
-                                            ? "bg-primary/10"
-                                            : msg.user.isTeacher
-                                                ? "bg-amber-500/10"
-                                                : "bg-emerald-500/10"
-                                    )}>
-                                        <span className={cn(
-                                            "text-[12px] font-extrabold tracking-wide",
-                                            isSelf
-                                                ? "text-primary"
-                                                : msg.user.isTeacher
-                                                    ? "text-amber-500"
-                                                    : "text-emerald-600 dark:text-emerald-400"
-                                        )}>
-                                            {msg.user.name}{isSelf ? " (You)" : msg.user.isTeacher ? " (Instructor)" : ""} says :
-                                        </span>
-                                        <span className="text-[10px] text-muted-foreground font-semibold shrink-0 ml-4">{timeStr}</span>
-                                    </div>
-                                    <div className={cn(
-                                        "px-4 py-3 text-sm leading-relaxed text-foreground bg-card",
-                                        isSelf ? "text-right" : "text-left"
-                                    )}>
-                                        {msg.message && <p>{msg.message}</p>}
-                                        <AttachmentsBlock />
-                                    </div>
-                                </div>
                             </div>
-                        )
-                    })
+                        </div>
+                    ))
                 )}
 
                 {showScrollButton && (
                     <button
                         onClick={scrollToBottom}
-                        className="sticky bottom-4 ml-auto mr-4 z-50 p-1.5 bg-secondary text-primary-background rounded-[5px] shadow-2xl hover:scale-110 active:scale-95 transition-all animate-in fade-in zoom-in duration-300 border border-white/20 backdrop-blur-sm"
+                        className="sticky bottom-0 ml-auto z-50 p-1.5 bg-secondary text-primary-background rounded-[5px] shadow-2xl hover:scale-110 active:scale-95 transition-all animate-in fade-in zoom-in duration-300 border border-white/20 backdrop-blur-sm"
                         title="Scroll to bottom"
                     >
                         <ChevronDown size={24} className="animate-bounce pt-1" />

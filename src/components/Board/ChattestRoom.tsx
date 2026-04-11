@@ -51,6 +51,116 @@ interface Visitor {
     isOnline?: boolean;
 }
 
+const resolveAttachmentUrl = (url: string) => {
+    if (!url) return ""
+    if (url.startsWith("data:") || url.startsWith("http") || url.startsWith("blob:")) return url
+    const backendUrl = process.env.NEXT_PUBLIC_MAIN_BACKEND_URL || "http://localhost:5002"
+    return `${backendUrl}${url.startsWith("/") ? "" : "/"}${url}`
+}
+
+const AttachmentsBlock = ({ msg, isSelf }: { msg: ChatMessage, isSelf: boolean }) => (
+    <>
+        {msg.attachments && msg.attachments.length > 0 && (
+            <div className={`space-y-2 mt-2 w-fit ${isSelf ? "ml-auto" : "mr-auto"}`}>
+                {msg.attachments.map((att) => (
+                    <div key={att.id} className="overflow-hidden rounded-[3px] border border-border">
+                        {att.type === "image" ? (
+                            <div className="relative group">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                    src={resolveAttachmentUrl(att.url)}
+                                    alt={att.name}
+                                    className="max-w-full max-h-[160px] h-auto rounded-[3px] cursor-zoom-in hover:opacity-95 transition-opacity"
+                                    onClick={() => window.open(resolveAttachmentUrl(att.url), '_blank')}
+                                />
+                                <a
+                                    href={resolveAttachmentUrl(att.url)}
+                                    download={att.name}
+                                    className="absolute bottom-2 right-2 p-1.5 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <Download size={14} />
+                                </a>
+                            </div>
+                        ) : (
+                            <a
+                                href={resolveAttachmentUrl(att.url)}
+                                download={att.name}
+                                className={cn(
+                                    "flex items-center gap-3 p-3 text-xs transition-colors",
+                                    isSelf
+                                        ? "bg-primary/10 hover:bg-primary/15 text-primary border-t border-primary/20"
+                                        : "bg-muted hover:bg-muted/80 text-foreground border-t border-border"
+                                )}
+                            >
+                                <FileText size={24} className={cn("shrink-0", isSelf ? "text-primary" : "text-muted-foreground")} />
+                                <div className="flex flex-col min-w-0 flex-1">
+                                    <span className="font-bold truncate text-foreground">{att.name}</span>
+                                    <span className="text-muted-foreground text-[10px]">{(att.size ? (att.size / 1024).toFixed(1) : 0)} KB</span>
+                                </div>
+                                <Download size={16} className={cn("shrink-0", isSelf ? "text-primary" : "text-muted-foreground")} />
+                            </a>
+                        )}
+                    </div>
+                ))}
+            </div>
+        )}
+    </>
+)
+
+const MessageItem = React.memo(({ msg, userName }: { msg: ChatMessage, userName: string }) => {
+    const isSelf = msg.user.name === userName
+    const timeStr = new Date(msg.timestamp).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    })
+
+    return (
+        <div className={cn(
+            "flex flex-col w-full",
+            isSelf ? "ml-auto items-end" : "mr-auto items-start"
+        )}>
+            <div className={cn(
+                "overflow-hidden border-b border-border w-full",
+                isSelf
+                    ? "border-r-2 border-r-primary"
+                    : msg.user.isTeacher
+                        ? "border-l-2 border-l-amber-500"
+                        : "border-l-2 border-l-emerald-500"
+            )}>
+                <div className={cn(
+                    "flex items-center justify-between px-3 py-2 border-b border-border/50",
+                    isSelf
+                        ? "bg-primary/10"
+                        : msg.user.isTeacher
+                            ? "bg-amber-500/10"
+                            : "bg-emerald-500/10"
+                )}>
+                    <span className={cn(
+                        "text-[12px] font-extrabold tracking-wide",
+                        isSelf
+                            ? "text-primary"
+                            : msg.user.isTeacher
+                                ? "text-amber-500"
+                                : "text-emerald-600 dark:text-emerald-400"
+                    )}>
+                        {msg.user.name}{isSelf ? " (You)" : msg.user.isTeacher ? " (Instructor)" : ""} says :
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-semibold shrink-0 ml-4">{timeStr}</span>
+                </div>
+                <div className={cn(
+                    "px-4 py-3 text-sm leading-relaxed text-foreground bg-card",
+                    isSelf ? "text-right" : "text-left"
+                )}>
+                    {msg.message && <p>{msg.message}</p>}
+                    <AttachmentsBlock msg={msg} isSelf={isSelf} />
+                </div>
+            </div>
+        </div>
+    )
+})
+MessageItem.displayName = "MessageItem"
+
 export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCount, role, userName, sessionId }: ChatRoomProps) {
     const { socket } = useSocket()
     const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -320,12 +430,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
         }
     }
 
-    const resolveAttachmentUrl = (url: string) => {
-        if (!url) return ""
-        if (url.startsWith("data:") || url.startsWith("http")) return url
-        const backendUrl = process.env.NEXT_PUBLIC_MAIN_BACKEND_URL || "http://localhost:5002"
-        return `${backendUrl}${url.startsWith("/") ? "" : "/"}${url}`
-    }
+
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
@@ -582,106 +687,13 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                         <p className="text-[10px] font-black uppercase tracking-[0.3em]">No Chats</p>
                     </div>
                 ) : (
-                    messages.map((msg, i) => {
-                        const isSelf = msg.user.name === userName
-                        const timeStr = new Date(msg.timestamp).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit'
-                        })
-                        const AttachmentsBlock = () => (
-                            <>
-                                {msg.attachments && msg.attachments.length > 0 && (
-                                    <div className={`space-y-2 mt-2 w-fit ${isSelf ? "ml-auto" : "mr-auto"}`}>
-                                        {msg.attachments.map((att) => (
-                                            <div key={att.id} className="overflow-hidden rounded-[3px] border border-border">
-                                                {att.type === "image" ? (
-                                                    <div className="relative group">
-                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                        <img
-                                                            src={resolveAttachmentUrl(att.url)}
-                                                            alt={att.name}
-                                                            className="max-w-full max-h-[160px] h-auto rounded-[3px] cursor-zoom-in hover:opacity-95 transition-opacity"
-                                                            onClick={() => window.open(resolveAttachmentUrl(att.url), '_blank')}
-                                                        />
-                                                        <a
-                                                            href={resolveAttachmentUrl(att.url)}
-                                                            download={att.name}
-                                                            className="absolute bottom-2 right-2 p-1.5 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        >
-                                                            <Download size={14} />
-                                                        </a>
-                                                    </div>
-                                                ) : (
-                                                    <a
-                                                        href={resolveAttachmentUrl(att.url)}
-                                                        download={att.name}
-                                                        className={cn(
-                                                            "flex items-center gap-3 p-3 text-xs transition-colors",
-                                                            isSelf
-                                                                ? "bg-primary/10 hover:bg-primary/15 text-primary border-t border-primary/20"
-                                                                : "bg-muted hover:bg-muted/80 text-foreground border-t border-border"
-                                                        )}
-                                                    >
-                                                        <FileText size={24} className={cn("shrink-0", isSelf ? "text-primary" : "text-muted-foreground")} />
-                                                        <div className="flex flex-col min-w-0 flex-1">
-                                                            <span className="font-bold truncate text-foreground">{att.name}</span>
-                                                            <span className="text-muted-foreground text-[10px]">{(att.size ? (att.size / 1024).toFixed(1) : 0)} KB</span>
-                                                        </div>
-                                                        <Download size={16} className={cn("shrink-0", isSelf ? "text-primary" : "text-muted-foreground")} />
-                                                    </a>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </>
-                        )
-
-                        return (
-                            <div key={i} className={cn(
-                                "flex flex-col w-full",
-                                isSelf ? "ml-auto items-end" : "mr-auto items-start"
-                            )}>
-                                <div className={cn(
-                                    "overflow-hidden border-b border-border w-full",
-                                    isSelf
-                                        ? "border-r-2 border-r-primary"
-                                        : msg.user.isTeacher
-                                            ? "border-l-2 border-l-amber-500"
-                                            : "border-l-2 border-l-emerald-500"
-                                )}>
-                                    <div className={cn(
-                                        "flex items-center justify-between px-3 py-2 border-b border-border/50",
-                                        isSelf
-                                            ? "bg-primary/10"
-                                            : msg.user.isTeacher
-                                                ? "bg-amber-500/10"
-                                                : "bg-emerald-500/10"
-                                    )}>
-                                        <span className={cn(
-                                            "text-[12px] font-extrabold tracking-wide",
-                                            isSelf
-                                                ? "text-primary"
-                                                : msg.user.isTeacher
-                                                    ? "text-amber-500"
-                                                    : "text-emerald-600 dark:text-emerald-400"
-                                        )}>
-                                            {msg.user.name}{isSelf ? " (You)" : msg.user.isTeacher ? " (Instructor)" : ""} says :
-                                        </span>
-                                        <span className="text-[10px] text-muted-foreground font-semibold shrink-0 ml-4">{timeStr}</span>
-                                    </div>
-                                    <div className={cn(
-                                        "px-4 py-3 text-sm leading-relaxed text-foreground bg-card",
-                                        isSelf ? "text-right" : "text-left"
-                                    )}>
-                                        {msg.message && <p>{msg.message}</p>}
-                                        <AttachmentsBlock />
-                                    </div>
-                                </div>
-                            </div>
-                        )
-                    })
+                    messages.map((msg) => (
+                        <MessageItem
+                            key={`${msg.user.name}-${msg.timestamp}`}
+                            msg={msg}
+                            userName={userName}
+                        />
+                    ))
                 )}
 
                 {showScrollButton && (

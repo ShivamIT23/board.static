@@ -70,16 +70,14 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
     })
     const [showSettings, setShowSettings] = useState(false)
     const scrollRef = useRef<HTMLDivElement>(null)
-
-    // Scroll restoration and auto-bottom tracking
+    
+    // Scroll restoration refs
+    const isLoadMoreAction = useRef(false)
     const scrollRestorationPending = useRef<{ prevScrollHeight: number; prevScrollTop: number } | null>(null)
-    const firstMessageIdRef = useRef<number | null>(null)
-    const lastMessageIdRef = useRef<number | null>(null)
-
+    
     const visitorsRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [showScrollButton, setShowScrollButton] = useState(false)
-    const [isAtBottom, setIsAtBottom] = useState(true)
 
     // Socket listeners
     useEffect(() => {
@@ -209,41 +207,33 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
         setShowVisitors(!showVisitors)
     }
 
-    // --- Robust Scroll Management ---
+    // --- FIX 3: useLayoutEffect handles scroll restoration synchronously before paint ---
     useLayoutEffect(() => {
-        if (!scrollRef.current || messages.length === 0) return
+        if (!scrollRestorationPending.current || !scrollRef.current) return
+        
+        const { prevScrollHeight, prevScrollTop } = scrollRestorationPending.current
+        const newScrollHeight = scrollRef.current.scrollHeight
+        scrollRef.current.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight)
+        
+        // Clear both flags only after the DOM adjustment is committed
+        scrollRestorationPending.current = null
+        isLoadMoreAction.current = false
+    }, [messages])
 
-        const currentFirstId = messages[0].timestamp
-        const currentLastId = messages[messages.length - 1].timestamp
-
-        const isInitialLoad = firstMessageIdRef.current === null
-        const isPrepend = !isInitialLoad && currentFirstId !== firstMessageIdRef.current && currentLastId === lastMessageIdRef.current
-        const isAppend = !isInitialLoad && currentLastId !== lastMessageIdRef.current
-
-        if (isPrepend && scrollRestorationPending.current) {
-            // Load more: Restore position
-            const { prevScrollHeight, prevScrollTop } = scrollRestorationPending.current
-            const newScrollHeight = scrollRef.current.scrollHeight
-            scrollRef.current.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight)
-            scrollRestorationPending.current = null
-        } else if (isInitialLoad && isOpen) {
-            // First load: Always scroll to bottom
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-        } else if (isAppend && isAtBottom && isOpen) {
-            // New message: Only scroll to bottom if user was already at bottom
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-        }
-
-        // Update tracking refs
-        firstMessageIdRef.current = currentFirstId
-        lastMessageIdRef.current = currentLastId
-    }, [messages, isOpen, isAtBottom])
-
+    // --- FIX 4: Simplified scroll-to-bottom useEffect ---
     useEffect(() => {
-        if (isOpen) {
-            scrollToBottom();
+        if (!isOpen) return
+        
+        // isLoadMoreAction.current is only true during a load-more cycle.
+        // The useLayoutEffect above handles restoration and clears the flag
+        // before this effect runs.
+        if (isLoadMoreAction.current) return
+        
+        const container = scrollRef.current
+        if (container) {
+            container.scrollTop = container.scrollHeight
         }
-    }, [isOpen])
+    }, [messages.length, isOpen])
 
     const toggleSetting = (type: "chat" | "attachments") => {
         if (!socket || role !== "teacher") return
@@ -261,35 +251,42 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
     // --- FIX 2: Set snapshot before setMessages, clear flag after DOM paint ---
     const loadMore = async () => {
         if (!socket || isLoadingMore || !canLoadMore || messages.length === 0) return
-
+        
         setIsLoadingMore(true)
-
+        
+        // Set BOTH flags before the state update, so the useEffect scroll-to-bottom
+        // is blocked from the very first render caused by setMessages.
+        isLoadMoreAction.current = true
+        
         const container = scrollRef.current
         scrollRestorationPending.current = {
             prevScrollHeight: container?.scrollHeight ?? 0,
             prevScrollTop: container?.scrollTop ?? 0,
         }
-
+        
         const oldestTimestamp = messages[0].timestamp
-
+        
         try {
             const data = await getHistoricalChats(sessionId, oldestTimestamp)
             if (data.status === 'success' && Array.isArray(data.data)) {
                 if (data.data.length === 0) {
                     setCanLoadMore(false)
                     scrollRestorationPending.current = null
+                    isLoadMoreAction.current = false
                     return
                 }
-
+                
                 setMessages((prev) => [...data.data, ...prev])
                 // Restoration happens in the useLayoutEffect below — do NOT clear flags here.
             } else {
                 setCanLoadMore(false)
                 scrollRestorationPending.current = null
+                isLoadMoreAction.current = false
             }
         } catch (error) {
             console.error("Load more error:", error)
             scrollRestorationPending.current = null
+            isLoadMoreAction.current = false
         } finally {
             setIsLoadingMore(false)
         }
@@ -298,9 +295,6 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
     const handleScroll = () => {
         if (!scrollRef.current) return
         const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
-
-        // Check if user is at the bottom (with a small 10px buffer)
-        setIsAtBottom(scrollHeight - scrollTop - clientHeight < 10)
 
         // Show scroll to bottom button if user is scrolling up
         setShowScrollButton(scrollHeight - scrollTop - clientHeight > 300)

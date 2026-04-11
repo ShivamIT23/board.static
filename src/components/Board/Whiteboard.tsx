@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useRef, useCallback } from "react"
-import { Canvas, PencilBrush, Path } from "fabric"
+import { Canvas, PencilBrush, Path, FabricImage } from "fabric"
 import { useSocket } from "../providers/socket-provider"
 
 // ── Custom cursors (module-level constants) ──────────────────
@@ -36,7 +36,7 @@ interface LiveStroke {
     width: number
 }
 
-export default function Whiteboard({ sessionId, role, tool, color, boardColor, brushSize, isLocked }: WhiteboardProps) {
+function Whiteboard({ sessionId, role, tool, color, boardColor, brushSize, isLocked }: WhiteboardProps) {
     const { socket } = useSocket()
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const wrapperRef = useRef<HTMLDivElement>(null)
@@ -50,6 +50,9 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
     // 2. liveFabricObjs: the Fabric Path currently on the canvas (swapped each frame)
     const liveStrokesRef = useRef<Record<string, LiveStroke>>({})
     const liveFabricObjsRef = useRef<Record<string, Path>>({})
+
+    // For board files (images added by teacher)
+    const boardFileObjsRef = useRef<Record<string, FabricImage>>({})
 
     // ─────────────────────────────────────────────────────────────
     // Coordinate helpers – simple 0‑1 ratio normalisation
@@ -108,7 +111,7 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
             const pt = canvas.getScenePoint(opt.e)
             const norm = toNorm(pt.x, pt.y, canvas.width, canvas.height)
 
-            /*
+            /**//*
             socket.emit("stroke_draw", {
                 roomId: sessionId,
                 payload: {
@@ -122,6 +125,7 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
                 },
             })
             */
+            /* */
         })
 
         canvas.on("mouse:move", (opt) => {
@@ -130,28 +134,36 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
             const norm = toNorm(pt.x, pt.y, canvas.width, canvas.height)
 
             /*
-            socket.emit("stroke_draw", {
-                roomId: sessionId,
-                payload: {
-                    id: localStrokeIdRef.current,
-                    type: "draw",
-                    point: norm,
-                },
-            })
+            */
+            /*
+             socket.emit("stroke_draw", {
+                 roomId: sessionId,
+                 payload: {
+                     id: localStrokeIdRef.current,
+                     type: "draw",
+                     point: norm,
+                 },
+             })
+                 */
+            /*
             */
         })
 
         canvas.on("mouse:up", () => {
             if (!localStrokeIdRef.current) return
             /*
-            socket.emit("stroke_draw", {
-                roomId: sessionId,
-                payload: {
-                    id: localStrokeIdRef.current,
-                    type: "end",
-                    point: { x: 0, y: 0 },
-                },
-            })
+            */
+            /*
+             socket.emit("stroke_draw", {
+                 roomId: sessionId,
+                 payload: {
+                     id: localStrokeIdRef.current,
+                     type: "end",
+                     point: { x: 0, y: 0 },
+                 },
+             })
+                 */
+            /*
             */
             localStrokeIdRef.current = null
         })
@@ -170,6 +182,7 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
         // and never gets shifted by Fabric's internal transforms.
         // ─────────────────────────────────────────────────────────
 
+        /* */
         /*
         const handleStrokeDraw = ({ payload }: { payload: StrokePayload }) => {
             const { id, type, point, color: sColor, width: sWidth } = payload
@@ -246,9 +259,10 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
             canvas.clear()
             canvas.backgroundColor = boardColor
             canvas.renderAll()
-            // Clean up any in-progress remote strokes
+            // Clean up any in-progress remote strokes and board files
             liveStrokesRef.current = {}
             liveFabricObjsRef.current = {}
+            boardFileObjsRef.current = {}
         }
         socket.on("clear_canvas", handleClearCanvas)
 
@@ -258,6 +272,58 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
         }
         document.addEventListener("clear-canvas-emit", handleClearEmit)
         */
+        /*
+        */
+
+        // ── Board file rendering helper ──────────────────────────
+        const addImageToCanvas = (fileData: { id: string; url: string; name: string; position: { x: number; y: number }; scale: number }) => {
+            const img = new Image()
+            img.crossOrigin = "anonymous"
+            img.onload = () => {
+                const fabricImg = new FabricImage(img, {
+                    left: fileData.position.x * canvas.width,
+                    top: fileData.position.y * canvas.height,
+                    scaleX: (fileData.scale * canvas.width) / img.width,
+                    scaleY: (fileData.scale * canvas.width) / img.width, // uniform scale
+                    selectable: role === "teacher",
+                    evented: role === "teacher",
+                    hasControls: role === "teacher",
+                    hasBorders: role === "teacher",
+                    lockMovementX: role !== "teacher",
+                    lockMovementY: role !== "teacher",
+                })
+                // Store reference for later removal
+                boardFileObjsRef.current[fileData.id] = fabricImg
+                canvas.add(fabricImg)
+                canvas.requestRenderAll()
+            }
+            img.src = fileData.url
+        }
+
+        // ── Board file: add ──────────────────────────────────────
+        const handleBoardFileAdd = ({ payload }: { payload: { id: string; url: string; name: string; position: { x: number; y: number }; scale: number } }) => {
+            addImageToCanvas(payload)
+        }
+        socket.on("board_file_add", handleBoardFileAdd)
+
+        // ── Board file: remove ───────────────────────────────────
+        const handleBoardFileRemove = ({ payload }: { payload: { id: string } }) => {
+            const obj = boardFileObjsRef.current[payload.id]
+            if (obj) {
+                canvas.remove(obj)
+                delete boardFileObjsRef.current[payload.id]
+                canvas.requestRenderAll()
+            }
+        }
+        socket.on("board_file_remove", handleBoardFileRemove)
+
+        // ── Board files: initial state for newcomers ─────────────
+        const handleBoardFilesState = ({ payload }: { payload: Array<{ id: string; url: string; name: string; position: { x: number; y: number }; scale: number }> }) => {
+            for (const file of payload) {
+                addImageToCanvas(file)
+            }
+        }
+        socket.on("board_files_state", handleBoardFilesState)
 
         // ── Resize ───────────────────────────────────────────────
         const handleResize = () => {
@@ -271,9 +337,16 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
         window.addEventListener("resize", handleResize)
 
         return () => {
-            // socket.off("stroke_draw", handleStrokeDraw)
-            // socket.off("clear_canvas", handleClearCanvas)
-            // document.removeEventListener("clear-canvas-emit", handleClearEmit)
+            /**/
+            /*
+            socket.off("stroke_draw", handleStrokeDraw)
+            socket.off("clear_canvas", handleClearCanvas)
+            document.removeEventListener("clear-canvas-emit", handleClearEmit)
+            socket.off("board_file_add", handleBoardFileAdd)
+            socket.off("board_file_remove", handleBoardFileRemove)
+            socket.off("board_files_state", handleBoardFilesState)
+            */
+            /**/
             canvas.dispose()
             window.removeEventListener("resize", handleResize)
         }
@@ -336,3 +409,5 @@ export default function Whiteboard({ sessionId, role, tool, color, boardColor, b
         </div>
     )
 }
+
+export default React.memo(Whiteboard)

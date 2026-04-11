@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react"
 import Toolbar from "./Toolbar"
 import Whiteboard from "./Whiteboard"
 import ChatRoom from "./ChatRoom"
+import BoardTopBar from "./BoardTopBar"
 import ThemeToggle from "../theme-toggle"
 import { SocketProvider } from "../providers/socket-provider"
 import { LogOut } from "lucide-react"
@@ -34,75 +35,81 @@ export default function MainBoard({ duration, sessionId, role, userName, userId,
     const [boardColor, setBoardColor] = useState("#18181b")
     const [brushSize, setBrushSize] = useState(3)
     const [isLocked,] = useState(false)
-    const [timeLeft, setTimeLeft] = useState(duration)
     const [userCount, setUserCount] = useState(1)
     const [roomUsers, setRoomUsers] = useState<RoomUser[]>([])
+
+    // Page & Zoom Management
+    const [currentPage, setCurrentPage] = useState(1)
+    const [totalPages, setTotalPages] = useState(1)
+    const [zoom, setZoom] = useState(100)
 
     // Socket server URL
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3005"
 
-    const timeLeftRef = useRef(timeLeft);
-    useEffect(() => {
-        timeLeftRef.current = timeLeft;
-    }, [timeLeft]);
 
-    // 1. Countdown Logic (Every 1 second)
+
+function formatMinutesToMMSS(minutes: number) {
+    const totalSeconds = Math.floor(minutes * 60);
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+// Optimized Timer Component to prevent full-board re-renders every second
+const SessionTimer = React.memo(({ initialDuration, role, sessionId }: { initialDuration: number, role: string, sessionId: string }) => {
+    const [timeLeft, setTimeLeft] = useState(initialDuration)
+    const timeLeftRef = useRef(initialDuration)
+
+    useEffect(() => {
+        timeLeftRef.current = timeLeft
+    }, [timeLeft])
+
+    // 1. Countdown Logic
     useEffect(() => {
         const timer = setInterval(() => {
             setTimeLeft((prev) => {
                 if (prev <= 0) return 0;
-                return prev - (1 / 60); // 1 second is 1/60th of a minute
+                return prev - (1 / 60);
             });
         }, 1000);
         return () => clearInterval(timer);
     }, []);
 
-    // 2. Sync for Teacher (Every 1 minute)
+    // 2. Sync Logic
     useEffect(() => {
-        if (role !== "teacher") return;
-
-        const syncTimer = setInterval(async () => {
-            try {
-                await fetch("/api/session/duration", {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        sessionId,
-                        duration: timeLeftRef.current
-                    })
-                });
-            } catch (error) {
-                console.error("Failed to sync duration:", error);
-            }
-        }, 60000);
-        return () => clearInterval(syncTimer);
+        if (role === "teacher") {
+            const syncTimer = setInterval(async () => {
+                try {
+                    await fetch("/api/session/duration", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ sessionId, duration: timeLeftRef.current })
+                    });
+                } catch (error) { console.error("Sync error:", error); }
+            }, 60000);
+            return () => clearInterval(syncTimer);
+        } else {
+            const syncTimer = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/session/duration?sessionId=${sessionId}`);
+                    const data = await res.json();
+                    if (data.duration !== undefined) setTimeLeft(data.duration);
+                } catch (error) { console.error("Fetch error:", error); }
+            }, 4 * 60 * 1000);
+            return () => clearInterval(syncTimer);
+        }
     }, [role, sessionId]);
 
-    // 3. Sync for Student (Every 4 minutes)
-    useEffect(() => {
-        if (role !== "student") return;
-
-        const syncTimer = setInterval(async () => {
-            try {
-                const res = await fetch(`/api/session/duration?sessionId=${sessionId}`);
-                const data = await res.json();
-                if (data.duration !== undefined) {
-                    setTimeLeft(data.duration);
-                }
-            } catch (error) {
-                console.error("Failed to fetch duration:", error);
-            }
-        }, 4 * 60 * 1000);
-        return () => clearInterval(syncTimer);
-    }, [role, sessionId]);
-
-    function formatMinutesToMMSS(minutes: number) {
-        const totalSeconds = Math.floor(minutes * 60);
-        const mins = Math.floor(totalSeconds / 60);
-        const secs = totalSeconds % 60;
-
-        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    }
+    return (
+        <div className="flex items-center gap-1.5 px-1 py-0.5 bg-muted rounded-[5px] border border-border">
+            <span className={`text-sm font-black uppercase tracking-widest ${timeLeft < 5 ? 'text-red-500 animate-pulse-scale' : 'text-green-600 dark:text-green-500'}`}>
+                {formatMinutesToMMSS(timeLeft)}
+            </span>
+        </div>
+    )
+})
+SessionTimer.displayName = "SessionTimer"
 
 
     const updateBoardBackground = (newColor: string) => {
@@ -147,10 +154,7 @@ export default function MainBoard({ duration, sessionId, role, userName, userId,
                     <div className="flex items-center gap-6">
                         <ThemeToggle />
                         <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1.5 px-1 py-0.5 bg-muted rounded-[5px] border border-border">
-
-                                <span className={`text-sm font-black uppercase tracking-widest ${timeLeft < 5 ? 'text-red-500 animate-pulse-scale' : 'text-green-600 dark:text-green-500'}`}>{formatMinutesToMMSS(timeLeft)}</span>
-                            </div>
+                             <SessionTimer initialDuration={duration} role={role} sessionId={sessionId} />
                         </div>
                         <div className="flex items-center gap-3">
                             <div className="text-right">
@@ -196,16 +200,29 @@ export default function MainBoard({ duration, sessionId, role, userName, userId,
                     />
 
                     {/* 2. Main Drawing Canvas */}
-                    <div className="flex-1 overflow-hidden relative">
-                        <Whiteboard
-                            sessionId={sessionId}
-                            role={role}
-                            tool={tool}
-                            color={color}
-                            boardColor={boardColor}
-                            brushSize={brushSize}
-                            isLocked={isLocked}
-                        />
+                    <div className="flex-1 overflow-hidden relative flex flex-col">
+                        {/* <BoardTopBar
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            onPageChange={setCurrentPage}
+                            onAddPage={() => {
+                                setTotalPages(prev => prev + 1)
+                                setCurrentPage(totalPages + 1)
+                            }}
+                            zoom={zoom}
+                            onZoomChange={setZoom}
+                        /> */}
+                        <div className="flex-1 relative">
+                            <Whiteboard
+                                sessionId={sessionId}
+                                role={role}
+                                tool={tool}
+                                color={color}
+                                boardColor={boardColor}
+                                brushSize={brushSize}
+                                isLocked={isLocked}
+                            />
+                        </div>
                     </div>
 
                     {/* 3. Real-time Chat Panel */}
