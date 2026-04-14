@@ -129,6 +129,8 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             }))
         )
 
+        const containerWidth = wrapperRef.current?.clientWidth || canvas.width
+
         let totalHeight = 0
         const drawCommands: { img: HTMLImageElement, top: number, scale: number }[] = []
 
@@ -139,7 +141,6 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         })
 
         // Ensure canvas has a fixed 1:3 aspect ratio (Height = 3 * Width)
-        const containerWidth = wrapperRef.current?.clientWidth || canvas.width
         const targetHeight = containerWidth * 3
         const finalHeight = Math.max(targetHeight, totalHeight)
         canvas.setDimensions({ width: containerWidth, height: finalHeight })
