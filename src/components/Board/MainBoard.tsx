@@ -1,15 +1,15 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useMemo } from "react"
-// Import new sub-components
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import Toolbar from "./Toolbar"
 import Whiteboard from "./Whiteboard"
 import ChatRoom from "./ChatRoom"
 import BoardTopBar from "./BoardTopBar"
 import ThemeToggle from "../theme-toggle"
-import { SocketProvider } from "../providers/socket-provider"
+import { SocketProvider, useSocket } from "../providers/socket-provider"
 import { LogOut } from "lucide-react"
 import { leaveSession } from "@/app/actions/auth"
+import { toast } from "sonner"
 
 interface RoomUser {
     user_id: string
@@ -28,95 +28,357 @@ interface MainBoardProps {
     visitorId?: number
 }
 
-export default function MainBoard({ duration, sessionId, role, userName, userId, visitorId }: MainBoardProps) {
+
+
+function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps) {
     // Board State
     const [tool, setTool] = useState("pencil")
     const [color, setColor] = useState("#FFFFFF")
-    const [boardColor, setBoardColor] = useState("#18181b")
+    const [pageBgColors, setPageBgColors] = useState<Record<number, string>>({ 1: "#18181b" })
+    const [pageBgImages, setPageBgImages] = useState<Record<number, string[]>>({})
     const [brushSize, setBrushSize] = useState(3)
     const [isLocked,] = useState(false)
     const [userCount, setUserCount] = useState(1)
     const [roomUsers, setRoomUsers] = useState<RoomUser[]>([])
+    const [isChatOpen, setIsChatOpen] = useState(true)
 
     // Page & Zoom Management
     const [currentPage, setCurrentPage] = useState(1)
     const [totalPages, setTotalPages] = useState(1)
     const [zoom, setZoom] = useState(100)
 
-    // Socket server URL
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3005"
+    const { socket } = useSocket()
 
-
-
-function formatMinutesToMMSS(minutes: number) {
-    const totalSeconds = Math.floor(minutes * 60);
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-
-    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
-
-// Optimized Timer Component to prevent full-board re-renders every second
-const SessionTimer = React.memo(({ initialDuration, role, sessionId }: { initialDuration: number, role: string, sessionId: string }) => {
-    const [timeLeft, setTimeLeft] = useState(initialDuration)
-    const timeLeftRef = useRef(initialDuration)
+    // Derived current color
+    const currentBoardColor = pageBgColors[currentPage] || "#18181b"
+    const currentBgImages = pageBgImages[currentPage] || []
 
     useEffect(() => {
-        timeLeftRef.current = timeLeft
-    }, [timeLeft])
-
-    // 1. Countdown Logic
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setTimeLeft((prev) => {
-                if (prev <= 0) return 0;
-                return prev - (1 / 60);
-            });
-        }, 1000);
-        return () => clearInterval(timer);
-    }, []);
-
-    // 2. Sync Logic
-    useEffect(() => {
-        if (role === "teacher") {
-            const syncTimer = setInterval(async () => {
-                try {
-                    await fetch("/api/session/duration", {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ sessionId, duration: timeLeftRef.current })
-                    });
-                } catch (error) { console.error("Sync error:", error); }
-            }, 60000);
-            return () => clearInterval(syncTimer);
-        } else {
-            const syncTimer = setInterval(async () => {
-                try {
-                    const res = await fetch(`/api/session/duration?sessionId=${sessionId}`);
-                    const data = await res.json();
-                    if (data.duration !== undefined) setTimeLeft(data.duration);
-                } catch (error) { console.error("Fetch error:", error); }
-            }, 4 * 60 * 1000);
-            return () => clearInterval(syncTimer);
+        if (!socket) return
+        const handleBoardColorSync = ({ color, page }: { color: string, page?: number }) => {
+            console.log("Syncing board color:", color, "for page:", page)
+            setPageBgColors(prev => ({ ...prev, [page || 1]: color }))
         }
-    }, [role, sessionId]);
+        const handlePageUpdate = ({ payload }: { payload: { currentPage?: number, totalPages?: number, bgColors?: Record<number, string>, bgImages?: Record<number, string[]> } }) => {
+            console.log("Received page update:", payload)
+            if (payload.currentPage !== undefined) setCurrentPage(payload.currentPage)
+            if (payload.totalPages !== undefined) setTotalPages(payload.totalPages)
+            if (payload.bgColors !== undefined) setPageBgColors(prev => ({ ...prev, ...payload.bgColors }))
+            if (payload.bgImages !== undefined) setPageBgImages(prev => ({ ...prev, ...payload.bgImages }))
+        }
 
-    return (
-        <div className="flex items-center gap-1.5 px-1 py-0.5 bg-muted rounded-[5px] border border-border">
-            <span className={`text-sm font-black uppercase tracking-widest ${timeLeft < 5 ? 'text-red-500 animate-pulse-scale' : 'text-green-600 dark:text-green-500'}`}>
-                {formatMinutesToMMSS(timeLeft)}
-            </span>
-        </div>
-    )
-})
-SessionTimer.displayName = "SessionTimer"
+        // Calculate labels for tabs (B-1, B-2 for board; P-1, P-2 for PDF)
+        // Note: we can't easily put this in useMemo because pageBgImages might update separately from totalPages
+        // But for rendering, it's fine.
 
+        const handlePageState = ({ payload }: { payload: { pages?: Record<string, unknown>[], currentPageId?: string } }) => {
+            console.log("Received initial page state:", payload)
+            if (payload.pages) setTotalPages(payload.pages.length)
+        }
+        socket.on("board_color_sync", handleBoardColorSync)
+        socket.on("page_update", handlePageUpdate)
+        socket.on("page_state", handlePageState)
+        return () => {
+            socket.off("board_color_sync", handleBoardColorSync)
+            socket.off("page_update", handlePageUpdate)
+            socket.off("page_state", handlePageState)
+        }
+    }, [socket])
+
+    const pageLabels = useMemo(() => {
+        let bCount = 0;
+        let pCount = 0;
+        const labels: Record<number, string> = {};
+        for (let i = 1; i <= totalPages; i++) {
+            const isPdf = !!(pageBgImages[i] && pageBgImages[i].length > 0);
+            if (isPdf) {
+                pCount++;
+                labels[i] = `P-${pCount}`;
+            } else {
+                bCount++;
+                labels[i] = `B-${bCount}`;
+            }
+        }
+        return labels;
+    }, [totalPages, pageBgImages])
 
     const updateBoardBackground = (newColor: string) => {
-        // Only update local state in static mode
-        setBoardColor(newColor)
+        setPageBgColors(prev => ({ ...prev, [currentPage]: newColor }))
+        if (role === "teacher" && socket) {
+            socket.emit("board_color_change", {
+                roomId: sessionId,
+                color: newColor,
+                page: currentPage
+            })
+        }
     }
 
+    const handlePageChange = (page: number) => {
+        console.log("Switching to page:", page)
+        setCurrentPage(page)
+        if (role === "teacher" && socket) {
+            socket.emit("page_update", {
+                roomId: sessionId,
+                payload: {
+                    currentPage: page,
+                    totalPages: totalPages
+                }
+            })
+        }
+    }
+
+    const handleAddPage = () => {
+        const newTotal = totalPages + 1
+        console.log("Adding page. New total:", newTotal)
+        setTotalPages(newTotal)
+        setCurrentPage(newTotal)
+
+        // Ensure new page has a default color
+        setPageBgColors(prev => ({ ...prev, [newTotal]: "#18181b" }))
+
+        if (role === "teacher" && socket) {
+            socket.emit("page_update", {
+                roomId: sessionId,
+                payload: {
+                    currentPage: newTotal,
+                    totalPages: newTotal,
+                    bgColors: { ...pageBgColors, [newTotal]: "#18181b" }
+                }
+            })
+        }
+    }
+
+    // ── PDF Upload Handler ────────────────────────────────────
+    const handlePdfUpload = useCallback(async (file: File) => {
+        if (role !== "teacher") return
+
+        toast.info("Processing PDF... Please wait.")
+
+        try {
+            // Dynamic import of pdfjs-dist
+            const pdfjsLib = await import("pdfjs-dist")
+
+            // Set worker source locally
+            pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+                "pdfjs-dist/build/pdf.worker.mjs",
+                import.meta.url
+            ).toString()
+
+            const arrayBuffer = await file.arrayBuffer()
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+            const numPages = pdf.numPages
+
+            console.log(`PDF loaded: ${numPages} pages`)
+
+            const dataUrls: string[] = []
+            for (let i = 1; i <= numPages; i++) {
+                const page = await pdf.getPage(i)
+                const viewport = page.getViewport({ scale: 2.0 })
+
+                const offscreen = document.createElement("canvas")
+                offscreen.width = viewport.width
+                offscreen.height = viewport.height
+                const ctx = offscreen.getContext("2d")!
+
+                await page.render({ canvasContext: ctx, viewport, canvas: offscreen }).promise
+                dataUrls.push(offscreen.toDataURL("image/jpeg", 0.85))
+            }
+
+            // Update local state: add one page with all PDF images stacked
+            const pageIdx = totalPages + 1
+            const newBgImages = { [pageIdx]: dataUrls }
+            const newBgColors = { [pageIdx]: "#ffffff" }
+
+            setTotalPages(pageIdx)
+            setCurrentPage(pageIdx)
+            setPageBgImages(prev => ({ ...prev, ...newBgImages }))
+            setPageBgColors(prev => ({ ...prev, ...newBgColors }))
+
+            // Broadcast to students
+            if (socket) {
+                socket.emit("page_update", {
+                    roomId: sessionId,
+                    payload: {
+                        currentPage: pageIdx,
+                        totalPages: pageIdx,
+                        bgColors: { ...pageBgColors, ...newBgColors },
+                        bgImages: newBgImages,
+                    }
+                })
+            }
+
+            toast.success(`PDF loaded: ${numPages} page${numPages > 1 ? 's' : ''} added`)
+        } catch (err) {
+            console.error("PDF processing error:", err)
+            toast.error("Failed to process PDF. Please try again.")
+        }
+    }, [role, totalPages, socket, sessionId, pageBgColors])
+
+    const handleDeletePage = () => {
+        if (totalPages <= 1 || role !== "teacher") return
+
+        const pageToDelete = currentPage
+        console.log("Deleting page:", pageToDelete)
+
+        // 1. Shift background data
+        const newBgColors: Record<number, string> = {}
+        const newBgImages: Record<number, string[]> = {}
+
+        for (let i = 1; i <= totalPages; i++) {
+            if (i < pageToDelete) {
+                newBgColors[i] = pageBgColors[i] || "#18181b"
+                newBgImages[i] = pageBgImages[i] || []
+            } else if (i > pageToDelete) {
+                newBgColors[i - 1] = pageBgColors[i] || "#18181b"
+                newBgImages[i - 1] = pageBgImages[i] || []
+            }
+        }
+
+        const newTotal = totalPages - 1
+        const newCurrent = Math.min(currentPage, newTotal)
+
+        // 2. Local State update
+        setTotalPages(newTotal)
+        setPageBgColors(newBgColors)
+        setPageBgImages(newBgImages)
+        setCurrentPage(newCurrent)
+
+        // 3. Notify Whiteboard to shift its objects
+        document.dispatchEvent(new CustomEvent("delete-page-local", {
+            detail: { page: pageToDelete }
+        }))
+
+        // 4. Sync to students
+        if (socket) {
+            socket.emit("page_update", {
+                roomId: sessionId,
+                payload: {
+                    currentPage: newCurrent,
+                    totalPages: newTotal,
+                    bgColors: newBgColors,
+                    bgImages: newBgImages
+                }
+            })
+        }
+    }
+
+    return (
+        <div className="flex flex-col w-screen h-screen bg-background text-foreground overflow-hidden font-sans">
+            <div className="flex flex-1 overflow-hidden">
+                <div className="flex flex-col flex-1 overflow-hidden">
+                    <BoardTopBar
+                        zoom={zoom}
+                        onZoomChange={setZoom}
+                        boardColor={currentBoardColor}
+                        setBoardColor={updateBoardBackground}
+                        role={role}
+                        sessionId={sessionId}
+                        duration={duration}
+                    />
+                    <div className="flex-1 overflow-hidden relative flex">
+
+                        <Toolbar
+                            tool={tool}
+                            setTool={setTool}
+                            role={role}
+                            color={color}
+                            setColor={setColor}
+                            brushSize={brushSize}
+                            setBrushSize={setBrushSize}
+                            onClearCanvas={role === "teacher" ? () => {
+                                document.dispatchEvent(new CustomEvent("clear-canvas-emit"))
+                            } : undefined}
+                            onPdfUpload={role === "teacher" ? handlePdfUpload : undefined}
+                        />
+                        <div className="flex-1 relative flex flex-col overflow-hidden">
+                            {/* Chrome Tabs Style Pagination */}
+                            <div className="flex items-end px-4 pt-1.5 overflow-x-auto no-scrollbar gap-0.5 bg-muted/30 border-b border-border/50">
+                                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                                    <div
+                                        key={pageNum}
+                                        onClick={() => handlePageChange(pageNum)}
+                                        className={`
+                                            relative flex items-center h-8 px-4 min-w-[70px] max-w-[150px] cursor-pointer 
+                                            transition-all duration-200 rounded-t-lg group
+                                            ${currentPage === pageNum
+                                                ? "bg-background text-foreground shadow-[0_-4px_8px_rgba(0,0,0,0.1)] z-10"
+                                                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                            }
+                                        `}
+                                    >
+                                        <span className="text-[11px] font-bold truncate shrink-0 mr-1.5">
+                                            {pageLabels[pageNum]}
+                                        </span>
+                                        {role === "teacher" && totalPages > 1 && currentPage === pageNum && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDeletePage() }}
+                                                className="ml-auto p-0.5 rounded-full hover:bg-muted transition-colors opacity-0 group-hover:opacity-100"
+                                            >
+                                                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                        {/* Tab curve mimics */}
+                                        {currentPage === pageNum && (
+                                            <>
+                                                <div className="absolute -left-2.5 bottom-0 w-2.5 h-2.5 bg-background overflow-hidden">
+                                                    <div className="w-full h-full bg-muted/30 rounded-br-lg" />
+                                                </div>
+                                                <div className="absolute -right-2.5 bottom-0 w-2.5 h-2.5 bg-background overflow-hidden">
+                                                    <div className="w-full h-full bg-muted/30 rounded-bl-lg" />
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                ))}
+                                {role === "teacher" && (
+                                    <button
+                                        onClick={handleAddPage}
+                                        className="mb-1 ml-1.5 p-1 rounded-full hover:bg-muted/50 text-muted-foreground transition-all shrink-0"
+                                        title="Add New Page"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                                        </svg>
+                                    </button>
+                                )}
+                            </div>
+
+                            <Whiteboard
+                                sessionId={sessionId}
+                                role={role}
+                                tool={tool}
+                                color={color}
+                                boardColor={currentBoardColor}
+                                bgImages={currentBgImages}
+                                brushSize={brushSize}
+                                isLocked={isLocked}
+                                currentPage={currentPage}
+                                onToolChange={setTool}
+                            />
+                        </div>
+                    </div>
+                </div>
+                <ChatRoom
+                    userCount={userCount}
+                    roomUsers={roomUsers}
+                    setRoomUsers={setRoomUsers}
+                    setUserCount={setUserCount}
+                    role={role}
+                    userName={userName}
+                    sessionId={sessionId}
+                    isOpen={isChatOpen}
+                    setIsOpen={setIsChatOpen}
+                />
+            </div>
+        </div>
+    )
+}
+
+export default function MainBoard({ duration, sessionId, role, userName, userId, visitorId }: MainBoardProps) {
+    // Socket server URL
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3005"
 
     const user = useMemo(() => ({
         id: userId || "guest",
@@ -126,117 +388,15 @@ SessionTimer.displayName = "SessionTimer"
     }), [userId, userName, role, visitorId]);
 
     return (
-        <SocketProvider
-            url={socketUrl}
-            roomId={sessionId}
-            user={user}
-        >
-            <div className="flex flex-col w-screen h-screen bg-background text-foreground overflow-hidden font-sans">
-                {/* Minimal Board Header */}
-                <header className="h-14 border-b border-border bg-header flex items-center justify-between px-3 z-40 shrink-0">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            {/* <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                            <span className="text-white font-black text-lg ">B</span>
-                        </div> */}
-                            <span className="text-primary font-bold tracking-tighter text-xl">Board</span>
-                        </div>
-                        {role == "teacher" && <>
-                            <div className="h-6 w-px bg-border mx-2" />
-                            <div className="flex flex-col">
-                                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest leading-none mb-1">Active Session</span>
-                                <span className="text-xs text-foreground font-medium">{sessionId}</span>
-                            </div>
-                        </>
-                        }
-                    </div>
-
-                    <div className="flex items-center gap-6">
-                        <ThemeToggle />
-                        <div className="flex items-center gap-2">
-                             <SessionTimer initialDuration={duration} role={role} sessionId={sessionId} />
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className="text-right">
-                                <p className="text-sm text-foreground font-bold mb-1">{userName}</p>
-                                <p className="text-[10px] text-muted-foreground font-bold capitalize tracking-widest leading-none">({role})</p>
-                            </div>
-                            <div className="w-10 h-10 bg-linear-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg">
-                                {userName.charAt(0).toUpperCase()}
-                            </div>
-                        </div>
-
-                        <button
-                            onClick={() => {
-                                if (confirm("Are you sure you want to leave this session?")) {
-                                    leaveSession(sessionId);
-                                }
-                            }}
-                            className="flex items-center gap-2 px-4 h-10 bg-red-500 dark:bg-red-500/60 hover:bg-red-500/80 dark:hover:bg-red-500 text-white rounded-lg transition-all duration-300 font-bold text-xs ring-1 ring-red-500/20 hover:ring-red-500 shadow-sm group"
-                            title="Leave Session"
-                        >
-                            <LogOut size={16} className="group-hover:-translate-x-0.5 transition-transform" />
-                            <span>Leave</span>
-                        </button>
-                    </div>
-                </header>
-
-                <div className="flex flex-1 overflow-hidden">
-                    {/* 1. Sidebar Tools */}
-                    <Toolbar
-                        tool={tool}
-                        setTool={setTool}
-                        role={role}
-                        color={color}
-                        setColor={setColor}
-                        boardColor={boardColor}
-                        setBoardColor={updateBoardBackground}
-                        brushSize={brushSize}
-                        setBrushSize={setBrushSize}
-                        onClearCanvas={role === "teacher" ? () => {
-                            // Will be handled by ClearCanvasEmitter below
-                            document.dispatchEvent(new CustomEvent("clear-canvas-emit"))
-                        } : undefined}
-                    />
-
-                    {/* 2. Main Drawing Canvas */}
-                    <div className="flex-1 overflow-hidden relative flex flex-col">
-                        {/* <BoardTopBar
-                            currentPage={currentPage}
-                            totalPages={totalPages}
-                            onPageChange={setCurrentPage}
-                            onAddPage={() => {
-                                setTotalPages(prev => prev + 1)
-                                setCurrentPage(totalPages + 1)
-                            }}
-                            zoom={zoom}
-                            onZoomChange={setZoom}
-                        /> */}
-                        <div className="flex-1 relative">
-                            <Whiteboard
-                                sessionId={sessionId}
-                                role={role}
-                                tool={tool}
-                                color={color}
-                                boardColor={boardColor}
-                                brushSize={brushSize}
-                                isLocked={isLocked}
-                            />
-                        </div>
-                    </div>
-
-                    {/* 3. Real-time Chat Panel */}
-                    <ChatRoom
-                        userCount={userCount}
-                        roomUsers={roomUsers}
-                        setRoomUsers={setRoomUsers}
-                        setUserCount={setUserCount}
-                        role={role}
-                        userName={userName}
-                        sessionId={sessionId}
-                    />
-                </div>
-            </div>
+        <SocketProvider url={socketUrl} roomId={sessionId} user={user}>
+            <MainBoardInner
+                duration={duration}
+                sessionId={sessionId}
+                role={role}
+                userName={userName}
+                userId={userId}
+                visitorId={visitorId}
+            />
         </SocketProvider>
     )
 }

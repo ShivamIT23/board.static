@@ -41,6 +41,8 @@ interface ChatRoomProps {
     role: "teacher" | "student"
     userName: string
     sessionId: string
+    isOpen: boolean
+    setIsOpen: (open: boolean) => void
 }
 
 interface Visitor {
@@ -51,11 +53,10 @@ interface Visitor {
     isOnline?: boolean;
 }
 
-export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCount, role, userName, sessionId }: ChatRoomProps) {
+export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCount, role, userName, sessionId, isOpen, setIsOpen }: ChatRoomProps) {
     const { socket } = useSocket()
     const [messages, setMessages] = useState<ChatMessage[]>([])
     const [inputMessage, setInputMessage] = useState("")
-    const [isOpen, setIsOpen] = useState(true)
     const [showVisitors, setShowVisitors] = useState(false)
     const [visitors, setVisitors] = useState<Visitor[]>([])
     const [isLoadingVisitors, setIsLoadingVisitors] = useState(false)
@@ -386,21 +387,38 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
 
     if (!isOpen) {
         return (
-            <button
-                onClick={() => setIsOpen(true)}
-                className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all z-50"
-            >
-                <MessageCircle size={24} />
-            </button>
+            <div className="w-12 bg-card border-l border-border flex flex-col items-center py-4 gap-4 transition-all duration-300">
+                <button
+                    type="button"
+                    onClick={() => setIsOpen(true)}
+                    className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-all"
+                    title="Open Chat"
+                >
+                    <MessageCircle size={20} />
+                </button>
+                <div className="flex flex-col items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] font-bold text-muted-foreground">{userCount}</span>
+                </div>
+            </div>
         )
     }
 
     return (
-        <aside className="w-80 flex flex-col bg-card border-l border-border transition-all duration-300 z-30 shrink-0 h-full relative">
-            <div className="h-10 flex items-center justify-between px-6 border-b border-border shrink-0">
-                <span className="text-sm font-black uppercase tracking-[0.2em] text-muted-foreground">Chat</span>
+        <aside className="w-64 sm:w-72 md:w-80 flex flex-col bg-card border-l border-border transition-all duration-300 z-30 shrink-0 h-full relative">
+            <div className="h-[41px] flex items-center justify-between px-3 sm:px-6 border-b border-border shrink-0">
+                <span className="text-[10px] sm:text-xs font-black tracking-widest text-muted-background">WELCOME {userName} <span className=" text-muted-foreground">{role == "teacher" ? "(T)" : "(S)"}</span></span>
+                <div className="flex items-center gap-2 relative">
+                    <button type="button" onClick={() => setIsOpen(false)} className="p-1.5 text-muted-foreground hover:text-foreground">
+                        <Minimize2 size={16} />
+                    </button>
+                </div>
+            </div>
+            <div className="h-10 flex items-center justify-between px-3 sm:px-6 border-b border-border shrink-0">
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">Chat</span>
                 <div className="flex items-center gap-2 relative">
                     <button
+                        type="button"
                         id="users"
                         onClick={toggleVisitors}
                         className={cn(
@@ -442,6 +460,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                                                 {role === "teacher" && user.socket_id !== socket?.id && (
                                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <button
+                                                            type="button"
                                                             onClick={() => toggleUserPermission(user.user_id, "text", user.textEnabled ?? true)}
                                                             className={cn(
                                                                 "p-1 rounded transition-colors",
@@ -452,6 +471,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                                                             {user.textEnabled !== false ? <MessageSquare size={12} /> : <MessageSquareOff size={12} />}
                                                         </button>
                                                         <button
+                                                            type="button"
                                                             onClick={() => toggleUserPermission(user.user_id, "attachments", user.attachmentsEnabled ?? true)}
                                                             className={cn(
                                                                 "p-1 rounded transition-colors",
@@ -507,6 +527,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
 
                     {role === "teacher" && (
                         <button
+                            type="button"
                             onClick={() => setShowSettings(!showSettings)}
                             className={cn("p-1.5 text-muted-foreground hover:text-foreground", showSettings && "text-primary bg-primary/10 rounded-md")}
                             title="Chat Controls"
@@ -514,9 +535,6 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                             <Settings size={16} />
                         </button>
                     )}
-                    <button onClick={() => setIsOpen(false)} className="p-1.5 text-muted-foreground hover:text-foreground">
-                        <Minimize2 size={16} />
-                    </button>
                 </div>
             </div>
 
@@ -529,6 +547,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                             <span className="text-[9px] text-muted-foreground">Enable/Disable chat for all</span>
                         </div>
                         <button
+                            type="button"
                             onClick={() => toggleSetting("chat")}
                             className={cn(
                                 "p-2 rounded-md transition-all",
@@ -545,6 +564,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                             <span className="text-[9px] text-muted-foreground">Global file sharing toggle</span>
                         </div>
                         <button
+                            type="button"
                             onClick={() => toggleSetting("attachments")}
                             disabled={!roomSettings.chatEnabled}
                             className={cn(
@@ -562,7 +582,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
             <div
                 ref={scrollRef}
                 onScroll={handleScroll}
-                className="flex-1 overflow-y-auto p-0 flex flex-col space-y-4 bg-muted/30 relative"
+                className="flex-1 overflow-y-auto p-0 flex flex-col space-y-4 bg-muted/30 relative no-scrollbar"
             >
                 {/* Infinite Scroll Loading Indicator */}
                 {isLoadingMore && canLoadMore && (
@@ -686,6 +706,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
 
                 {showScrollButton && (
                     <button
+                        type="button"
                         onClick={scrollToBottom}
                         className="sticky bottom-4 ml-auto mr-4 z-50 p-1.5 bg-secondary text-primary-background rounded-[5px] shadow-2xl hover:scale-110 active:scale-95 transition-all animate-in fade-in zoom-in duration-300 border border-white/20 backdrop-blur-sm"
                         title="Scroll to bottom"
@@ -741,7 +762,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                 ) : (
                     <div className="flex">
                         <div className={cn(
-                            "flex gap-3 w-full items-center bg-muted border border-border p-1 pr-2 focus-within:border-primary box-border focus-within:ring-0 focus-within:ring-offset-0 transition-all group",
+                            "flex gap-1 w-full items-center bg-muted border border-border p-1 pr-2 focus-within:border-primary box-border focus-within:ring-0 focus-within:ring-offset-0 transition-all group",
                             (!roomSettings.chatEnabled && role === "student") && "opacity-50 cursor-not-allowed"
                         )}>
                             <input
@@ -778,7 +799,7 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                                     (role === "student" && roomUsers.find(u => u.socket_id === socket?.id)?.textEnabled === false) ? "Chat is disabled" :
                                         selectedFile ? "Add a caption..." : "Send a message..."
                                 }
-                                className="flex-1 h-10 px-3 bg-transparent text-sm font-medium outline-none text-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed"
+                                className="flex-1 h-10 px-1 bg-transparent text-sm font-medium outline-none text-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed"
                             />
                         </div>
                         <button

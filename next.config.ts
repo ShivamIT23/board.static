@@ -2,7 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   devIndicators: false,
-  /* config options here */
+  webpack: (config) => {
+    // Prevent webpack from trying to bundle the pdf.js worker
+    config.resolve.alias.canvas = false;
+    return config;
+  },
+  turbopack: {},
 };
 
 export default nextConfig;
