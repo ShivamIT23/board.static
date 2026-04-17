@@ -5,10 +5,15 @@ import {
     Plus,
     RotateCcw,
     RotateCw,
-    LogOut
+    LogOut,
+    ImagePlus,
+    FileUp
 } from "lucide-react"
 import { leaveSession } from "@/app/actions/auth"
 import ThemeToggle from "../theme-toggle"
+import { cn } from "@/lib/utils"
+import { useSocket } from "../providers/socket-provider"
+import { toast } from "sonner"
 
 // Optimized Timer Component
 export const SessionTimer = React.memo(({ initialDuration, role, sessionId }: { initialDuration: number, role: string, sessionId: string }) => {
@@ -69,6 +74,7 @@ interface BoardTopBarProps {
     role: "teacher" | "student"
     sessionId: string
     duration: number
+    onPdfUpload?: (file: File) => void
 }
 
 export default function BoardTopBar({
@@ -78,8 +84,66 @@ export default function BoardTopBar({
     setBoardColor,
     role,
     sessionId,
-    duration
+    duration,
+    onPdfUpload
 }: BoardTopBarProps) {
+    const { socket } = useSocket()
+    const boardFileInputRef = useRef<HTMLInputElement>(null)
+    const pdfFileInputRef = useRef<HTMLInputElement>(null)
+
+    const handleBoardFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file || !socket) return
+
+        if (!file.type.startsWith("image/")) {
+            toast.error("Only image files can be added to the board")
+            if (boardFileInputRef.current) boardFileInputRef.current.value = ""
+            return
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error("Image must be less than 5MB")
+            if (boardFileInputRef.current) boardFileInputRef.current.value = ""
+            return
+        }
+
+        const reader = new FileReader()
+        reader.onloadend = () => {
+            socket.emit("board_file_add", {
+                payload: {
+                    id: crypto.randomUUID(),
+                    url: reader.result as string,
+                    name: file.name,
+                    position: { x: 0.3, y: 0.3 },
+                    scale: 0.25,
+                }
+            })
+        }
+        reader.readAsDataURL(file)
+        if (boardFileInputRef.current) boardFileInputRef.current.value = ""
+    }
+
+    const handlePdfFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        if (file.type !== "application/pdf") {
+            toast.error("Only PDF files are supported")
+            if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
+            return
+        }
+
+        if (file.size > 25 * 1024 * 1024) {
+            toast.error("PDF must be less than 25MB")
+            if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
+            return
+        }
+
+        onPdfUpload?.(file)
+        if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
+    }
+
+    const backgroundColors = ["#1a1a2e", "#0f1923", "#1e1e1e", "#0d1117", "#14213d", "#1b2838"]
 
     return (
         <div className="relative flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 min-h-10 bg-sidebar backdrop-blur-xl border-b border-t-0 border-l-0 border-border/50 shadow-[0_8px_32px_rgba(0,0,0,0.3)] animate-in fade-in slide-in-from-top-4 duration-500 w-full overflow-x-auto no-scrollbar">
@@ -89,17 +153,18 @@ export default function BoardTopBar({
 
 
             {/* Undo/Redo */}
-            <div className="flex items-center gap-0.5 sm:gap-1 px-1 sm:px-2 border-r border-border/50 h-7 sm:h-full">
-                <button type="button" className="p-1 sm:p-1.5 rounded-full hover:bg-accent text-muted-foreground/60 transition-colors" title="Undo (Coming Soon)">
-                    <RotateCcw size={13} className="sm:w-[15px] sm:h-[15px]" />
-                </button>
-                <button type="button" className="p-1 sm:p-1.5 rounded-full hover:bg-accent text-muted-foreground/60 transition-colors" title="Redo (Coming Soon)">
-                    <RotateCw size={13} className="sm:w-[15px] sm:h-[15px]" />
-                </button>
-            </div>
+            {role == 'teacher' &&
+                <div className="flex items-center gap-0.5 sm:gap-1 px-1 sm:px-2 border-r border-border/50 h-7 sm:h-full">
+                    <button type="button" className="p-1 sm:p-1.5 rounded-full hover:bg-accent text-muted-foreground/60 transition-colors" title="Undo (Coming Soon)">
+                        <RotateCcw size={13} className="sm:w-[15px] sm:h-[15px]" />
+                    </button>
+                    <button type="button" className="p-1 sm:p-1.5 rounded-full hover:bg-accent text-muted-foreground/60 transition-colors" title="Redo (Coming Soon)">
+                        <RotateCw size={13} className="sm:w-[15px] sm:h-[15px]" />
+                    </button>
+                </div>}
 
             {/* Board Background (Desk) */}
-            {/* {role === "teacher" && (
+            {role === "teacher" && (
                 <div className="flex items-center gap-1.5 shrink-0 sm:gap-2 px-1 sm:px-3 border-r border-border/50 h-7 sm:h-full">
                     <span className="hidden md:block text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-zinc-500">Desk</span>
                     <div className="flex gap-1 sm:gap-1.5">
@@ -117,10 +182,10 @@ export default function BoardTopBar({
                         ))}
                     </div>
                 </div>
-            )} */}
+            )}
 
             {/* Zoom Controls */}
-            <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 pl-1">
+            {/* <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 pl-1">
                 <button
                     type="button"
                     onClick={() => onZoomChange(Math.max(10, zoom - 10))}
@@ -138,7 +203,7 @@ export default function BoardTopBar({
                 >
                     <Plus size={13} className="sm:w-[15px] sm:h-[15px]" />
                 </button>
-            </div>
+            </div> */}
             <div className="flex mx-auto h-full items-center shrink-0 gap-1 sm:gap-2 pl-1">
                 <SessionTimer initialDuration={duration} role={role} sessionId={sessionId} />
             </div>
@@ -146,6 +211,30 @@ export default function BoardTopBar({
                 <div className="max-h-full">
                     <ThemeToggle cn="w-6! h-6!" iconSize={12} />
                 </div>
+
+                {role === "teacher" && (
+                    <div className="flex items-center gap-1 sm:gap-2 h-full">
+                        <input type="file" ref={boardFileInputRef} onChange={handleBoardFileSelect} className="hidden" accept="image/*" />
+                        <button
+                            type="button"
+                            onClick={() => boardFileInputRef.current?.click()}
+                            className="p-1.5 rounded-[4px] transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent border border-border/50"
+                            title="Add Image to Board"
+                        >
+                            <ImagePlus size={15} />
+                        </button>
+                        <input type="file" ref={pdfFileInputRef} onChange={handlePdfFileSelect} className="hidden" accept="application/pdf" />
+                        <button
+                            type="button"
+                            onClick={() => pdfFileInputRef.current?.click()}
+                            className="p-1.5 rounded-[4px] transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent border border-border/50"
+                            title="Upload PDF to Board"
+                        >
+                            <FileUp size={15} />
+                        </button>
+                    </div>
+                )}
+
                 <button
                     type="button"
                     onClick={() => { if (confirm("Are you sure you want to leave this session?")) leaveSession(sessionId) }}

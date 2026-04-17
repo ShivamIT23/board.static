@@ -1,23 +1,13 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
+import React, { useState, useEffect, useMemo, useCallback } from "react"
 import Toolbar from "./Toolbar"
 import Whiteboard from "./Whiteboard"
 import ChatRoom from "./ChatRoom"
 import BoardTopBar from "./BoardTopBar"
-import ThemeToggle from "../theme-toggle"
 import { SocketProvider, useSocket } from "../providers/socket-provider"
-import { LogOut } from "lucide-react"
-import { leaveSession } from "@/app/actions/auth"
+import { RoomUser } from "./ChatRoom"
 import { toast } from "sonner"
-
-interface RoomUser {
-    user_id: string
-    username: string
-    socket_id: string
-    isMuted?: boolean
-    mediaState?: { audio: boolean; video: boolean }
-}
 
 interface MainBoardProps {
     duration: number
@@ -36,8 +26,10 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
     const [color, setColor] = useState("#FFFFFF")
     const [pageBgColors, setPageBgColors] = useState<Record<number, string>>({ 1: "#18181b" })
     const [pageBgImages, setPageBgImages] = useState<Record<number, string[]>>({})
+    const [pageNames, setPageNames] = useState<Record<number, string>>({})
     const [brushSize, setBrushSize] = useState(3)
-    const [isLocked,] = useState(false)
+    const [isLocked, setIsLocked] = useState(false)
+    const [drawingEnabled, setDrawingEnabled] = useState(role === "teacher")
     const [userCount, setUserCount] = useState(1)
     const [roomUsers, setRoomUsers] = useState<RoomUser[]>([])
     const [isChatOpen, setIsChatOpen] = useState(true)
@@ -46,6 +38,10 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
     const [currentPage, setCurrentPage] = useState(1)
     const [totalPages, setTotalPages] = useState(1)
     const [zoom, setZoom] = useState(100)
+
+    // Shape colors
+    const [shapeFillColor, setShapeFillColor] = useState("transparent")
+    const [shapeBorderColor, setShapeBorderColor] = useState("#FFFFFF")
 
     const { socket } = useSocket()
 
@@ -59,12 +55,13 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
             console.log("Syncing board color:", color, "for page:", page)
             setPageBgColors(prev => ({ ...prev, [page || 1]: color }))
         }
-        const handlePageUpdate = ({ payload }: { payload: { currentPage?: number, totalPages?: number, bgColors?: Record<number, string>, bgImages?: Record<number, string[]> } }) => {
+        const handlePageUpdate = ({ payload }: { payload: { currentPage?: number, totalPages?: number, bgColors?: Record<number, string>, bgImages?: Record<number, string[]>, pageNames?: Record<number, string> } }) => {
             console.log("Received page update:", payload)
             if (payload.currentPage !== undefined) setCurrentPage(payload.currentPage)
             if (payload.totalPages !== undefined) setTotalPages(payload.totalPages)
             if (payload.bgColors !== undefined) setPageBgColors(prev => ({ ...prev, ...payload.bgColors }))
             if (payload.bgImages !== undefined) setPageBgImages(prev => ({ ...prev, ...payload.bgImages }))
+            if (payload.pageNames !== undefined) setPageNames(prev => ({ ...prev, ...payload.pageNames }))
         }
 
         // Calculate labels for tabs (B-1, B-2 for board; P-1, P-2 for PDF)
@@ -78,29 +75,60 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
         socket.on("board_color_sync", handleBoardColorSync)
         socket.on("page_update", handlePageUpdate)
         socket.on("page_state", handlePageState)
+
+        // Per-student drawing permission
+        const handleDrawingPermission = ({ payload }: { payload: { enabled: boolean } }) => {
+            setDrawingEnabled(payload.enabled)
+        }
+        socket.on("drawing_permission", handleDrawingPermission)
+
+        // Derive initial drawing state from room_users for students
+        const handleRoomUsersDrawing = ({ payload }: { payload: { users: Array<{ user_id: string; socket_id: string; drawingEnabled?: boolean }> } }) => {
+            if (role === "student") {
+                const me = payload.users.find(u => u.socket_id === socket.id)
+                if (me) setDrawingEnabled(me.drawingEnabled ?? false)
+            }
+        }
+        socket.on("room_users", handleRoomUsersDrawing)
+
+        // Global freeze (lock) state
+        const handleFrozenState = ({ payload }: { payload: { isFrozen: boolean } }) => {
+            console.log("Received freeze state:", payload.isFrozen)
+            setIsLocked(payload.isFrozen)
+        }
+        socket.on("frozen_state", handleFrozenState)
+
         return () => {
             socket.off("board_color_sync", handleBoardColorSync)
             socket.off("page_update", handlePageUpdate)
             socket.off("page_state", handlePageState)
+            socket.off("drawing_permission", handleDrawingPermission)
+            socket.off("room_users", handleRoomUsersDrawing)
+            socket.off("frozen_state", handleFrozenState)
         }
-    }, [socket])
+    }, [socket, role])
 
     const pageLabels = useMemo(() => {
         let bCount = 0;
-        let pCount = 0;
         const labels: Record<number, string> = {};
         for (let i = 1; i <= totalPages; i++) {
             const isPdf = !!(pageBgImages[i] && pageBgImages[i].length > 0);
             if (isPdf) {
-                pCount++;
-                labels[i] = `P-${pCount}`;
+                const name = pageNames[i];
+                if (name) {
+                    // Show first 4 chars of filename (without extension) + "..."
+                    const baseName = name.replace(/\.pdf$/i, "");
+                    labels[i] = baseName.length > 8 ? `${baseName.slice(0, 8)}...` : baseName;
+                } else {
+                    labels[i] = "PDF";
+                }
             } else {
                 bCount++;
                 labels[i] = `B-${bCount}`;
             }
         }
         return labels;
-    }, [totalPages, pageBgImages])
+    }, [totalPages, pageBgImages, pageNames])
 
     const updateBoardBackground = (newColor: string) => {
         setPageBgColors(prev => ({ ...prev, [currentPage]: newColor }))
@@ -188,11 +216,13 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
             const pageIdx = totalPages + 1
             const newBgImages = { [pageIdx]: dataUrls }
             const newBgColors = { [pageIdx]: "#ffffff" }
+            const newPageNames = { [pageIdx]: file.name }
 
             setTotalPages(pageIdx)
             setCurrentPage(pageIdx)
             setPageBgImages(prev => ({ ...prev, ...newBgImages }))
             setPageBgColors(prev => ({ ...prev, ...newBgColors }))
+            setPageNames(prev => ({ ...prev, ...newPageNames }))
 
             // Broadcast to students
             if (socket) {
@@ -203,6 +233,7 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                         totalPages: pageIdx,
                         bgColors: { ...pageBgColors, ...newBgColors },
                         bgImages: newBgImages,
+                        pageNames: newPageNames,
                     }
                 })
             }
@@ -214,33 +245,57 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
         }
     }, [role, totalPages, socket, sessionId, pageBgColors])
 
-    const handleDeletePage = () => {
+    const handleDeletePage = (pageToDelete: number) => {
         if (totalPages <= 1 || role !== "teacher") return
 
-        const pageToDelete = currentPage
+        // Confirmation dialog with full name
+        const isPdf = !!(pageBgImages[pageToDelete] && pageBgImages[pageToDelete].length > 0)
+        let fullLabel: string
+        if (isPdf) {
+            fullLabel = pageNames[pageToDelete] || "PDF"
+        } else {
+            // Count which board number this is (B-1 → Board-1)
+            let bCount = 0
+            for (let i = 1; i <= pageToDelete; i++) {
+                if (!(pageBgImages[i] && pageBgImages[i].length > 0)) bCount++
+            }
+            fullLabel = `Board-${bCount}`
+        }
+        if (!confirm(`Delete "${fullLabel}"?`)) return
+
         console.log("Deleting page:", pageToDelete)
 
         // 1. Shift background data
         const newBgColors: Record<number, string> = {}
         const newBgImages: Record<number, string[]> = {}
+        const newPageNames: Record<number, string> = {}
 
         for (let i = 1; i <= totalPages; i++) {
             if (i < pageToDelete) {
                 newBgColors[i] = pageBgColors[i] || "#18181b"
                 newBgImages[i] = pageBgImages[i] || []
+                if (pageNames[i]) newPageNames[i] = pageNames[i]
             } else if (i > pageToDelete) {
                 newBgColors[i - 1] = pageBgColors[i] || "#18181b"
                 newBgImages[i - 1] = pageBgImages[i] || []
+                if (pageNames[i]) newPageNames[i - 1] = pageNames[i]
             }
         }
 
         const newTotal = totalPages - 1
-        const newCurrent = Math.min(currentPage, newTotal)
+        // If deleting the current page or a page before it, adjust current
+        let newCurrent = currentPage
+        if (pageToDelete < currentPage) {
+            newCurrent = currentPage - 1
+        } else if (pageToDelete === currentPage) {
+            newCurrent = Math.min(currentPage, newTotal)
+        }
 
         // 2. Local State update
         setTotalPages(newTotal)
         setPageBgColors(newBgColors)
         setPageBgImages(newBgImages)
+        setPageNames(newPageNames)
         setCurrentPage(newCurrent)
 
         // 3. Notify Whiteboard to shift its objects
@@ -256,8 +311,18 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                     currentPage: newCurrent,
                     totalPages: newTotal,
                     bgColors: newBgColors,
-                    bgImages: newBgImages
+                    bgImages: newBgImages,
+                    pageNames: newPageNames
                 }
+            })
+        }
+    }
+
+    const toggleBoardFreeze = (enabled: boolean) => {
+        if (role === "teacher" && socket) {
+            socket.emit("board_toggle_freeze", {
+                roomId: sessionId,
+                payload: { enabled }
             })
         }
     }
@@ -274,6 +339,7 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                         role={role}
                         sessionId={sessionId}
                         duration={duration}
+                        onPdfUpload={role === "teacher" ? handlePdfUpload : undefined}
                     />
                     <div className="flex-1 overflow-hidden relative flex">
 
@@ -288,17 +354,16 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                             onClearCanvas={role === "teacher" ? () => {
                                 document.dispatchEvent(new CustomEvent("clear-canvas-emit"))
                             } : undefined}
-                            onPdfUpload={role === "teacher" ? handlePdfUpload : undefined}
                         />
                         <div className="flex-1 relative flex flex-col overflow-hidden">
                             {/* Chrome Tabs Style Pagination */}
-                            <div className="flex items-end px-4 pt-1.5 overflow-x-auto no-scrollbar gap-0.5 bg-muted/30 border-b border-border/50">
+                            <div className="flex items-end px-3 pt-1.5 overflow-x-auto no-scrollbar gap-1 bg-muted/30 border-b border-border/50">
                                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
                                     <div
                                         key={pageNum}
                                         onClick={() => handlePageChange(pageNum)}
                                         className={`
-                                            relative flex items-center h-8 px-4 min-w-[70px] max-w-[150px] cursor-pointer 
+                                            relative flex items-center h-6 px-2 min-w-[50px] max-w-[150px] cursor-pointer 
                                             transition-all duration-200 rounded-t-lg group
                                             ${currentPage === pageNum
                                                 ? "bg-background text-foreground shadow-[0_-4px_8px_rgba(0,0,0,0.1)] z-10"
@@ -309,10 +374,16 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                                         <span className="text-[11px] font-bold truncate shrink-0 mr-1.5">
                                             {pageLabels[pageNum]}
                                         </span>
-                                        {role === "teacher" && totalPages > 1 && currentPage === pageNum && (
+                                        {role === "teacher" && totalPages > 1 && (
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); handleDeletePage() }}
-                                                className="ml-auto p-0.5 rounded-full hover:bg-muted transition-colors opacity-0 group-hover:opacity-100"
+                                                onClick={(e) => { e.stopPropagation(); handleDeletePage(pageNum) }}
+                                                className={`ml-auto p-0.5 rounded-full transition-colors
+                                                    ${currentPage === pageNum
+                                                        ? "opacity-60 hover:opacity-100 hover:bg-destructive/20 hover:text-destructive"
+                                                        : "opacity-0 group-hover:opacity-60 hover:opacity-100! hover:bg-destructive/20 hover:text-destructive"
+                                                    }
+                                                `}
+                                                title={`Close ${pageLabels[pageNum]}`}
                                             >
                                                 <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" />
@@ -354,8 +425,11 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                                 bgImages={currentBgImages}
                                 brushSize={brushSize}
                                 isLocked={isLocked}
+                                drawingEnabled={drawingEnabled}
                                 currentPage={currentPage}
                                 onToolChange={setTool}
+                                shapeFillColor={shapeFillColor}
+                                shapeBorderColor={shapeBorderColor}
                             />
                         </div>
                     </div>
@@ -370,6 +444,8 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                     sessionId={sessionId}
                     isOpen={isChatOpen}
                     setIsOpen={setIsChatOpen}
+                    isBoardFrozen={isLocked}
+                    onToggleFreeze={toggleBoardFreeze}
                 />
             </div>
         </div>

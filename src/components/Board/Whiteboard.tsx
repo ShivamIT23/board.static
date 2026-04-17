@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useRef, useCallback } from "react"
-import { Canvas, PencilBrush, Path, FabricImage, IText } from "fabric"
+import { Canvas, PencilBrush, Path, FabricImage, IText, Line, FabricObject } from "fabric"
 import { useSocket } from "../providers/socket-provider"
 
 // ── Custom cursors (High Contrast Native) ──────────────────
@@ -38,7 +38,35 @@ interface WhiteboardProps {
     isLocked: boolean
     currentPage: number
     onToolChange?: (tool: string) => void
+    shapeFillColor?: string
+    shapeBorderColor?: string
+    drawingEnabled?: boolean
 }
+
+/*
+const SHAPE_TOOL_IDS = ["rectangle", "circle", "triangle", "diamond", "star", "line", "arrow"] as const
+type ShapeToolId = typeof SHAPE_TOOL_IDS[number]
+function isShapeTool(t: string): t is ShapeToolId { return SHAPE_TOOL_IDS.includes(t as ShapeToolId) }
+
+// Helper: build shape points for polygon-based shapes
+function getTrianglePoints(w: number, h: number) {
+    return [{ x: w / 2, y: 0 }, { x: w, y: h }, { x: 0, y: h }]
+}
+function getDiamondPoints(w: number, h: number) {
+    return [{ x: w / 2, y: 0 }, { x: w, y: h / 2 }, { x: w / 2, y: h }, { x: 0, y: h / 2 }]
+}
+function getStarPoints(w: number, h: number) {
+    const cx = w / 2, cy = h / 2
+    const outerR = Math.min(w, h) / 2, innerR = outerR * 0.4
+    const pts: { x: number; y: number }[] = []
+    for (let i = 0; i < 10; i++) {
+        const angle = (Math.PI / 2) * -1 + (Math.PI / 5) * i
+        const r = i % 2 === 0 ? outerR : innerR
+        pts.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) })
+    }
+    return pts
+}
+*/
 
 interface StrokePayload {
     id: string
@@ -47,6 +75,11 @@ interface StrokePayload {
     color?: string
     width?: number
     page?: number
+}
+
+interface LaserPayload {
+    point: { x: number; y: number }
+    prevPoint?: { x: number; y: number } | null
 }
 
 interface LiveStroke {
@@ -61,7 +94,7 @@ interface BoardIText extends IText {
     _synced?: boolean
 }
 
-function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushSize, isLocked, currentPage, onToolChange }: WhiteboardProps) {
+function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushSize, isLocked, currentPage, drawingEnabled, onToolChange, shapeFillColor = "transparent", shapeBorderColor = "#FFFFFF" }: WhiteboardProps) {
     const { socket } = useSocket()
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const wrapperRef = useRef<HTMLDivElement>(null)
@@ -75,9 +108,34 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     const liveFabricObjsRef = useRef<Record<string, Path>>({})
     const boardFileObjsRef = useRef<Record<string, FabricImage>>({})
     const textObjsRef = useRef<Record<string, IText>>({})
+    const shapeObjsRef = useRef<Record<string, FabricObject>>({})
+    
+    // Safer unique ID generation (fallback for non-secure contexts/older browsers)
+    const generateId = useCallback(() => {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+        return Math.random().toString(36).substring(2, 11);
+    }, []);
+
     const toolRef = useRef(tool)
     const onToolChangeRef = useRef(onToolChange)
     const activeTextRef = useRef<IText | null>(null)
+    const bgImagesRef = useRef(bgImages)
+    const setBgImagesOnCanvasRef = useRef<(canvas: Canvas, imageUrls: string[]) => Promise<void>>(() => Promise.resolve())
+    const isLockedRef = useRef(isLocked)
+    const drawingEnabledRef = useRef(drawingEnabled)
+    const lastLaserPointRef = useRef<{ x: number, y: number } | null>(null)
+    const isLaserActiveRef = useRef(false)
+
+    // Shape drawing state
+    /*
+    const shapeStartRef = useRef<{ x: number; y: number } | null>(null)
+    const shapePreviewRef = useRef<FabricObject | null>(null)
+    const shapeFillRef = useRef(shapeFillColor)
+    const shapeBorderRef = useRef(shapeBorderColor)
+    const brushSizeRef = useRef(brushSize)
+    */
 
     useEffect(() => {
         currentPageRef.current = currentPage
@@ -90,6 +148,33 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     useEffect(() => {
         onToolChangeRef.current = onToolChange
     }, [onToolChange])
+
+    useEffect(() => {
+        bgImagesRef.current = bgImages
+    }, [bgImages])
+
+    useEffect(() => {
+        isLockedRef.current = isLocked
+    }, [isLocked])
+
+    useEffect(() => {
+        drawingEnabledRef.current = drawingEnabled
+    }, [drawingEnabled])
+
+    /*
+    useEffect(() => {
+        shapeFillRef.current = shapeFillColor
+    }, [shapeFillColor])
+
+    useEffect(() => {
+        shapeBorderRef.current = shapeBorderColor
+    }, [shapeBorderColor])
+
+    useEffect(() => {
+        brushSizeRef.current = brushSize
+    }, [brushSize])
+    */
+
 
     // Utility: Width-based normalization
     const toNorm = useCallback((px: number, py: number, cw: number) => ({
@@ -109,6 +194,31 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             d += ` L ${pts[i].x} ${pts[i].y}`
         }
         return d
+    }, [])
+
+    const showLaserPoint = useCallback((x: number, y: number, prevX?: number, prevY?: number) => {
+        const canvas = fabricRef.current
+        if (!canvas) return
+
+        const laserColor = "#A855F7" // Purple
+        const duration = 800
+
+        if (prevX !== undefined && prevY !== undefined) {
+            const line = new Line([prevX, prevY, x, y], {
+                stroke: laserColor,
+                strokeWidth: 4,
+                strokeLineCap: "round",
+                selectable: false,
+                evented: false,
+                globalCompositeOperation: "difference", // mix-blend-difference
+            })
+            canvas.add(line)
+            line.animate({ opacity: 0 }, {
+                duration,
+                onChange: () => canvas.requestRenderAll(),
+                onComplete: () => canvas.remove(line)
+            })
+        }
     }, [])
 
     // ── Helper: Set stacked background images on canvas ───────
@@ -175,6 +285,10 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     }, [boardColor])
 
     useEffect(() => {
+        setBgImagesOnCanvasRef.current = setBgImagesOnCanvas
+    }, [setBgImagesOnCanvas])
+
+    useEffect(() => {
         if (!canvasRef.current || !wrapperRef.current || !socket) return
 
         const initialWidth = wrapperRef.current?.clientWidth || 800
@@ -194,11 +308,54 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         }
         canvas.freeDrawingCursor = PENCIL_CURSOR
 
+        // ── Helper: create a Fabric shape from normalized payload ──
+
+        //for shape
+        /*
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const createShapeFromPayload = (data: any): FabricObject | null => {
+            const cw = canvas.width
+            const left = data.position.x * cw
+            const top = data.position.y * cw
+            const w = (data.widthRatio || 0) * cw
+            const h = (data.heightRatio || 0) * cw
+            const fill = data.fill || "transparent"
+            const stroke = data.stroke || "#FFFFFF"
+            const strokeWidth = (data.strokeWidthRatio || 0.003) * cw
+            const common = { left, top, fill, stroke, strokeWidth, originX: "left" as const, originY: "top" as const, selectable: true, evented: true }
+
+            switch (data.shapeType as string) {
+                case "rectangle":
+                    return new Rect({ ...common, width: w, height: h })
+                case "circle":
+                    return new Ellipse({ ...common, rx: w / 2, ry: h / 2 })
+                case "triangle":
+                    return new Polygon(getTrianglePoints(w, h), { ...common, left, top })
+                case "diamond":
+                    return new Polygon(getDiamondPoints(w, h), { ...common, left, top })
+                case "star":
+                    return new Polygon(getStarPoints(w, h), { ...common, left, top })
+                case "line":
+                    return new Line([0, 0, w, h], { ...common, fill: undefined })
+                case "arrow": {
+                    // Arrow = line with arrowhead via Path
+                    const angle = Math.atan2(h, w)
+                    const headLen = Math.min(20, Math.max(8, strokeWidth * 4))
+                    const x2 = w, y2 = h
+                    const d = `M 0 0 L ${x2} ${y2} M ${x2 - headLen * Math.cos(angle - Math.PI / 6)} ${y2 - headLen * Math.sin(angle - Math.PI / 6)} L ${x2} ${y2} L ${x2 - headLen * Math.cos(angle + Math.PI / 6)} ${y2 - headLen * Math.sin(angle + Math.PI / 6)}`
+                    return new Path(d, { ...common, fill: "transparent" })
+                }
+                default:
+                    return null
+            }
+        }
+        */
+
         // ── Local Stroke Events ───────────────────────────────────
         canvas.on("mouse:down", (opt) => {
             // Text tool: place an empty IText on click (Excalidraw-style)
             if (toolRef.current === "text") {
-                if (role === "student" && isLocked) return
+                if (role === "student" && (isLockedRef.current || !drawingEnabledRef.current)) return
 
                 // If there's already an active text being edited, finalize it first
                 if (activeTextRef.current) {
@@ -206,11 +363,15 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     activeTextRef.current = null
                 }
 
+                // Fabric.js v7 requires selection=true for IText editing cursor to render
+                canvas.selection = true
+                canvas.skipTargetFind = false
+
                 const pt = canvas.getScenePoint(opt.e)
-                const id = crypto.randomUUID()
+                const id = generateId()
                 // fontSize proportional to canvas width, minimum 12px
                 const proportionalFontSize = Math.max(12, Math.round(canvas.width * 0.025))
-                console.log(`[TEXT] Creating text. canvas.width=${canvas.width}, fontSize=${proportionalFontSize}`)
+                console.log(`[TEXT] Creating text at (${pt.x}, ${pt.y}). canvas.width=${canvas.width}, fontSize=${proportionalFontSize}`)
                 const textObj = new IText("", {
                     left: pt.x,
                     top: pt.y,
@@ -228,11 +389,13 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 canvas.add(textObj)
                 canvas.setActiveObject(textObj)
                 textObj.enterEditing()
+                // Fabric.js uses a hidden textarea for keyboard input — must be explicitly focused
+                // especially when called programmatically inside mouse:down
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const textarea = (textObj as any).hiddenTextarea as HTMLTextAreaElement | undefined
+                if (textarea) textarea.focus()
                 activeTextRef.current = textObj
                 canvas.requestRenderAll()
-
-                // Switch toolbar to select immediately
-                onToolChangeRef.current?.("select")
 
                 // Emit to peers when editing finishes
                 textObj.on("editing:exited", () => {
@@ -266,8 +429,31 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 return
             }
 
-            if (!canvas.isDrawingMode || (role === "student" && isLocked)) return
-            localStrokeIdRef.current = crypto.randomUUID()
+            if (toolRef.current === "laser") {
+                isLaserActiveRef.current = true
+                const pt = canvas.getScenePoint(opt.e)
+                const point = toNorm(pt.x, pt.y, canvas.width)
+                socket.emit("laser_pointer", {
+                    roomId: sessionId,
+                    payload: { point }
+                })
+                showLaserPoint(pt.x, pt.y)
+                lastLaserPointRef.current = { x: pt.x, y: pt.y }
+                return
+            }
+
+            // Shape tool: start drawing a shape
+            /*
+            if (isShapeTool(toolRef.current)) {
+                if (role === "student" && isLocked) return
+                const pt = canvas.getScenePoint(opt.e)
+                shapeStartRef.current = { x: pt.x, y: pt.y }
+                return
+            }
+            */
+
+            if (!canvas.isDrawingMode || (role === "student" && (isLockedRef.current || !drawingEnabledRef.current))) return
+            localStrokeIdRef.current = generateId()
             const pt = canvas.getScenePoint(opt.e)
             socket.emit("stroke_draw", {
                 roomId: sessionId,
@@ -283,6 +469,62 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         })
 
         canvas.on("mouse:move", (opt) => {
+            // Shape preview while dragging
+            /*
+            if (shapeStartRef.current && isShapeTool(toolRef.current)) {
+                const pt = canvas.getScenePoint(opt.e)
+                const start = shapeStartRef.current
+                const w = pt.x - start.x
+                const h = pt.y - start.y
+                const left = w >= 0 ? start.x : pt.x
+                const top = h >= 0 ? start.y : pt.y
+                const absW = Math.abs(w)
+                const absH = Math.abs(h)
+
+                // Remove previous preview
+                if (shapePreviewRef.current) {
+                    canvas.remove(shapePreviewRef.current)
+                }
+
+                const previewData = {
+                    shapeType: toolRef.current,
+                    position: toNorm(left, top, canvas.width),
+                    widthRatio: absW / canvas.width,
+                    heightRatio: absH / canvas.width,
+                    fill: shapeFillRef.current,
+                    stroke: shapeBorderRef.current,
+                    strokeWidthRatio: brushSizeRef.current / canvas.width,
+                }
+
+                const preview = createShapeFromPayload(previewData)
+                if (preview) {
+                    preview.set({ selectable: false, evented: false, opacity: 0.6 })
+                    shapePreviewRef.current = preview
+                    canvas.add(preview)
+                    canvas.requestRenderAll()
+                }
+                return
+            }
+            */
+
+            if (toolRef.current === "laser") {
+                if (!isLaserActiveRef.current) return
+                const pt = canvas.getScenePoint(opt.e)
+                const point = toNorm(pt.x, pt.y, canvas.width)
+                socket.emit("laser_pointer", {
+                    roomId: sessionId,
+                    payload: {
+                        point,
+                        prevPoint: lastLaserPointRef.current ? toNorm(lastLaserPointRef.current.x, lastLaserPointRef.current.y, canvas.width) : null
+                    }
+                })
+                showLaserPoint(pt.x, pt.y, lastLaserPointRef.current?.x, lastLaserPointRef.current?.y)
+                lastLaserPointRef.current = { x: pt.x, y: pt.y }
+                return
+            } else {
+                lastLaserPointRef.current = null
+            }
+
             if (!localStrokeIdRef.current) return
             const pt = canvas.getScenePoint(opt.e)
             socket.emit("stroke_draw", {
@@ -296,7 +538,68 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             })
         })
 
-        canvas.on("mouse:up", () => {
+        canvas.on("mouse:over", (opt) => {
+            lastLaserPointRef.current = null
+        })
+
+        canvas.on("mouse:out", () => {
+            lastLaserPointRef.current = null
+            isLaserActiveRef.current = false
+        })
+
+        canvas.on("mouse:up", (opt) => {
+            lastLaserPointRef.current = null
+            isLaserActiveRef.current = false
+            // Finalize shape
+            /*
+            if (shapeStartRef.current && isShapeTool(toolRef.current)) {
+                const pt = canvas.getScenePoint(opt.e)
+                const start = shapeStartRef.current
+                shapeStartRef.current = null
+
+                // Remove preview
+                if (shapePreviewRef.current) {
+                    canvas.remove(shapePreviewRef.current)
+                    shapePreviewRef.current = null
+                }
+
+                const w = pt.x - start.x
+                const h = pt.y - start.y
+                // Skip tiny clicks (less than 5px)
+                if (Math.abs(w) < 5 && Math.abs(h) < 5) return
+
+                const left = w >= 0 ? start.x : pt.x
+                const top = h >= 0 ? start.y : pt.y
+                const absW = Math.abs(w)
+                const absH = Math.abs(h)
+                const id = crypto.randomUUID()
+
+                const shapePayload = {
+                    id,
+                    shapeType: toolRef.current,
+                    position: toNorm(left, top, canvas.width),
+                    widthRatio: absW / canvas.width,
+                    heightRatio: absH / canvas.width,
+                    fill: shapeFillRef.current,
+                    stroke: shapeBorderRef.current,
+                    strokeWidthRatio: brushSizeRef.current / canvas.width,
+                    page: currentPageRef.current,
+                }
+
+                const shape = createShapeFromPayload(shapePayload)
+                if (shape) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (shape as any).id = id
+                    shapeObjsRef.current[id] = shape
+                    canvas.add(shape)
+                    canvas.requestRenderAll()
+
+                    socket.emit("shape_add", { roomId: sessionId, payload: shapePayload })
+                }
+                return
+            }
+            */
+
             if (!localStrokeIdRef.current) return
             socket.emit("stroke_draw", {
                 roomId: sessionId,
@@ -336,6 +639,23 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 })
                 return
             }
+
+            // Shape modified (moved, resized)
+            /*
+            if (shapeObjsRef.current[id]) {
+                socket.emit("shape_update", {
+                    roomId: sessionId,
+                    payload: {
+                        id,
+                        position: toNorm(obj.left, obj.top, canvas.width),
+                        widthRatio: obj.getScaledWidth() / canvas.width,
+                        heightRatio: obj.getScaledHeight() / canvas.width,
+                        page: currentPageRef.current,
+                    }
+                })
+                return
+            }
+            */
 
             // Board file (image) modified
             if (role !== "teacher") return
@@ -383,8 +703,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     canvas.add(newPath)
                     newPath.setCoords()
                     if (currentIndex !== -1) {
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        (newPath as any).moveTo(currentIndex)
+                        canvas.moveObjectTo(newPath, currentIndex)
                     }
                     canvas.remove(existingPath)
                     liveFabricObjsRef.current[id] = newPath
@@ -523,23 +842,93 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             }
         }
 
+        const handleLaserPointer = ({ payload }: { payload: LaserPayload }) => {
+            const { point, prevPoint } = payload
+            const pos = fromNorm(point.x, point.y, canvas.width)
+            const prevPos = prevPoint ? fromNorm(prevPoint.x, prevPoint.y, canvas.width) : undefined
+            showLaserPoint(pos.x, pos.y, prevPos?.x, prevPos?.y)
+        }
+
+        const onBoardColorSync = (data: { color: string, page: number }) => {
+            if (data.page === currentPageRef.current) {
+                canvas.backgroundColor = data.color
+                canvas.renderAll()
+            }
+        }
+
+        const onViewSync = (data: { payload: { ratio: number; senderId?: string } }) => {
+            // Everyone receives view_sync, but ignore our own broadcasts
+            if (data.payload.senderId === socket.id) return
+            if (wrapperRef.current) {
+                const wrapper = wrapperRef.current
+                wrapper.scrollTop = data.payload.ratio * wrapper.scrollHeight
+            }
+        }
+
         socket.on("stroke_draw", handleStrokeDraw)
+        socket.on("laser_pointer", handleLaserPointer)
         socket.on("clear_canvas", handleClearCanvas)
+        socket.on("board_color_sync", onBoardColorSync)
+        socket.on("view_sync", onViewSync)
         socket.on("board_file_add", ({ payload }) => addImageToCanvas(payload))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
+        /*
+        const handleShapeAdd = ({ payload }: { payload: any }) => {
+            console.log("[SHAPE] Received shape_add:", payload)
+            if (payload.page !== undefined && payload.page !== currentPageRef.current) return
+            if (shapeObjsRef.current[payload.id]) return // Already exists
+            const shape = createShapeFromPayload(payload)
+            if (shape) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (shape as any).id = payload.id
+                shapeObjsRef.current[payload.id] = shape
+                canvas.add(shape)
+                canvas.requestRenderAll()
+                console.log("[SHAPE] Shape added to canvas:", payload.id, payload.shapeType)
+            } else {
+                console.warn("[SHAPE] Failed to create shape from payload:", payload)
+            }
+        }
+            */
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const handleShapeUpdate = ({ payload }: { payload: any }) => {
+            const obj = shapeObjsRef.current[payload.id]
+            if (!obj) return
+            if (payload.position) {
+                obj.set({
+                    left: payload.position.x * canvas.width,
+                    top: payload.position.y * canvas.width,
+                })
+            }
+            if (payload.widthRatio !== undefined && payload.heightRatio !== undefined) {
+                obj.set({
+                    scaleX: (payload.widthRatio * canvas.width) / (obj.width || 1),
+                    scaleY: (payload.heightRatio * canvas.width) / (obj.height || 1),
+                })
+            }
+            obj.setCoords()
+            canvas.requestRenderAll()
+        }
+
         socket.on("text_add", handleTextAdd)
         socket.on("text_update", handleTextUpdate)
+        // socket.on("shape_add", handleShapeAdd)
+        // socket.on("shape_update", handleShapeUpdate)
         socket.on("board_file_remove", ({ payload }) => {
             const o = boardFileObjsRef.current[payload.id]
             if (o) { canvas.remove(o); delete boardFileObjsRef.current[payload.id]; canvas.renderAll() }
         })
         socket.on("board_file_update", handleBoardFileUpdate)
         socket.on("board_files_state", ({ payload }) => payload.forEach(addImageToCanvas))
-        
-        socket.on("board_objects_state", ({ payload }: { payload: { type: "stroke" | "text", payload: Record<string, unknown> }[] }) => {
+
+        socket.on("board_objects_state", ({ payload }: { payload: { type: "stroke" | "text" | "shape", payload: Record<string, unknown> }[] }) => {
             console.log("[board_objects_state] Restoring objects:", payload.length)
             payload.forEach(obj => {
                 if (obj.type === "stroke") handleStrokeDraw({ payload: obj.payload as unknown as StrokePayload })
                 else if (obj.type === "text") handleTextAdd({ payload: obj.payload })
+                // else if (obj.type === "shape") handleShapeAdd({ payload: obj.payload })
             })
         })
 
@@ -570,39 +959,57 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             const containerWidth = wrapperRef.current.clientWidth
             const canvas = fabricRef.current
 
-            const bg = canvas.backgroundImage
-            if (bg instanceof FabricImage) {
-                // For stacked images, we scale differently.
-                // Since our current implementation bakes them into a single image, resizing is tricky.
-                // We'll re-run the layout if the width changed significantly.
-                if (bgImages && bgImages.length > 0) {
-                    setBgImagesOnCanvas(canvas, bgImages)
-                } else {
-                    canvas.setDimensions({ width: containerWidth, height: containerWidth * 3 })
-                }
+            const oldWidth = canvas.width
+            if (Math.abs(containerWidth - oldWidth) < 1) return // Skip trivial resizes
+
+            const scaleFactor = containerWidth / oldWidth
+
+            // Rescale all existing objects proportionally
+            canvas.getObjects().forEach(obj => {
+                obj.set({
+                    left: obj.left * scaleFactor,
+                    top: obj.top * scaleFactor,
+                    scaleX: (obj.scaleX || 1) * scaleFactor,
+                    scaleY: (obj.scaleY || 1) * scaleFactor,
+                })
+                obj.setCoords()
+            })
+
+            // Update canvas dimensions
+            const currentBgImages = bgImagesRef.current
+            if (currentBgImages && currentBgImages.length > 0) {
+                // For PDF pages, set dimensions synchronously first, then re-render background
+                canvas.setDimensions({ width: containerWidth, height: containerWidth * 3 })
+                setBgImagesOnCanvasRef.current(canvas, currentBgImages)
             } else {
                 canvas.setDimensions({ width: containerWidth, height: containerWidth * 3 })
             }
-            canvas.renderAll()
+
+            canvas.requestRenderAll()
         })
         resizeObserver.observe(wrapperRef.current)
 
         return () => {
             socket.off("stroke_draw", handleStrokeDraw)
+            socket.off("laser_pointer", handleLaserPointer)
             socket.off("clear_canvas", handleClearCanvas)
             socket.off("board_file_add")
             socket.off("text_add", handleTextAdd)
             socket.off("text_update", handleTextUpdate)
+            // socket.off("shape_add", handleShapeAdd)
+            // socket.off("shape_update", handleShapeUpdate)
             socket.off("board_file_remove")
             socket.off("board_file_update", handleBoardFileUpdate)
             socket.off("board_files_state")
             document.removeEventListener("clear-canvas-emit", handleClearEmit)
             document.removeEventListener("delete-page-local", handleDeleteLocal)
+            socket.off("board_color_sync", onBoardColorSync)
+            socket.off("view_sync", onViewSync)
             canvas.dispose()
             resizeObserver.disconnect()
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sessionId, role, socket, isLocked])
+    }, [sessionId, role, socket])
 
     // ── Page State Management ────────────────────────────────────
     const lastPageRef = useRef(currentPage)
@@ -663,14 +1070,53 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
     useEffect(() => {
         const canvas = fabricRef.current; if (!canvas) return
-        canvas.isDrawingMode = (tool === "pencil" || tool === "eraser")
+        const canDraw = role === "teacher" || (!isLocked && (drawingEnabled ?? false));
+        canvas.isDrawingMode = (tool === "pencil" || tool === "eraser") && canDraw;
         canvas.freeDrawingCursor = tool === "pencil" ? PENCIL_CURSOR : ERASER_CURSOR
         if (canvas.freeDrawingBrush) {
             canvas.freeDrawingBrush.color = tool === "eraser" ? boardColor : color
             canvas.freeDrawingBrush.width = tool === "eraser" ? brushSize * 4 : brushSize
         }
-        canvas.defaultCursor = (tool === "rectangle" || tool === "circle" || tool === "line" || tool === "arrow") ? "crosshair" : tool === "text" ? TEXT_CURSOR : "default"
-    }, [tool, color, brushSize, boardColor])
+        canvas.defaultCursor = activeTextRef.current ? TEXT_CURSOR : (tool === "laser" ? "crosshair" : tool === "text" ? TEXT_CURSOR : "default")
+        // Disable selection when using drawing/laser tools
+        // Text and laser tools need pointer events (getScenePoint) so skipTargetFind must be false for them
+        // IMPORTANT: If there's an active text being edited, keep selection=true so the cursor stays alive
+        if (activeTextRef.current) {
+            canvas.selection = true
+            canvas.skipTargetFind = false
+        } else {
+            canvas.selection = (tool === "select" || tool === "text")
+            canvas.skipTargetFind = (tool === "pencil" || tool === "eraser" || tool === "laser")
+        }
+    }, [tool, color, brushSize, boardColor, drawingEnabled, role, isLocked])
+
+    // ── View Sync: Scroll Broadcasting (teacher always, students when drawing enabled) ──
+    useEffect(() => {
+        if (!socket) return
+        // Teacher always broadcasts; students only when drawing is enabled
+        const shouldBroadcast = role === "teacher" || (role === "student" && drawingEnabled)
+        if (!shouldBroadcast) return
+
+        const wrapper = wrapperRef.current
+        if (!wrapper) return
+
+        let lastEmitTime = 0
+        const handleScroll = () => {
+            const now = Date.now()
+            if (now - lastEmitTime < 100) return // Throttle to 10fps
+            lastEmitTime = now
+
+            // Calculate ratio based on scroll position relative to total height
+            const ratio = wrapper.scrollTop / wrapper.scrollHeight
+            socket.emit("view_sync", {
+                roomId: sessionId,
+                payload: { ratio, senderId: socket.id }
+            })
+        }
+
+        wrapper.addEventListener("scroll", handleScroll)
+        return () => wrapper.removeEventListener("scroll", handleScroll)
+    }, [role, sessionId, socket, drawingEnabled])
 
     return (
         <div className="flex-1 min-h-0 bg-background relative flex flex-col p-3">

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react"
-import { MessageCircle, Send, Minimize2, User2, Paperclip, FileText, X, Download, Settings, MessageSquare, MessageSquareOff, File as FileIcon, FileX, Lock, ChevronDown } from "lucide-react"
+import { MessageCircle, Send, Minimize2, User2, Paperclip, FileText, X, Download, Settings, MessageSquare, MessageSquareOff, File as FileIcon, FileX, Lock, ChevronDown, Pencil, PencilOff, Zap, ZapOff } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSocket } from "../providers/socket-provider"
 import { getHistoricalChats } from "@/app/actions/auth"
@@ -23,7 +23,7 @@ interface ChatMessage {
     attachments?: Attachment[]
 }
 
-interface RoomUser {
+export interface RoomUser {
     user_id: string
     username: string
     socket_id: string
@@ -31,6 +31,9 @@ interface RoomUser {
     mediaState?: { audio: boolean; video: boolean }
     textEnabled?: boolean
     attachmentsEnabled?: boolean
+    drawingEnabled?: boolean
+    role?: "teacher" | "student"
+    isTeacher?: boolean
 }
 
 interface ChatRoomProps {
@@ -43,6 +46,8 @@ interface ChatRoomProps {
     sessionId: string
     isOpen: boolean
     setIsOpen: (open: boolean) => void
+    isBoardFrozen?: boolean
+    onToggleFreeze?: (enabled: boolean) => void
 }
 
 interface Visitor {
@@ -53,7 +58,7 @@ interface Visitor {
     isOnline?: boolean;
 }
 
-export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCount, role, userName, sessionId, isOpen, setIsOpen }: ChatRoomProps) {
+export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCount, role, userName, sessionId, isOpen, setIsOpen, isBoardFrozen = false, onToggleFreeze }: ChatRoomProps) {
     const { socket } = useSocket()
     const [messages, setMessages] = useState<ChatMessage[]>([])
     const [inputMessage, setInputMessage] = useState("")
@@ -253,9 +258,13 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
         socket.emit(event, { roomId: sessionId, payload: { enabled: !current } })
     }
 
-    const toggleUserPermission = (userId: string, type: "text" | "attachments", currentEnabled: boolean) => {
+    const toggleUserPermission = (userId: string, type: "text" | "attachments" | "drawing", currentEnabled: boolean) => {
         if (!socket || role !== "teacher") return
-        const event = type === "text" ? "chat_toggle_user_text" : "chat_toggle_user_attachments"
+        let event = ""
+        if (type === "text") event = "chat_toggle_user_text"
+        else if (type === "attachments") event = "chat_toggle_user_attachments"
+        else if (type === "drawing") event = "board_toggle_user_drawing"
+        
         socket.emit(event, { roomId: sessionId, payload: { userId, enabled: !currentEnabled } })
     }
 
@@ -449,7 +458,9 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                                     {roomUsers.length === 0 ? (
                                         <div className="px-3 py-2 text-[10px] text-muted-foreground italic">No one online</div>
                                     ) : role === "teacher" ? (
-                                        roomUsers.map((user) => (
+                                        [...roomUsers]
+                                            .sort((a, b) => (a.role === "teacher" ? -1 : b.role === "teacher" ? 1 : 0))
+                                            .map((user) => (
                                             <div key={user.socket_id} className="px-3 py-1.5 hover:bg-muted/50 transition-colors flex items-center justify-between group">
                                                 <div className="flex items-center gap-2">
                                                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -469,6 +480,17 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                                                             title={user.textEnabled !== false ? "Disable text" : "Enable text"}
                                                         >
                                                             {user.textEnabled !== false ? <MessageSquare size={12} /> : <MessageSquareOff size={12} />}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleUserPermission(user.user_id, "drawing", user.drawingEnabled ?? true)}
+                                                            className={cn(
+                                                                "p-1 rounded transition-colors",
+                                                                user.drawingEnabled !== false ? "text-blue-500 hover:bg-blue-500/10" : "text-zinc-400 hover:bg-zinc-400/10"
+                                                            )}
+                                                            title={user.drawingEnabled !== false ? "Disable drawing" : "Enable drawing"}
+                                                        >
+                                                            {user.drawingEnabled !== false ? <Pencil size={12} /> : <PencilOff size={12} />}
                                                         </button>
                                                         <button
                                                             type="button"
@@ -507,7 +529,8 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                                             <div className="px-3 py-2 text-[10px] text-muted-foreground italic">No other visitors</div>
                                         ) : (
                                             visitors.filter(v => !roomUsers.some(ru => ru.username === v.name)).map((visitor) => (
-                                                <div key={visitor.id} className="px-3 py-1.5 hover:bg-muted/50 transition-colors group">
+                                                <div key={visitor.id} className="px-3 py-1.5 hover:bg-muted/50 transition-colors group flex items-center gap-2">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
                                                     <div className="flex flex-col">
                                                         <span className="text-sm font-bold text-muted-foreground group-hover:text-foreground transition-colors">
                                                             {visitor.name}
@@ -573,6 +596,23 @@ export default function ChatRoom({ userCount, roomUsers, setRoomUsers, setUserCo
                             )}
                         >
                             {roomSettings.attachmentsEnabled ? <FileIcon size={16} /> : <FileX size={16} />}
+                        </button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-foreground">Freeze Board</span>
+                            <span className="text-[9px] text-muted-foreground">Block all student drawing</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => onToggleFreeze?.(!isBoardFrozen)}
+                            className={cn(
+                                "p-2 rounded-md transition-all",
+                                isBoardFrozen ? "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20" : "bg-zinc-500/10 text-zinc-500 hover:bg-zinc-500/20"
+                            )}
+                        >
+                            {isBoardFrozen ? <Zap size={16} /> : <ZapOff size={16} />}
                         </button>
                     </div>
                 </div>
