@@ -46,9 +46,15 @@ export const SocketProvider = ({
       setIsConnected(true);
       // Move setSocket inside a callback to avoid synchronous setState warning
       setSocket(socketInstance);
+      const lastSync = typeof window !== "undefined" ? localStorage.getItem(`board_sync_${roomId}`) : null;
+      const lastSyncTimestamp = lastSync ? parseInt(lastSync) : 0;
+
       socketInstance.emit("join", {
         roomId,
-        payload: { user: userRef.current },
+        payload: { 
+          user: userRef.current,
+          lastSyncTimestamp
+        },
       });
     });
 

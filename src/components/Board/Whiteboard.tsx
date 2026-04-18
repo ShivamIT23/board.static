@@ -1,8 +1,9 @@
 "use client"
 
-import React, { useEffect, useRef, useCallback } from "react"
-import { Canvas, PencilBrush, Path, FabricImage, IText, Line, FabricObject } from "fabric"
+import React, { useEffect, useRef, useCallback, useState } from "react"
+import { Canvas, PencilBrush, Path, FabricImage, IText, Line, FabricObject, Rect, Ellipse, Polygon } from "fabric"
 import { useSocket } from "../providers/socket-provider"
+import { cn } from "@/lib/utils"
 
 // ── Custom cursors (High Contrast Native) ──────────────────
 
@@ -35,15 +36,55 @@ interface WhiteboardProps {
     boardColor: string
     bgImages?: string[]       // NEW: array of data URLs for stacked PDF pages
     brushSize: number
-    isLocked: boolean
     currentPage: number
     onToolChange?: (tool: string) => void
     shapeFillColor?: string
     shapeBorderColor?: string
     drawingEnabled?: boolean
+    isViewLocked: boolean
 }
 
-/*
+interface ShapePayload {
+    id: string;
+    page?: number;
+    shapeType: string;
+    position: { x: number; y: number };
+    widthRatio?: number;
+    heightRatio?: number;
+    fill?: string;
+    stroke?: string;
+    strokeWidthRatio?: number;
+    timestamp?: number;
+}
+
+interface TextPayload {
+    id: string;
+    page?: number;
+    text?: string;
+    color?: string;
+    fontSize?: number;
+    fontSizeRatio?: number;
+    position: { x: number; y: number };
+    timestamp?: number;
+}
+
+interface ImagePayload {
+    id: string;
+    url: string;
+    position: { x: number; y: number };
+    widthRatio?: number;
+    heightRatio?: number;
+    scale?: number;
+    addedBy?: string;
+    page?: number;
+}
+
+interface StoredBoardObject {
+    type: string;
+    payload: FullStrokePayload | TextPayload | ShapePayload | ImagePayload;
+    timestamp: number;
+}
+
 const SHAPE_TOOL_IDS = ["rectangle", "circle", "triangle", "diamond", "star", "line", "arrow"] as const
 type ShapeToolId = typeof SHAPE_TOOL_IDS[number]
 function isShapeTool(t: string): t is ShapeToolId { return SHAPE_TOOL_IDS.includes(t as ShapeToolId) }
@@ -66,7 +107,6 @@ function getStarPoints(w: number, h: number) {
     }
     return pts
 }
-*/
 
 interface StrokePayload {
     id: string
@@ -88,17 +128,27 @@ interface LiveStroke {
     width: number
 }
 
+interface FullStrokePayload {
+    id: string;
+    points: { x: number; y: number }[];
+    color: string;
+    width: number;
+    page?: number;
+    timestamp?: number;
+}
+
 // Extended IText with custom properties for board sync
 interface BoardIText extends IText {
     id: string
     _synced?: boolean
 }
 
-function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushSize, isLocked, currentPage, drawingEnabled, onToolChange, shapeFillColor = "transparent", shapeBorderColor = "#FFFFFF" }: WhiteboardProps) {
+function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushSize, isViewLocked, currentPage, drawingEnabled, shapeFillColor, shapeBorderColor, onToolChange }: WhiteboardProps) {
     const { socket } = useSocket()
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const wrapperRef = useRef<HTMLDivElement>(null)
     const fabricRef = useRef<Canvas | null>(null)
+    const [canvasReady, setCanvasReady] = useState(false)
 
     const localStrokeIdRef = useRef<string | null>(null)
     const currentPageRef = useRef(currentPage)
@@ -109,7 +159,21 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     const boardFileObjsRef = useRef<Record<string, FabricImage>>({})
     const textObjsRef = useRef<Record<string, IText>>({})
     const shapeObjsRef = useRef<Record<string, FabricObject>>({})
-    
+
+    // Persistence refs
+    const boardHistoryRef = useRef<StoredBoardObject[]>([]);
+    const lastSyncTimeRef = useRef<number>(0);
+
+    const saveToLocalStorage = useCallback((newObj?: StoredBoardObject) => {
+        if (newObj) {
+            boardHistoryRef.current.push(newObj);
+            if (newObj.timestamp > lastSyncTimeRef.current) {
+                lastSyncTimeRef.current = newObj.timestamp;
+                localStorage.setItem(`board_sync_${sessionId}`, newObj.timestamp.toString());
+            }
+        }
+        localStorage.setItem(`board_data_${sessionId}`, JSON.stringify(boardHistoryRef.current));
+    }, [sessionId]);
     // Safer unique ID generation (fallback for non-secure contexts/older browsers)
     const generateId = useCallback(() => {
         if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -121,21 +185,32 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     const toolRef = useRef(tool)
     const onToolChangeRef = useRef(onToolChange)
     const activeTextRef = useRef<IText | null>(null)
+
+    // Load from localStorage on mount
+    useEffect(() => {
+        const saved = localStorage.getItem(`board_data_${sessionId}`);
+        if (saved) {
+            try {
+                boardHistoryRef.current = JSON.parse(saved);
+                const sync = localStorage.getItem(`board_sync_${sessionId}`);
+                if (sync) lastSyncTimeRef.current = parseInt(sync);
+            } catch (e) {
+                console.error("Failed to parse board history", e);
+            }
+        }
+    }, [sessionId]);
     const bgImagesRef = useRef(bgImages)
     const setBgImagesOnCanvasRef = useRef<(canvas: Canvas, imageUrls: string[]) => Promise<void>>(() => Promise.resolve())
-    const isLockedRef = useRef(isLocked)
     const drawingEnabledRef = useRef(drawingEnabled)
     const lastLaserPointRef = useRef<{ x: number, y: number } | null>(null)
     const isLaserActiveRef = useRef(false)
 
     // Shape drawing state
-    /*
     const shapeStartRef = useRef<{ x: number; y: number } | null>(null)
     const shapePreviewRef = useRef<FabricObject | null>(null)
     const shapeFillRef = useRef(shapeFillColor)
     const shapeBorderRef = useRef(shapeBorderColor)
     const brushSizeRef = useRef(brushSize)
-    */
 
     useEffect(() => {
         currentPageRef.current = currentPage
@@ -153,15 +228,12 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         bgImagesRef.current = bgImages
     }, [bgImages])
 
-    useEffect(() => {
-        isLockedRef.current = isLocked
-    }, [isLocked])
+
 
     useEffect(() => {
         drawingEnabledRef.current = drawingEnabled
     }, [drawingEnabled])
 
-    /*
     useEffect(() => {
         shapeFillRef.current = shapeFillColor
     }, [shapeFillColor])
@@ -173,7 +245,6 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     useEffect(() => {
         brushSizeRef.current = brushSize
     }, [brushSize])
-    */
 
 
     // Utility: Width-based normalization
@@ -301,6 +372,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         })
 
         fabricRef.current = canvas
+        setCanvasReady(true)
         canvas.freeDrawingBrush = new PencilBrush(canvas)
         if (canvas.freeDrawingBrush) {
             canvas.freeDrawingBrush.color = color
@@ -311,7 +383,6 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         // ── Helper: create a Fabric shape from normalized payload ──
 
         //for shape
-        /*
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const createShapeFromPayload = (data: any): FabricObject | null => {
             const cw = canvas.width
@@ -349,13 +420,12 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     return null
             }
         }
-        */
 
         // ── Local Stroke Events ───────────────────────────────────
         canvas.on("mouse:down", (opt) => {
             // Text tool: place an empty IText on click (Excalidraw-style)
             if (toolRef.current === "text") {
-                if (role === "student" && (isLockedRef.current || !drawingEnabledRef.current)) return
+                if (role === "student" && (!drawingEnabledRef.current)) return
 
                 // If there's already an active text being edited, finalize it first
                 if (activeTextRef.current) {
@@ -443,16 +513,14 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             }
 
             // Shape tool: start drawing a shape
-            /*
             if (isShapeTool(toolRef.current)) {
-                if (role === "student" && isLocked) return
+                if (role === "student" && isViewLocked) return
                 const pt = canvas.getScenePoint(opt.e)
                 shapeStartRef.current = { x: pt.x, y: pt.y }
                 return
             }
-            */
 
-            if (!canvas.isDrawingMode || (role === "student" && (isLockedRef.current || !drawingEnabledRef.current))) return
+            if (!canvas.isDrawingMode || (role === "student" && (!drawingEnabledRef.current))) return
             localStrokeIdRef.current = generateId()
             const pt = canvas.getScenePoint(opt.e)
             socket.emit("stroke_draw", {
@@ -470,7 +538,6 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
         canvas.on("mouse:move", (opt) => {
             // Shape preview while dragging
-            /*
             if (shapeStartRef.current && isShapeTool(toolRef.current)) {
                 const pt = canvas.getScenePoint(opt.e)
                 const start = shapeStartRef.current
@@ -487,6 +554,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 }
 
                 const previewData = {
+                    id: "preview",
                     shapeType: toolRef.current,
                     position: toNorm(left, top, canvas.width),
                     widthRatio: absW / canvas.width,
@@ -505,7 +573,6 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 }
                 return
             }
-            */
 
             if (toolRef.current === "laser") {
                 if (!isLaserActiveRef.current) return
@@ -551,7 +618,6 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             lastLaserPointRef.current = null
             isLaserActiveRef.current = false
             // Finalize shape
-            /*
             if (shapeStartRef.current && isShapeTool(toolRef.current)) {
                 const pt = canvas.getScenePoint(opt.e)
                 const start = shapeStartRef.current
@@ -572,7 +638,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 const top = h >= 0 ? start.y : pt.y
                 const absW = Math.abs(w)
                 const absH = Math.abs(h)
-                const id = crypto.randomUUID()
+                const id = generateId()
 
                 const shapePayload = {
                     id,
@@ -584,21 +650,21 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     stroke: shapeBorderRef.current,
                     strokeWidthRatio: brushSizeRef.current / canvas.width,
                     page: currentPageRef.current,
+                    timestamp: Date.now(),
                 }
 
                 const shape = createShapeFromPayload(shapePayload)
                 if (shape) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (shape as any).id = id
+                    (shape as FabricObject & { id: string }).id = id
                     shapeObjsRef.current[id] = shape
                     canvas.add(shape)
                     canvas.requestRenderAll()
 
                     socket.emit("shape_add", { roomId: sessionId, payload: shapePayload })
+                    if (onToolChangeRef.current) onToolChangeRef.current("select")
                 }
                 return
             }
-            */
 
             if (!localStrokeIdRef.current) return
             socket.emit("stroke_draw", {
@@ -612,6 +678,15 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             })
             localStrokeIdRef.current = null
         })
+
+        canvas.on("path:created", (opt) => {
+            if (localStrokeIdRef.current) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (opt.path as any).id = localStrokeIdRef.current
+                opt.path.set({ selectable: role === "teacher" })
+            }
+        })
+
 
         // ── Object Modification Sync ──────────────────────────────
         canvas.on("object:modified", (opt) => {
@@ -677,7 +752,8 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         const handleStrokeDraw = ({ payload }: { payload: StrokePayload }) => {
             const { id, type, point, color: sColor, width: sWidth, page: sPage } = payload
             if (sPage !== undefined && sPage !== currentPageRef.current) return
-
+            // Only skip if WE are the one drawing this stroke (it's already on our canvas via Fabric)
+            if (id === localStrokeIdRef.current) return
             const local = fromNorm(point.x, point.y, canvas.width)
             const localWidth = sWidth ? sWidth * canvas.width : brushSize
 
@@ -687,6 +763,8 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     fill: "transparent", stroke: sColor, strokeWidth: localWidth,
                     selectable: false, evented: false, objectCaching: false,
                 })
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ;(p as any).id = id
                 liveFabricObjsRef.current[id] = p
                 canvas.add(p)
             } else if (type === "draw" && liveStrokesRef.current[id]) {
@@ -699,6 +777,8 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                         fill: "transparent", stroke: data.color, strokeWidth: data.width,
                         selectable: false, evented: false, objectCaching: false,
                     })
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    ;(newPath as any).id = id
                     // Add and move to original index to maintain Z-order
                     canvas.add(newPath)
                     newPath.setCoords()
@@ -718,6 +798,30 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             canvas.requestRenderAll()
         }
 
+        const handleStrokeAdd = ({ payload }: { payload: FullStrokePayload }) => {
+            if (payload.page !== undefined && payload.page !== currentPageRef.current) return
+            
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (canvas.getObjects().some((o: any) => o.id === payload.id)) return
+
+            import("fabric").then(({ Path }) => {
+                const points = payload.points.map(p => fromNorm(p.x, p.y, canvas.width))
+                const pathStr = buildPathStr(points)
+                const p = new Path(pathStr, {
+                    fill: "transparent",
+                    stroke: payload.color,
+                    strokeWidth: payload.width * canvas.width,
+                    selectable: role === "teacher",
+                    evented: role === "teacher",
+                    objectCaching: true
+                })
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ;(p as any).id = payload.id
+                canvas.add(p)
+                canvas.requestRenderAll()
+            })
+        }
+
         const handleClearCanvas = () => {
             canvas.clear()
             canvas.backgroundColor = boardColor
@@ -726,8 +830,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             canvas.renderAll()
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const addImageToCanvas = (data: any) => {
+        const addImageToCanvas = (data: ImagePayload) => {
             const img = new Image()
             img.crossOrigin = "anonymous"
             img.onload = () => {
@@ -760,8 +863,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             img.src = data.url
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const handleBoardFileUpdate = ({ payload }: { payload: any }) => {
+        const handleBoardFileUpdate = ({ payload }: { payload: Partial<ImagePayload> & { id: string } }) => {
             const obj = boardFileObjsRef.current[payload.id]
             if (obj) {
                 if (payload.position) {
@@ -782,8 +884,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         }
 
         // ── Text Add (from peers) ─────────────────────────────────
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const handleTextAdd = ({ payload }: { payload: any }) => {
+        const handleTextAdd = ({ payload }: { payload: TextPayload }) => {
             if (payload.page !== undefined && payload.page !== currentPageRef.current) return
             // If text with this ID already exists, update instead of creating duplicate
             if (textObjsRef.current[payload.id]) {
@@ -814,8 +915,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         }
 
         // ── Text Update (from peers — content/position/size change) ──
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const handleTextUpdate = ({ payload }: { payload: any }) => {
+        const handleTextUpdate = ({ payload }: { payload: TextPayload }) => {
             if (payload.page !== undefined && payload.page !== currentPageRef.current) return
             const existing = textObjsRef.current[payload.id]
             if (existing) {
@@ -866,6 +966,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         }
 
         socket.on("stroke_draw", handleStrokeDraw)
+        socket.on("stroke_add", handleStrokeAdd)
         socket.on("laser_pointer", handleLaserPointer)
         socket.on("clear_canvas", handleClearCanvas)
         socket.on("board_color_sync", onBoardColorSync)
@@ -873,8 +974,8 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         socket.on("board_file_add", ({ payload }) => addImageToCanvas(payload))
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
-        /*
-        const handleShapeAdd = ({ payload }: { payload: any }) => {
+        // ── Shape Add (from peers) ────────────────────────────────
+        const handleShapeAdd = ({ payload }: { payload: ShapePayload }) => {
             console.log("[SHAPE] Received shape_add:", payload)
             if (payload.page !== undefined && payload.page !== currentPageRef.current) return
             if (shapeObjsRef.current[payload.id]) return // Already exists
@@ -886,14 +987,17 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 canvas.add(shape)
                 canvas.requestRenderAll()
                 console.log("[SHAPE] Shape added to canvas:", payload.id, payload.shapeType)
+
+                // Persist to history
+                if (payload.timestamp && !boardHistoryRef.current.some(obj => obj.payload.id === payload.id)) {
+                    saveToLocalStorage({ type: "shape", payload, timestamp: payload.timestamp });
+                }
             } else {
                 console.warn("[SHAPE] Failed to create shape from payload:", payload)
             }
         }
-            */
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const handleShapeUpdate = ({ payload }: { payload: any }) => {
+        const handleShapeUpdate = ({ payload }: { payload: Partial<ShapePayload> & { id: string } }) => {
             const obj = shapeObjsRef.current[payload.id]
             if (!obj) return
             if (payload.position) {
@@ -914,8 +1018,8 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
         socket.on("text_add", handleTextAdd)
         socket.on("text_update", handleTextUpdate)
-        // socket.on("shape_add", handleShapeAdd)
-        // socket.on("shape_update", handleShapeUpdate)
+        socket.on("shape_add", handleShapeAdd)
+        socket.on("shape_update", handleShapeUpdate)
         socket.on("board_file_remove", ({ payload }) => {
             const o = boardFileObjsRef.current[payload.id]
             if (o) { canvas.remove(o); delete boardFileObjsRef.current[payload.id]; canvas.renderAll() }
@@ -923,17 +1027,46 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         socket.on("board_file_update", handleBoardFileUpdate)
         socket.on("board_files_state", ({ payload }) => payload.forEach(addImageToCanvas))
 
-        socket.on("board_objects_state", ({ payload }: { payload: { type: "stroke" | "text" | "shape", payload: Record<string, unknown> }[] }) => {
+        const handleObjectRemove = ({ payload }: { payload: { id: string } }) => {
+            // Find and remove the object with that ID
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const obj = canvas.getObjects().find((o: any) => o.id === payload.id);
+            if (obj) {
+                canvas.remove(obj);
+                // Clean up any potential refs
+                if (boardFileObjsRef.current[payload.id]) delete boardFileObjsRef.current[payload.id];
+                if (textObjsRef.current[payload.id]) delete textObjsRef.current[payload.id];
+                if (shapeObjsRef.current[payload.id]) delete shapeObjsRef.current[payload.id];
+                canvas.renderAll();
+            }
+        }
+        socket.on("object_remove", handleObjectRemove);
+
+        interface BoardObjectPayload {
+            type: "stroke" | "text" | "shape";
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            payload: FullStrokePayload | TextPayload | ShapePayload; 
+            timestamp: number;
+        }
+
+        socket.on("board_objects_state", ({ payload }: { payload: BoardObjectPayload[] }) => {
             console.log("[board_objects_state] Restoring objects:", payload.length)
             payload.forEach(obj => {
-                if (obj.type === "stroke") handleStrokeDraw({ payload: obj.payload as unknown as StrokePayload })
-                else if (obj.type === "text") handleTextAdd({ payload: obj.payload })
-                // else if (obj.type === "shape") handleShapeAdd({ payload: obj.payload })
+                // handleStrokeAdd/handleTextAdd handle the current-page-only rendering AND storage
+                const fullPayload = { ...obj.payload, timestamp: obj.timestamp };
+                if (obj.type === "stroke") handleStrokeAdd({ payload: fullPayload as unknown as FullStrokePayload })
+                else if (obj.type === "text") handleTextAdd({ payload: fullPayload as unknown as TextPayload })
+                else if (obj.type === "shape") handleShapeAdd({ payload: fullPayload as unknown as ShapePayload })
             })
         })
 
         const handleClearEmit = () => socket.emit("clear_canvas", { roomId: sessionId })
         document.addEventListener("clear-canvas-emit", handleClearEmit)
+
+        const handleUndoTrigger = () => socket.emit("board_undo", { roomId: sessionId })
+        const handleRedoTrigger = () => socket.emit("board_redo", { roomId: sessionId })
+        document.addEventListener("undo-trigger", handleUndoTrigger)
+        document.addEventListener("redo-trigger", handleRedoTrigger)
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const handleDeleteLocal = (e: any) => {
@@ -991,6 +1124,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
         return () => {
             socket.off("stroke_draw", handleStrokeDraw)
+            socket.off("stroke_add", handleStrokeAdd)
             socket.off("laser_pointer", handleLaserPointer)
             socket.off("clear_canvas", handleClearCanvas)
             socket.off("board_file_add")
@@ -1001,10 +1135,14 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             socket.off("board_file_remove")
             socket.off("board_file_update", handleBoardFileUpdate)
             socket.off("board_files_state")
+            socket.off("object_remove", handleObjectRemove)
             document.removeEventListener("clear-canvas-emit", handleClearEmit)
+            document.removeEventListener("undo-trigger", handleUndoTrigger)
+            document.removeEventListener("redo-trigger", handleRedoTrigger)
             document.removeEventListener("delete-page-local", handleDeleteLocal)
             socket.off("board_color_sync", onBoardColorSync)
             socket.off("view_sync", onViewSync)
+            setCanvasReady(false)
             canvas.dispose()
             resizeObserver.disconnect()
         }
@@ -1054,8 +1192,13 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             canvas.renderAll()
         }
 
+        // 5. Request dynamic objects for this page if it's a new join/view
+        if (!boardHistoryRef.current.some(obj => obj.payload.page === currentPage)) {
+            socket?.emit("board_request_objects", { payload: { page: currentPage } });
+        }
+
         lastPageRef.current = currentPage
-    }, [currentPage, boardColor, bgImages, role, setBgImagesOnCanvas])
+    }, [currentPage, boardColor, bgImages, role, setBgImagesOnCanvas, socket])
 
     // ── Background image change (e.g. PDF page received via socket) ──
     useEffect(() => {
@@ -1070,7 +1213,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
     useEffect(() => {
         const canvas = fabricRef.current; if (!canvas) return
-        const canDraw = role === "teacher" || (!isLocked && (drawingEnabled ?? false));
+        const canDraw = role === "teacher" || (drawingEnabled ?? false);
         canvas.isDrawingMode = (tool === "pencil" || tool === "eraser") && canDraw;
         canvas.freeDrawingCursor = tool === "pencil" ? PENCIL_CURSOR : ERASER_CURSOR
         if (canvas.freeDrawingBrush) {
@@ -1088,7 +1231,9 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             canvas.selection = (tool === "select" || tool === "text")
             canvas.skipTargetFind = (tool === "pencil" || tool === "eraser" || tool === "laser")
         }
-    }, [tool, color, brushSize, boardColor, drawingEnabled, role, isLocked])
+    // canvasReady ensures this effect re-runs after the canvas is initialized
+    // (which happens asynchronously when socket connects)
+    }, [tool, color, brushSize, boardColor, drawingEnabled, role, canvasReady])
 
     // ── View Sync: Scroll Broadcasting (teacher always, students when drawing enabled) ──
     useEffect(() => {
@@ -1122,7 +1267,10 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         <div className="flex-1 min-h-0 bg-background relative flex flex-col p-3">
             <div
                 ref={wrapperRef}
-                className="w-full flex-1 rounded-2xl overflow-auto shadow-[0_0_20px_rgba(0,0,0,0.5)] dark:shadow-[0_0_20px_rgba(255,255,255,0.2)] border border-border transition-all duration-400 bg-zinc-900/50"
+                className={cn(
+                    "w-full flex-1 rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.5)] dark:shadow-[0_0_20px_rgba(255,255,255,0.2)] border border-border transition-all duration-400 bg-zinc-900/50",
+                    (role === "student" && isViewLocked) ? "overflow-hidden" : "overflow-auto"
+                )}
                 style={{ backgroundColor: boardColor }}
             >
                 <canvas ref={canvasRef} />

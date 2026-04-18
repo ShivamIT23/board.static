@@ -119,6 +119,7 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --animate-pulse-scale: pulse-scale 2s ease-in-out infinite;
+  --animate-bounce-horizontal: bounce-horizontal 2s infinite;
 
   @keyframes pulse-scale {
     0%, 100% {
@@ -126,6 +127,17 @@
     }
     50% {
       transform: scale(1.08);
+    }
+  }
+
+  @keyframes bounce-horizontal {
+    0%, 100% {
+      transform: translateX(0);
+      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    }
+    50% {
+      transform: translateX(25%);
+      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
     }
   }
 }
@@ -250,4 +262,151 @@ canvas {
   .thin-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: oklch(0.5 0 0 / 45%);
   }
+}
+
+/* ── Safari-style Color Picker (Compact) ───────────────────── */
+
+.color-picker-safari {
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Saturation / Value panel */
+.cp-sv-panel {
+  position: relative;
+  width: 100%;
+  height: 30px;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: crosshair;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/*
+ * SAFARI FIX: Safari renders the CSS keyword `transparent` as
+ * rgba(0,0,0,0) (transparent BLACK), which creates a muddy
+ * dark gradient instead of a clean fade. Using explicit rgba
+ * stops with matching RGB channels fixes this across all browsers.
+ */
+.cp-sv-white {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(to right, #ffffff, rgba(255, 255, 255, 0));
+}
+
+.cp-sv-black {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(to top, #000000, rgba(0, 0, 0, 0));
+}
+
+.cp-sv-thumb {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 1px 4px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Hue bar */
+.cp-hue-bar {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    hsl(0, 100%, 50%) 0%,
+    hsl(60, 100%, 50%) 17%,
+    hsl(120, 100%, 50%) 33%,
+    hsl(180, 100%, 50%) 50%,
+    hsl(240, 100%, 50%) 67%,
+    hsl(300, 100%, 50%) 83%,
+    hsl(360, 100%, 50%) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cp-hue-thumb {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), 0 1px 4px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Preview row */
+.cp-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cp-preview-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.cp-hex-input {
+  flex: 1;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.cp-hex-input:focus {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Preset grid — 8 columns for a compact layout */
+.cp-presets {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+}
+
+.cp-preset-btn {
+  width: 100%;
+  height: 0;
+  padding-bottom: 100%; /* square fallback for Safari */
+  border-radius: 4px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.cp-preset-btn:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.cp-preset-active {
+  border-color: #fff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+  transform: scale(1.08);
 }

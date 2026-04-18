@@ -1,12 +1,13 @@
 "use client"
 
 import React, { useCallback, useEffect, useRef, useState } from "react"
+import ReactDOM from "react-dom"
 import {
     Pencil, Eraser, MousePointer2, Trash2, Palette,
     Square, Circle, Minus, ArrowUpRight, Type, Triangle, Diamond, Star
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { CompactPicker } from "react-color"
+import ColorPicker from "./ColorPicker"
 
 const SHAPE_TOOLS = [
     { id: "rectangle", label: "Rectangle", icon: Square },
@@ -28,6 +29,10 @@ interface ToolbarProps {
     setColor: (color: string) => void
     brushSize: number
     setBrushSize: (size: number) => void
+    shapeFillColor: string
+    setShapeFillColor: (color: string) => void
+    shapeBorderColor: string
+    setShapeBorderColor: (color: string) => void
     onClearCanvas?: () => void
 }
 
@@ -39,16 +44,33 @@ export default function Toolbar({
     setColor,
     brushSize,
     setBrushSize,
+    shapeFillColor,
+    setShapeFillColor,
+    shapeBorderColor,
+    setShapeBorderColor,
     onClearCanvas
 }: ToolbarProps) {
     const [showShapeDropdown, setShowShapeDropdown] = useState(false)
-    const [showColorPicker, setShowColorPicker] = useState(false) // <-- New state for color picker
+    const [showColorPicker, setShowColorPicker] = useState(false)
+    const [showFillPicker, setShowFillPicker] = useState(false)
+    const [showBorderPicker, setShowBorderPicker] = useState(false)
+    const [shapeDropdownPos, setShapeDropdownPos] = useState<{ top: number; left: number } | null>(null)
+    const [colorPickerPos, setColorPickerPos] = useState<{ top: number; left: number } | null>(null)
+    const [fillPickerPos, setFillPickerPos] = useState<{ top: number; left: number } | null>(null)
+    const [borderPickerPos, setBorderPickerPos] = useState<{ top: number; left: number } | null>(null)
 
     const penColors = ["#FFFFFF", "#FEF08A", "#86EFAC", "#93C5FD", "#FCA5A5", "#F0ABFC"]
+    const fillColors = ["transparent", "#FFFFFF", "#FEF08A", "#86EFAC", "#93C5FD", "#FCA5A5", "#F0ABFC"]
+    const borderColors = ["#FFFFFF", "#000000", "#FEF08A", "#86EFAC", "#93C5FD", "#FCA5A5", "#F0ABFC"]
     const [selectedShape, setSelectedShape] = useState<ShapeToolId>("rectangle")
     const brushSizes = [2, 4, 8, 12, 16, 20]
     const scrollAreaRef = useRef<HTMLDivElement>(null)
+    const shapeButtonRef = useRef<HTMLDivElement>(null)
+    const colorButtonRef = useRef<HTMLButtonElement>(null)
+    const fillButtonRef = useRef<HTMLButtonElement>(null)
+    const borderButtonRef = useRef<HTMLButtonElement>(null)
     const [canScrollDown, setCanScrollDown] = useState(false)
+    
 
     const checkScroll = useCallback(() => {
         const el = scrollAreaRef.current
@@ -63,6 +85,62 @@ export default function Toolbar({
     const isShapeTool = SHAPE_TOOLS.some(s => s.id === tool)
     const ActiveShapeIcon = SHAPE_TOOLS.find(s => s.id === (isShapeTool ? tool : selectedShape))?.icon || Square
 
+    const toggleShapeDropdown = useCallback(() => {
+        if (showShapeDropdown) {
+            setShowShapeDropdown(false)
+            return
+        }
+        if (shapeButtonRef.current) {
+            const rect = shapeButtonRef.current.getBoundingClientRect()
+            setShapeDropdownPos({
+                top: rect.top + rect.height / 2 - 20,
+                left: rect.right + 8,
+            })
+        }
+        setShowShapeDropdown(true)
+    }, [showShapeDropdown])
+
+    const toggleColorPicker = useCallback(() => {
+        if (showColorPicker) {
+            setShowColorPicker(false)
+            return
+        }
+        if (colorButtonRef.current) {
+            const rect = colorButtonRef.current.getBoundingClientRect()
+            const pickerHeight = 420
+            const top = Math.max(8, Math.min(window.innerHeight - pickerHeight - 8, rect.top - pickerHeight / 2 + rect.height / 2))
+            setColorPickerPos({ top, left: rect.right + 16 })
+        }
+        setShowColorPicker(true)
+    }, [showColorPicker])
+
+    const toggleFillPicker = useCallback(() => {
+        if (showFillPicker) {
+            setShowFillPicker(false)
+            return
+        }
+        if (fillButtonRef.current) {
+            const rect = fillButtonRef.current.getBoundingClientRect()
+            const pickerHeight = 420
+            const top = Math.max(8, Math.min(window.innerHeight - pickerHeight - 8, rect.top - pickerHeight / 2 + rect.height / 2))
+            setFillPickerPos({ top, left: rect.right + 16 })
+        }
+        setShowFillPicker(true)
+    }, [showFillPicker])
+
+    const toggleBorderPicker = useCallback(() => {
+        if (showBorderPicker) {
+            setShowBorderPicker(false)
+            return
+        }
+        if (borderButtonRef.current) {
+            const rect = borderButtonRef.current.getBoundingClientRect()
+            const pickerHeight = 420
+            const top = Math.max(8, Math.min(window.innerHeight - pickerHeight - 8, rect.top - pickerHeight / 2 + rect.height / 2))
+            setBorderPickerPos({ top, left: rect.right + 16 })
+        }
+        setShowBorderPicker(true)
+    }, [showBorderPicker])
 
     return (
         <nav className="w-12 flex no-scrollbar flex-col items-center bg-sidebar border-r border-border z-30 shrink-0 h-full max-h-screen">
@@ -89,7 +167,7 @@ export default function Toolbar({
                         <div className="w-8 h-px bg-border my-1 mx-auto" />
 
                         {/* Shapes — single button with horizontal dropdown */}
-                        <div className="relative group">
+                        <div className="relative group" ref={shapeButtonRef}>
                             <div className={cn(
                                 "flex flex-col items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
                                 isShapeTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
@@ -100,7 +178,7 @@ export default function Toolbar({
                                         setTool(selectedShape)
                                         if (!isShapeTool) setShowShapeDropdown(false)
                                     }}
-                                    onContextMenu={(e) => { e.preventDefault(); setShowShapeDropdown(!showShapeDropdown) }}
+                                    onContextMenu={(e) => { e.preventDefault(); toggleShapeDropdown() }}
                                     className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10"
                                     title={`Use ${selectedShape}`}
                                 >
@@ -110,7 +188,7 @@ export default function Toolbar({
                                     type="button"
                                     onClick={(e) => {
                                         e.stopPropagation()
-                                        setShowShapeDropdown(!showShapeDropdown)
+                                        toggleShapeDropdown()
                                     }}
                                     className={cn(
                                         "py-0.5 flex items-center justify-center transition-colors hover:bg-white/20 border-t border-white/10",
@@ -124,10 +202,13 @@ export default function Toolbar({
                                 </button>
                             </div>
 
-                            {showShapeDropdown && (
+                            {showShapeDropdown && shapeDropdownPos && ReactDOM.createPortal(
                                 <>
-                                    <div className="fixed inset-0 z-40" onClick={() => setShowShapeDropdown(false)} />
-                                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 flex flex-wrap items-center gap-1 bg-sidebar border border-border rounded-lg p-1.5 shadow-xl animate-in fade-in slide-in-from-left-2 duration-200 min-w-[120px]">
+                                    <div className="fixed inset-0 z-9998" onClick={() => setShowShapeDropdown(false)} />
+                                    <div
+                                        className="fixed z-9999 flex flex-wrap items-center gap-1 bg-sidebar border border-border rounded-lg p-1.5 shadow-xl animate-in fade-in slide-in-from-left-2 duration-200 min-w-[120px]"
+                                        style={{ top: shapeDropdownPos.top, left: shapeDropdownPos.left }}
+                                    >
                                         {SHAPE_TOOLS.map((shape) => {
                                             const Icon = shape.icon
                                             return (
@@ -152,7 +233,8 @@ export default function Toolbar({
                                             )
                                         })}
                                     </div>
-                                </>
+                                </>,
+                                document.body
                             )}
                         </div>
 
@@ -198,34 +280,36 @@ export default function Toolbar({
                                 />
                             ))}
 
-                            {/* React-Color Custom Picker Popover */}
+                            {/* Custom Color Picker Popover */}
                             <div className="relative mt-1 flex justify-center">
                                 <button
+                                    ref={colorButtonRef}
                                     type="button"
-                                    onClick={() => setShowColorPicker(!showColorPicker)}
+                                    onClick={() => toggleColorPicker()}
                                     className="w-6 h-6 rounded-[2px] border-2 border-dashed border-muted-foreground flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
                                 >
                                     <Palette size={12} />
                                 </button>
 
-                                {showColorPicker && (
+                                {showColorPicker && colorPickerPos && ReactDOM.createPortal(
                                     <>
                                         {/* Invisible backdrop to close picker when clicking outside */}
-                                        <div className="fixed inset-0 z-40" onClick={() => setShowColorPicker(false)} />
+                                        <div className="fixed inset-0 z-9998" onClick={() => setShowColorPicker(false)} />
 
                                         {/* The Popover Card */}
-                                        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 z-50 animate-in fade-in slide-in-from-left-2 duration-200">
-                                            <div className="p-2 bg-sidebar border border-border rounded-lg shadow-xl">
-                                                <CompactPicker
+                                        <div
+                                            className="fixed z-9999 animate-in fade-in slide-in-from-left-2 duration-200"
+                                            style={{ top: colorPickerPos.top, left: colorPickerPos.left }}
+                                        >
+                                            <div className="p-1.5 bg-sidebar border border-border rounded-[5px] shadow-2xl">
+                                                <ColorPicker
                                                     color={color}
-                                                    onChange={(colorResult) => {
-                                                        setColor(colorResult.hex)
-                                                        // Optional: setShowColorPicker(false) if you want it to close immediately upon clicking a color
-                                                    }}
+                                                    onChange={(hex) => setColor(hex)}
                                                 />
                                             </div>
                                         </div>
-                                    </>
+                                    </>,
+                                    document.body
                                 )}
                             </div>
                         </div>
@@ -252,6 +336,90 @@ export default function Toolbar({
                     </div>
 
                     {/* Shape Fill & Border Colors — only when a shape tool is active */}
+                    {isShapeTool && (
+                        <div className="flex flex-col gap-4 py-2 border-t border-border w-full items-center mb-6 animate-in slide-in-from-bottom-2 duration-300">
+                             {/* Fill Color */}
+                             <div className="flex flex-col gap-2 items-center">
+                                <span className="text-[7px] font-black uppercase tracking-widest text-muted-foreground text-center">Fill</span>
+                                <div className="grid grid-cols-2 gap-1 px-1">
+                                    {fillColors.map((c) => (
+                                        <button
+                                            key={c}
+                                            onClick={() => setShapeFillColor(c)}
+                                            className={cn(
+                                                "w-4 h-4 rounded-sm border transition-all duration-200",
+                                                shapeFillColor === c ? "border-white scale-110 z-10 shadow-sm" : "border-transparent hover:scale-110"
+                                            )}
+                                            style={c === "transparent" ? {
+                                                backgroundImage: "linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%)",
+                                                backgroundPosition: "0 0, 2px 2px",
+                                                backgroundSize: "4px 4px",
+                                                backgroundColor: "white"
+                                            } : { backgroundColor: c }}
+                                            title={c === "transparent" ? "No Fill" : c}
+                                        >
+                                            {c === "transparent" && <div className="w-full h-full flex items-center justify-center"><div className="w-[1px] h-[120%] bg-red-500 rotate-45 shadow-sm" /></div>}
+                                        </button>
+                                    ))}
+                                    <button
+                                        ref={fillButtonRef}
+                                        onClick={() => toggleFillPicker()}
+                                        className="w-4 h-4 rounded-sm border border-dashed border-muted-foreground flex items-center justify-center text-muted-foreground hover:bg-accent transition-colors"
+                                    >
+                                        <Palette size={8} />
+                                    </button>
+                                </div>
+                                {showFillPicker && fillPickerPos && ReactDOM.createPortal(
+                                    <>
+                                        <div className="fixed inset-0 z-9998" onClick={() => setShowFillPicker(false)} />
+                                        <div className="fixed z-9999 animate-in fade-in slide-in-from-left-2 duration-200" style={{ top: fillPickerPos.top, left: fillPickerPos.left }}>
+                                            <div className="p-1.5 bg-sidebar border border-border rounded-[5px] shadow-2xl">
+                                                <ColorPicker color={shapeFillColor} onChange={(hex) => setShapeFillColor(hex)} />
+                                            </div>
+                                        </div>
+                                    </>,
+                                    document.body
+                                )}
+                            </div>
+
+                             {/* Border Color */}
+                             <div className="flex flex-col gap-2 items-center">
+                                <span className="text-[7px] font-black uppercase tracking-widest text-muted-foreground text-center">Border</span>
+                                <div className="grid grid-cols-2 gap-1 px-1">
+                                    {borderColors.map((c) => (
+                                        <button
+                                            key={c}
+                                            onClick={() => setShapeBorderColor(c)}
+                                            className={cn(
+                                                "w-4 h-4 rounded-full border-2 transition-all duration-200",
+                                                shapeBorderColor === c ? "border-white scale-110 z-10 shadow-sm" : "border-transparent hover:scale-110"
+                                            )}
+                                            style={{ backgroundColor: c }}
+                                            title={c}
+                                        />
+                                    ))}
+                                    <button
+                                        ref={borderButtonRef}
+                                        onClick={() => toggleBorderPicker()}
+                                        className="w-4 h-4 rounded-full border-2 border-dashed border-muted-foreground flex items-center justify-center text-muted-foreground hover:bg-accent transition-colors"
+                                    >
+                                        <Palette size={8} />
+                                    </button>
+                                </div>
+                                {showBorderPicker && borderPickerPos && ReactDOM.createPortal(
+                                    <>
+                                        <div className="fixed inset-0 z-9998" onClick={() => setShowBorderPicker(false)} />
+                                        <div className="fixed z-9999 animate-in fade-in slide-in-from-left-2 duration-200" style={{ top: borderPickerPos.top, left: borderPickerPos.left }}>
+                                            <div className="p-1.5 bg-sidebar border border-border rounded-[5px] shadow-2xl">
+                                                <ColorPicker color={shapeBorderColor} onChange={(hex) => setShapeBorderColor(hex)} />
+                                            </div>
+                                        </div>
+                                    </>,
+                                    document.body
+                                )}
+                            </div>
+                        </div>
+                    )}
                     {isShapeTool && (
                         <>
                         </>

@@ -3,10 +3,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react"
 import Toolbar from "./Toolbar"
 import Whiteboard from "./Whiteboard"
-import ChatRoom from "./ChatRoom"
+import ChatRoom from "../Chat/ChatRoom"
 import BoardTopBar from "./BoardTopBar"
 import { SocketProvider, useSocket } from "../providers/socket-provider"
-import { RoomUser } from "./ChatRoom"
+import { RoomUser } from "../Chat/ChatRoom"
 import { toast } from "sonner"
 
 interface MainBoardProps {
@@ -28,11 +28,11 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
     const [pageBgImages, setPageBgImages] = useState<Record<number, string[]>>({})
     const [pageNames, setPageNames] = useState<Record<number, string>>({})
     const [brushSize, setBrushSize] = useState(3)
-    const [isLocked, setIsLocked] = useState(false)
     const [drawingEnabled, setDrawingEnabled] = useState(role === "teacher")
     const [userCount, setUserCount] = useState(1)
     const [roomUsers, setRoomUsers] = useState<RoomUser[]>([])
     const [isChatOpen, setIsChatOpen] = useState(true)
+    const [isViewLocked, setIsViewLocked] = useState(true)
 
     // Page & Zoom Management
     const [currentPage, setCurrentPage] = useState(1)
@@ -91,12 +91,14 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
         }
         socket.on("room_users", handleRoomUsersDrawing)
 
-        // Global freeze (lock) state
-        const handleFrozenState = ({ payload }: { payload: { isFrozen: boolean } }) => {
-            console.log("Received freeze state:", payload.isFrozen)
-            setIsLocked(payload.isFrozen)
+    
+
+        // Global view lock state
+        const handleViewLockedState = ({ payload }: { payload: { isLocked: boolean } }) => {
+            console.log("Received view locked state:", payload.isLocked)
+            setIsViewLocked(payload.isLocked)
         }
-        socket.on("frozen_state", handleFrozenState)
+        socket.on("view_locked_state", handleViewLockedState)
 
         return () => {
             socket.off("board_color_sync", handleBoardColorSync)
@@ -104,7 +106,7 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
             socket.off("page_state", handlePageState)
             socket.off("drawing_permission", handleDrawingPermission)
             socket.off("room_users", handleRoomUsersDrawing)
-            socket.off("frozen_state", handleFrozenState)
+            socket.off("view_locked_state", handleViewLockedState)
         }
     }, [socket, role])
 
@@ -318,9 +320,11 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
         }
     }
 
-    const toggleBoardFreeze = (enabled: boolean) => {
+
+
+    const toggleViewLocked = (enabled: boolean) => {
         if (role === "teacher" && socket) {
-            socket.emit("board_toggle_freeze", {
+            socket.emit("board_toggle_view_lock", {
                 roomId: sessionId,
                 payload: { enabled }
             })
@@ -334,12 +338,16 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                     <BoardTopBar
                         zoom={zoom}
                         onZoomChange={setZoom}
+                        isOpen={isChatOpen}
+                        duration={duration}
+                        userName={userName}
                         boardColor={currentBoardColor}
                         setBoardColor={updateBoardBackground}
                         role={role}
                         sessionId={sessionId}
-                        duration={duration}
                         onPdfUpload={role === "teacher" ? handlePdfUpload : undefined}
+                        isViewLocked={isViewLocked}
+                        onToggleViewLocked={toggleViewLocked}
                     />
                     <div className="flex-1 overflow-hidden relative flex">
 
@@ -351,6 +359,10 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                             setColor={setColor}
                             brushSize={brushSize}
                             setBrushSize={setBrushSize}
+                            shapeFillColor={shapeFillColor}
+                            setShapeFillColor={setShapeFillColor}
+                            shapeBorderColor={shapeBorderColor}
+                            setShapeBorderColor={setShapeBorderColor}
                             onClearCanvas={role === "teacher" ? () => {
                                 document.dispatchEvent(new CustomEvent("clear-canvas-emit"))
                             } : undefined}
@@ -424,7 +436,7 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                                 boardColor={currentBoardColor}
                                 bgImages={currentBgImages}
                                 brushSize={brushSize}
-                                isLocked={isLocked}
+                                isViewLocked={isViewLocked}
                                 drawingEnabled={drawingEnabled}
                                 currentPage={currentPage}
                                 onToolChange={setTool}
@@ -432,9 +444,7 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                                 shapeBorderColor={shapeBorderColor}
                             />
                         </div>
-                    </div>
-                </div>
-                <ChatRoom
+                        <ChatRoom
                     userCount={userCount}
                     roomUsers={roomUsers}
                     setRoomUsers={setRoomUsers}
@@ -444,9 +454,11 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                     sessionId={sessionId}
                     isOpen={isChatOpen}
                     setIsOpen={setIsChatOpen}
-                    isBoardFrozen={isLocked}
-                    onToggleFreeze={toggleBoardFreeze}
                 />
+                    </div>
+                    
+                </div>
+                
             </div>
         </div>
     )

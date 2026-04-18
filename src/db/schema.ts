@@ -287,9 +287,31 @@ export const classChats = mysqlTable('tb_class_chats', {
   timestamp: timestamp('timestamp').defaultNow().notNull(),
 });
 
+export const classBoardStates = mysqlTable('tb_class_board_states', {
+  id: int('id').primaryKey().autoincrement(),
+  sessionId: varchar('session_id', { length: 255 }).notNull(),
+  page: int('page').default(0).notNull(),
+  data: text('data').notNull(), // JSON string of board objects for this page
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+});
+
+export const classBoardFiles = mysqlTable('tb_class_board_files', {
+  id: int('id').primaryKey().autoincrement(),
+  sessionId: varchar('session_id', { length: 255 }).notNull(),
+  fileId: varchar('file_id', { length: 255 }).notNull(), // id of the file/image on canvas
+  url: text('url').notNull(),
+  name: varchar('name', { length: 255 }),
+  position: text('position'), // JSON {x, y}
+  scale: text('scale'), // JSON or float
+  addedBy: varchar('added_by', { length: 255 }),
+  timestamp: timestamp('timestamp').defaultNow().notNull(),
+});
+
 export const classesRelations = relations(classes, ({ many }) => ({
   visitors: many(classVisitors),
   chats: many(classChats),
+  boardStates: many(classBoardStates),
+  boardFiles: many(classBoardFiles),
 }));
 
 export const classChatsRelations = relations(classChats, ({ one }) => ({
@@ -303,5 +325,19 @@ export const classVisitorsRelations = relations(classVisitors, ({ one }) => ({
   class: one(classes, {
     fields: [classVisitors.classId],
     references: [classes.id],
+  }),
+}));
+
+export const classBoardStatesRelations = relations(classBoardStates, ({ one }) => ({
+  class: one(classes, {
+    fields: [classBoardStates.sessionId],
+    references: [classes.sessionId],
+  }),
+}));
+
+export const classBoardFilesRelations = relations(classBoardFiles, ({ one }) => ({
+  class: one(classes, {
+    fields: [classBoardFiles.sessionId],
+    references: [classes.sessionId],
   }),
 }));
