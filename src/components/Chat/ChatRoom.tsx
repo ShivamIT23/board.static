@@ -157,17 +157,17 @@ export default function ChatRoom({
     useEffect(() => {
         if (!socket || !inputMessage.trim()) return
 
-        socket.emit("typing", { payload: { isTyping: true } })
+        socket.emit("typing", { roomId: sessionId, payload: { isTyping: true } })
 
         const timeout = setTimeout(() => {
-            socket.emit("typing", { payload: { isTyping: false } })
+            socket.emit("typing", { roomId: sessionId, payload: { isTyping: false } })
         }, 3000)
 
         return () => {
             clearTimeout(timeout)
-            socket.emit("typing", { payload: { isTyping: false } })
+            socket.emit("typing", { roomId: sessionId, payload: { isTyping: false } })
         }
-    }, [socket, inputMessage])
+    }, [socket, inputMessage, sessionId])
 
     // Initial chat history fetch
     useEffect(() => {
@@ -369,6 +369,7 @@ export default function ChatRoom({
         }
 
         socket.emit("chat", {
+            roomId: sessionId,
             payload: {
                 message: inputMessage,
                 attachments: attachments.length > 0 ? attachments : undefined
@@ -489,7 +490,6 @@ export default function ChatRoom({
             <MessageList
                 messages={messages}
                 userName={userName}
-                typingUsers={typingUsers}
                 scrollRef={scrollRef}
                 handleScroll={handleScroll}
                 showScrollButton={showScrollButton}
@@ -498,6 +498,20 @@ export default function ChatRoom({
                 canLoadMore={canLoadMore}
                 resolveAttachmentUrl={resolveAttachmentUrl}
             />
+
+            {/* Typing Indicator */}
+            {Object.keys(typingUsers).length > 0 && (
+                <div className="px-6 py-2 bg-muted/30 border-t border-border/50">
+                    <p className="text-[10px] text-muted-foreground animate-pulse flex items-center gap-2">
+                        <span className="flex gap-1">
+                            <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]" />
+                            <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]" />
+                            <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" />
+                        </span>
+                        {Object.values(typingUsers).join(", ")} {Object.keys(typingUsers).length > 1 ? "are" : "is"} typing...
+                    </p>
+                </div>
+            )}
 
             <ChatInput
                 inputMessage={inputMessage}

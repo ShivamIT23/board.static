@@ -8,7 +8,6 @@ import { ChatMessage } from "./ChatRoom"
 interface MessageListProps {
     messages: ChatMessage[]
     userName: string
-    typingUsers: Record<string, string>
     scrollRef: React.RefObject<HTMLDivElement | null>
     handleScroll: (e: React.UIEvent<HTMLDivElement>) => void
     showScrollButton: boolean
@@ -21,7 +20,6 @@ interface MessageListProps {
 export default function MessageList({
     messages,
     userName,
-    typingUsers,
     scrollRef,
     handleScroll,
     showScrollButton,
