@@ -113,13 +113,28 @@ export default function UserList({
                         ) : (
                             visitors.filter(v => !roomUsers.some(ru => ru.username === v.name)).map((visitor) => (
                                 <div key={visitor.id} className="px-3 py-1.5 hover:bg-muted/50 transition-colors group flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                                    <div className="w-1.5 h-1.5 rounded-full bg-red-300 shrink-0" />
                                     <div className="flex flex-col">
                                         <span className="text-sm font-bold text-muted-foreground group-hover:text-foreground transition-colors">
                                             {visitor.name}
                                         </span>
                                         <span className="text-[8px] text-muted-foreground opacity-60">
-                                            Last seen: {new Date(visitor.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            {visitor.leftAt
+                                                ? `Joined: ${new Date(visitor.joinedAt).toLocaleTimeString([], {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })} • Left: ${new Date(visitor.leftAt).toLocaleTimeString([], {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })}`
+                                                : `Joined: ${new Date(visitor.joinedAt).toLocaleTimeString([], {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })} • Inactive: ${new Date(visitor.lastSeenAt || visitor.joinedAt).toLocaleTimeString([], {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })}`
+                                            }
                                         </span>
                                     </div>
                                 </div>

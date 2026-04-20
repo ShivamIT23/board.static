@@ -274,6 +274,8 @@ export const classVisitors = mysqlTable('tb_class_visitors', {
   ipAddress: varchar('ip_address', { length: 45 }),
   userAgent: text('user_agent'),
   joinedAt: timestamp('joined_at').defaultNow(),
+  leftAt: timestamp('left_at'),
+  lastSeenAt: timestamp('last_seen_at').defaultNow().onUpdateNow(),
   isActive: tinyint('is_active').default(1),
 });
 

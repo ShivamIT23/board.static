@@ -229,22 +229,10 @@ export default function BoardTopBar({
                     )}
 
                     {role === 'teacher' && (
-                        <div className="flex items-center gap-1.5 shrink-0 sm:gap-2 px-1 sm:px-3 border-r border-border/50 h-7">
+                        <div className="flex items-center gap-1 shrink-0 sm:gap-2 px-1 border-r border-border/50 h-7">
                             <span className="hidden lg:block text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-muted-foreground/50">Desk</span>
+                            <span className="block lg:hidden text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-muted-foreground/50">D</span>
                             <div className="flex gap-1 sm:gap-1.5 items-center">
-                                {["#1a1a2e", "#0f1923", "#1e1e1e", "#0d1117", "#14213d", "#1b2838"].map((c) => (
-                                    <button
-                                        key={c}
-                                        type="button"
-                                        onClick={() => setBoardColor(c)}
-                                        className={cn(
-                                            "w-3.5 h-3.5 rounded-full border transition-all duration-200",
-                                            boardColor === c ? "ring-2 ring-primary ring-offset-1 ring-offset-sidebar scale-110" : "border-border/50 hover:border-muted-foreground/30"
-                                        )}
-                                        style={{ backgroundColor: c }}
-                                    />
-                                ))}
-                                <div className="w-px h-4 bg-border/50 mx-1" />
                                 <div ref={bgButtonRef}>
                                     <button
                                         type="button"

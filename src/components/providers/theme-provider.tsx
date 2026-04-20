@@ -7,7 +7,7 @@ export function ThemeProvider({
   ...props
 }: ThemeProviderProps) {
   return (
-    <NextThemesProvider {...props}>
+    <NextThemesProvider {...props} enableColorScheme={false}>
       {children}
     </NextThemesProvider>
   )

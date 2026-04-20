@@ -45,6 +45,8 @@ export interface Visitor {
     name: string;
     email: string | null;
     joinedAt: string;
+    leftAt?: string | null;
+    lastSeenAt?: string | null;
     isOnline?: boolean;
 }
 
@@ -94,6 +96,7 @@ export default function ChatRoom({
     const lastMessageIdRef = useRef<number | null>(null)
 
     const visitorsRef = useRef<HTMLDivElement>(null)
+    const visitorsButtonRef = useRef<HTMLButtonElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [showScrollButton, setShowScrollButton] = useState(false)
     const [isAtBottom, setIsAtBottom] = useState(true)
@@ -187,7 +190,8 @@ export default function ChatRoom({
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
-            if (visitorsRef.current && !visitorsRef.current.contains(event.target as Node)) {
+            if (visitorsRef.current && !visitorsRef.current.contains(event.target as Node) &&
+                visitorsButtonRef.current && !visitorsButtonRef.current.contains(event.target as Node)) {
                 setShowVisitors(false)
             }
         }
@@ -404,6 +408,7 @@ export default function ChatRoom({
                 <span className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">Chat</span>
                 <div className="flex items-center gap-2 relative">
                     <button
+                        ref={visitorsButtonRef}
                         type="button"
                         onClick={toggleVisitors}
                         className={cn(

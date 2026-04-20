@@ -102,9 +102,6 @@ export default function Toolbar({
     const [mathDropdownPos, setMathDropdownPos] = useState<{ top: number; left: number } | null>(null)
     const [emojiDropdownPos, setEmojiDropdownPos] = useState<{ top: number; left: number } | null>(null)
 
-    const penColors = ["#FFFFFF", "#FEF08A", "#86EFAC", "#93C5FD", "#FCA5A5", "#F0ABFC"]
-    const fillColors = ["transparent", "#FFFFFF", "#FEF08A", "#86EFAC", "#93C5FD", "#FCA5A5", "#F0ABFC"]
-    const borderColors = ["#FFFFFF", "#000000", "#FEF08A", "#86EFAC", "#93C5FD", "#FCA5A5", "#F0ABFC"]
     const [selectedShape, setSelectedShape] = useState<ShapeToolId>("rectangle")
     const [selectedSymbol, setSelectedSymbol] = useState<string>("π")
     const [selectedEmoji, setSelectedEmoji] = useState<string>("😊")
@@ -117,11 +114,13 @@ export default function Toolbar({
     const mathButtonRef = useRef<HTMLDivElement>(null)
     const emojiButtonRef = useRef<HTMLDivElement>(null)
     const [canScrollDown, setCanScrollDown] = useState(false)
+    const [canScrollUp, setCanScrollUp] = useState(false)
 
 
     const checkScroll = useCallback(() => {
         const el = scrollAreaRef.current
         if (!el) return
+        setCanScrollUp(el.scrollTop > 4)
         setCanScrollDown(el.scrollTop + el.clientHeight < el.scrollHeight - 4)
     }, [])
 
@@ -239,6 +238,17 @@ export default function Toolbar({
 
             {/* Scrollable content area with fade scroll indicator */}
             <div className="relative flex-1 w-full min-h-0">
+                {/* Top fade scroll affordance — visible only when more content is above */}
+                {canScrollUp && (
+                    <div
+                        className="pointer-events-none absolute top-0 left-0 right-0 h-10 z-10 flex items-start justify-center pt-1"
+                        style={{ background: "linear-gradient(to top, transparent, var(--sidebar))" }}
+                    >
+                        <svg className="w-3 h-3 text-muted-foreground opacity-60 animate-bounce rotate-180" viewBox="0 0 10 10" fill="currentColor">
+                            <path d="M2 3 L8 3 L5 8 Z" />
+                        </svg>
+                    </div>
+                )}
                 <div
                     ref={scrollAreaRef}
                     onScroll={checkScroll}
@@ -255,6 +265,9 @@ export default function Toolbar({
                         </button>
                         <button type="button" onClick={() => setTool("eraser")} className={cn("p-2 rounded-[5px] transition-all duration-300", tool === "eraser" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Eraser Tool">
                             <Eraser size={18} />
+                        </button>
+                        <button type="button" onClick={() => setTool("text")} className={cn("p-2 rounded-[5px] transition-all duration-300", tool === "text" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Text Tool">
+                            <Type size={18} />
                         </button>
                         <div className="w-8 h-px bg-border my-1 mx-auto" />
 
@@ -330,10 +343,6 @@ export default function Toolbar({
                             )}
                         </div>
 
-                        <button type="button" onClick={() => setTool("text")} className={cn("p-2 rounded-[5px] transition-all duration-300", tool === "text" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Text Tool">
-                            <Type size={18} />
-                        </button>
-
                         <div className="relative group" ref={mathButtonRef}>
                             <div className={cn(
                                 "flex flex-col items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
@@ -394,7 +403,7 @@ export default function Toolbar({
                                 document.body
                             )}
                         </div>
-                        <div className="relative group" ref={emojiButtonRef}>
+                        {/* <div className="relative group" ref={emojiButtonRef}>
                             <div className={cn(
                                 "flex flex-col items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
                                 isEmojiTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
@@ -453,7 +462,7 @@ export default function Toolbar({
                                 </>,
                                 document.body
                             )}
-                        </div>
+                        </div> */}
 
                         <button type="button" onClick={() => setTool("laser")} className={cn("p-2 rounded-[5px] transition-all duration-300", tool === "laser" ? "bg-red-500 text-white shadow-lg shadow-red-500/30" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Laser Pointer">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -481,18 +490,9 @@ export default function Toolbar({
                     <div className="w-10 h-px bg-border" />
 
                     {/* Color Section */}
-                    <div className="flex flex-col gap-3 items-center">
+                    <div className="flex flex-col gap-1 items-center">
                         <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground text-center">Ink</span>
                         <div className="flex flex-col gap-2">
-                            {/* Pre-defined swatches */}
-                            {penColors.map((c) => (
-                                <button
-                                    key={c}
-                                    onClick={() => setColor(c)}
-                                    className={cn("w-6 h-3 rounded-full border transition-all duration-200", color === c ? "border-white scale-110" : "border-transparent hover:scale-105")}
-                                    style={{ backgroundColor: c }}
-                                />
-                            ))}
 
                             {/* Custom Color Picker Popover */}
                             <div className="relative mt-1 flex justify-center">
@@ -556,25 +556,22 @@ export default function Toolbar({
                             <div className="flex flex-col gap-2 items-center">
                                 <span className="text-[7px] font-black uppercase tracking-widest text-muted-foreground text-center">Fill</span>
                                 <div className="grid grid-cols-2 gap-1 px-1">
-                                    {fillColors.map((c) => (
-                                        <button
-                                            key={c}
-                                            onClick={() => setShapeFillColor(c)}
-                                            className={cn(
-                                                "w-4 h-4 rounded-sm border transition-all duration-200",
-                                                shapeFillColor === c ? "border-white scale-110 z-10 shadow-sm" : "border-transparent hover:scale-110"
-                                            )}
-                                            style={c === "transparent" ? {
-                                                backgroundImage: "linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%)",
-                                                backgroundPosition: "0 0, 2px 2px",
-                                                backgroundSize: "4px 4px",
-                                                backgroundColor: "white"
-                                            } : { backgroundColor: c }}
-                                            title={c === "transparent" ? "No Fill" : c}
-                                        >
-                                            {c === "transparent" && <div className="w-full h-full flex items-center justify-center"><div className="w-px h-[120%] bg-red-500 rotate-45 shadow-sm" /></div>}
-                                        </button>
-                                    ))}
+                                    <button
+                                        onClick={() => setShapeFillColor("transparent")}
+                                        className={cn(
+                                            "w-4 h-4 rounded-sm border transition-all duration-200",
+                                            shapeFillColor === "transparent" ? "border-white scale-110 z-10 shadow-sm" : "border-transparent hover:scale-110"
+                                        )}
+                                        style={{
+                                            backgroundImage: "linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%)",
+                                            backgroundPosition: "0 0, 2px 2px",
+                                            backgroundSize: "4px 4px",
+                                            backgroundColor: "white"
+                                        }}
+                                        title="No Fill"
+                                    >
+                                        <div className="w-full h-full flex items-center justify-center"><div className="w-px h-[120%] bg-red-500 rotate-45 shadow-sm" /></div>
+                                    </button>
                                     <button
                                         ref={fillButtonRef}
                                         onClick={() => toggleFillPicker()}
@@ -600,18 +597,15 @@ export default function Toolbar({
                             <div className="flex flex-col gap-2 items-center">
                                 <span className="text-[7px] font-black uppercase tracking-widest text-muted-foreground text-center">Border</span>
                                 <div className="grid grid-cols-2 gap-1 px-1">
-                                    {borderColors.map((c) => (
-                                        <button
-                                            key={c}
-                                            onClick={() => setShapeBorderColor(c)}
-                                            className={cn(
-                                                "w-4 h-4 rounded-full border-2 transition-all duration-200",
-                                                shapeBorderColor === c ? "border-white scale-110 z-10 shadow-sm" : "border-transparent hover:scale-110"
-                                            )}
-                                            style={{ backgroundColor: c }}
-                                            title={c}
-                                        />
-                                    ))}
+                                    <button
+                                        onClick={() => setShapeBorderColor("#FFFFFF")}
+                                        className={cn(
+                                            "w-4 h-4 rounded-full border-2 transition-all duration-200",
+                                            shapeBorderColor === "#FFFFFF" ? "border-white scale-110 z-10 shadow-sm" : "border-transparent hover:scale-110"
+                                        )}
+                                        style={{ backgroundColor: "#FFFFFF" }}
+                                        title="White"
+                                    />
                                     <button
                                         ref={borderButtonRef}
                                         onClick={() => toggleBorderPicker()}
@@ -633,10 +627,6 @@ export default function Toolbar({
                                 )}
                             </div>
                         </div>
-                    )}
-                    {isShapeTool && (
-                        <>
-                        </>
                     )}
                 </div>
 
