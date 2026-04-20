@@ -42,6 +42,7 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
     // Shape colors
     const [shapeFillColor, setShapeFillColor] = useState("transparent")
     const [shapeBorderColor, setShapeBorderColor] = useState("#FFFFFF")
+    const [textColor, setTextColor] = useState("#FFFFFF")
 
     const { socket } = useSocket()
 
@@ -363,6 +364,8 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                             setShapeFillColor={setShapeFillColor}
                             shapeBorderColor={shapeBorderColor}
                             setShapeBorderColor={setShapeBorderColor}
+                            textColor={textColor}
+                            setTextColor={setTextColor}
                             onClearCanvas={role === "teacher" ? () => {
                                 document.dispatchEvent(new CustomEvent("clear-canvas-emit"))
                             } : undefined}
@@ -442,6 +445,7 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                                 onToolChange={setTool}
                                 shapeFillColor={shapeFillColor}
                                 shapeBorderColor={shapeBorderColor}
+                                textColor={textColor}
                             />
                         </div>
                         <ChatRoom

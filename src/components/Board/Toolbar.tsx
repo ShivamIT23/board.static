@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import ColorPicker from "./ColorPicker"
+import TextColorPicker from "./TextColorPicker"
 
 const SHAPE_TOOLS = [
     { id: "rectangle", label: "Rectangle", icon: RectangleHorizontal },
@@ -72,6 +73,8 @@ interface ToolbarProps {
     setShapeFillColor: (color: string) => void
     shapeBorderColor: string
     setShapeBorderColor: (color: string) => void
+    textColor: string
+    setTextColor: (color: string) => void
     onClearCanvas?: () => void
 }
 
@@ -87,6 +90,8 @@ export default function Toolbar({
     setShapeFillColor,
     shapeBorderColor,
     setShapeBorderColor,
+    textColor,
+    setTextColor,
     onClearCanvas
 }: ToolbarProps) {
     const [showShapeDropdown, setShowShapeDropdown] = useState(false)
@@ -115,7 +120,6 @@ export default function Toolbar({
     const emojiButtonRef = useRef<HTMLDivElement>(null)
     const [canScrollDown, setCanScrollDown] = useState(false)
     const [canScrollUp, setCanScrollUp] = useState(false)
-
 
     const checkScroll = useCallback(() => {
         const el = scrollAreaRef.current
@@ -269,6 +273,13 @@ export default function Toolbar({
                         <button type="button" onClick={() => setTool("text")} className={cn("p-2 rounded-[5px] transition-all duration-300", tool === "text" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Text Tool">
                             <Type size={18} />
                         </button>
+                        {/* Text Color — only when text tool is active */}
+                        {tool === "text" && (
+                            <>
+                                {/* <div className="w-8 h-px bg-border my-1" /> */}
+                                <TextColorPicker color={textColor} onChange={setTextColor} />
+                            </>
+                        )}
                         <div className="w-8 h-px bg-border my-1 mx-auto" />
 
                         {/* Shapes — single button with horizontal dropdown */}
@@ -516,10 +527,7 @@ export default function Toolbar({
                                             style={{ top: colorPickerPos.top, left: colorPickerPos.left }}
                                         >
                                             <div className="p-1.5 bg-sidebar border border-border rounded-[5px] shadow-2xl">
-                                                <ColorPicker
-                                                    color={color}
-                                                    onChange={(hex) => setColor(hex)}
-                                                />
+                                                <ColorPicker color={color} onChange={(hex) => setColor(hex)} />
                                             </div>
                                         </div>
                                     </>,

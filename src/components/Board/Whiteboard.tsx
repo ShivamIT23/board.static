@@ -42,6 +42,7 @@ interface WhiteboardProps {
     shapeBorderColor?: string
     drawingEnabled?: boolean
     isViewLocked: boolean
+    textColor?: string
 }
 
 interface ShapePayload {
@@ -171,7 +172,7 @@ interface BoardFabricObject extends FabricObject {
     id?: string
 }
 
-function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushSize, isViewLocked, currentPage, drawingEnabled, shapeFillColor, shapeBorderColor, onToolChange }: WhiteboardProps) {
+function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushSize, isViewLocked, currentPage, drawingEnabled, shapeFillColor, shapeBorderColor, textColor, onToolChange }: WhiteboardProps) {
     const { socket } = useSocket()
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const wrapperRef = useRef<HTMLDivElement>(null)
@@ -240,6 +241,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     const shapeBorderRef = useRef(shapeBorderColor)
     const brushSizeRef = useRef(brushSize)
     const colorRef = useRef(color)
+    const textColorRef = useRef(textColor || "#FFFFFF")
 
     useEffect(() => {
         currentPageRef.current = currentPage
@@ -278,6 +280,10 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     useEffect(() => {
         colorRef.current = color
     }, [color])
+
+    useEffect(() => {
+        textColorRef.current = textColor || "#FFFFFF"
+    }, [textColor])
 
 
     // Utility: Width-based normalization
@@ -513,11 +519,11 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     left: pt.x,
                     top: pt.y,
                     fontSize: proportionalFontSize,
-                    fill: color,
+                    fill: textColorRef.current,
                     fontFamily: "Inter, sans-serif",
                     selectable: true,
                     editable: true,
-                    cursorColor: color,
+                    cursorColor: textColorRef.current,
                     cursorWidth: 2,
                     editingBorderColor: "rgba(100, 100, 255, 0.4)",
                 }) as unknown as BoardIText
