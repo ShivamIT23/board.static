@@ -85,16 +85,34 @@ interface StoredBoardObject {
     timestamp: number;
 }
 
-const SHAPE_TOOL_IDS = ["rectangle", "circle", "triangle", "diamond", "star", "line", "arrow"] as const
-type ShapeToolId = typeof SHAPE_TOOL_IDS[number]
-function isShapeTool(t: string): t is ShapeToolId { return SHAPE_TOOL_IDS.includes(t as ShapeToolId) }
+const SHAPE_TOOL_IDS = ["rectangle", "square", "circle", "triangle", "right-triangle", "diamond", "rhombus", "star", "line", "arrow", "ellipse", "pentagon", "parallelogram", "graph-axis", "graph-grid"] as const
+function isShapeTool(t: string): boolean {
+    return (SHAPE_TOOL_IDS as readonly string[]).includes(t) || t.startsWith("symbol:") || t.startsWith("emoji:")
+}
 
 // Helper: build shape points for polygon-based shapes
 function getTrianglePoints(w: number, h: number) {
     return [{ x: w / 2, y: 0 }, { x: w, y: h }, { x: 0, y: h }]
 }
+function getRightTrianglePoints(w: number, h: number) {
+    return [{ x: 0, y: 0 }, { x: w, y: h }, { x: 0, y: h }]
+}
 function getDiamondPoints(w: number, h: number) {
     return [{ x: w / 2, y: 0 }, { x: w, y: h / 2 }, { x: w / 2, y: h }, { x: 0, y: h / 2 }]
+}
+function getPentagonPoints(w: number, h: number) {
+    const cx = w / 2, cy = h / 2
+    const r = Math.min(w, h) / 2
+    const pts = []
+    for (let i = 0; i < 5; i++) {
+        const angle = (Math.PI / 2) * -1 + (Math.PI * 2 / 5) * i
+        pts.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) })
+    }
+    return pts
+}
+function getParallelogramPoints(w: number, h: number) {
+    const offset = w * 0.25
+    return [{ x: offset, y: 0 }, { x: w, y: 0 }, { x: w - offset, y: h }, { x: 0, y: h }]
 }
 function getStarPoints(w: number, h: number) {
     const cx = w / 2, cy = h / 2
@@ -135,12 +153,22 @@ interface FullStrokePayload {
     width: number;
     page?: number;
     timestamp?: number;
+    // Saved position after user moved it
+    movedPosition?: { x: number; y: number };
+    movedWidthRatio?: number;
+    movedHeightRatio?: number;
 }
 
 // Extended IText with custom properties for board sync
 interface BoardIText extends IText {
     id: string
     _synced?: boolean
+}
+
+// Extended FabricObject with id for board sync tracking
+// id is optional because Fabric objects start without it; we assign it after creation
+interface BoardFabricObject extends FabricObject {
+    id?: string
 }
 
 function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushSize, isViewLocked, currentPage, drawingEnabled, shapeFillColor, shapeBorderColor, onToolChange }: WhiteboardProps) {
@@ -211,6 +239,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     const shapeFillRef = useRef(shapeFillColor)
     const shapeBorderRef = useRef(shapeBorderColor)
     const brushSizeRef = useRef(brushSize)
+    const colorRef = useRef(color)
 
     useEffect(() => {
         currentPageRef.current = currentPage
@@ -245,6 +274,10 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     useEffect(() => {
         brushSizeRef.current = brushSize
     }, [brushSize])
+
+    useEffect(() => {
+        colorRef.current = color
+    }, [color])
 
 
     // Utility: Width-based normalization
@@ -383,8 +416,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         // ── Helper: create a Fabric shape from normalized payload ──
 
         //for shape
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const createShapeFromPayload = (data: any): FabricObject | null => {
+        const createShapeFromPayload = (data: ShapePayload): FabricObject | null => {
             const cw = canvas.width
             const left = data.position.x * cw
             const top = data.position.y * cw
@@ -397,15 +429,36 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
             switch (data.shapeType as string) {
                 case "rectangle":
+                case "square":
                     return new Rect({ ...common, width: w, height: h })
                 case "circle":
+                case "ellipse":
                     return new Ellipse({ ...common, rx: w / 2, ry: h / 2 })
                 case "triangle":
                     return new Polygon(getTrianglePoints(w, h), { ...common, left, top })
+                case "right-triangle":
+                    return new Polygon(getRightTrianglePoints(w, h), { ...common, left, top })
                 case "diamond":
+                case "rhombus":
                     return new Polygon(getDiamondPoints(w, h), { ...common, left, top })
+                case "pentagon":
+                    return new Polygon(getPentagonPoints(w, h), { ...common, left, top })
+                case "parallelogram":
+                    return new Polygon(getParallelogramPoints(w, h), { ...common, left, top })
                 case "star":
                     return new Polygon(getStarPoints(w, h), { ...common, left, top })
+                case "graph-axis": {
+                    const d = `M 0 ${h / 2} L ${w} ${h / 2} M ${w / 2} 0 L ${w / 2} ${h}`
+                    return new Path(d, { ...common, fill: "transparent" })
+                }
+                case "graph-grid": {
+                    const step = Math.max(10, Math.min(w, h) / 10)
+                    let d = ""
+                    for (let i = 0; i <= 10; i++) {
+                        d += `M 0 ${i * step} L ${w} ${i * step} M ${i * step} 0 L ${i * step} ${h} `
+                    }
+                    return new Path(d, { ...common, strokeWidth: strokeWidth * 0.5, fill: "transparent" })
+                }
                 case "line":
                     return new Line([0, 0, w, h], { ...common, fill: undefined })
                 case "arrow": {
@@ -417,6 +470,20 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     return new Path(d, { ...common, fill: "transparent" })
                 }
                 default:
+                    if (data.shapeType.startsWith("symbol:") || data.shapeType.startsWith("emoji:")) {
+                        const val = data.shapeType.split(":")[1]
+                        const fontSize = Math.max(12, h)
+                        return new IText(val, {
+                            ...common,
+                            fontSize,
+                            fill: data.shapeType.startsWith("emoji:") ? "black" : stroke, 
+                            fontFamily: "Inter, sans-serif",
+                            stroke: undefined, 
+                            strokeWidth: 0,
+                            originX: "left",
+                            originY: "top"
+                        })
+                    }
                     return null
             }
         }
@@ -461,8 +528,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 textObj.enterEditing()
                 // Fabric.js uses a hidden textarea for keyboard input — must be explicitly focused
                 // especially when called programmatically inside mouse:down
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const textarea = (textObj as any).hiddenTextarea as HTMLTextAreaElement | undefined
+                const textarea = (textObj as unknown as { hiddenTextarea?: HTMLTextAreaElement }).hiddenTextarea
                 if (textarea) textarea.focus()
                 activeTextRef.current = textObj
                 canvas.requestRenderAll()
@@ -541,10 +607,28 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             if (shapeStartRef.current && isShapeTool(toolRef.current)) {
                 const pt = canvas.getScenePoint(opt.e)
                 const start = shapeStartRef.current
-                const w = pt.x - start.x
-                const h = pt.y - start.y
-                const left = w >= 0 ? start.x : pt.x
-                const top = h >= 0 ? start.y : pt.y
+                let w = pt.x - start.x
+                let h = pt.y - start.y
+
+                if (toolRef.current === "square" || toolRef.current === "circle" || toolRef.current.startsWith("symbol:") || toolRef.current.startsWith("emoji:")) {
+                    const size = Math.max(Math.abs(w), Math.abs(h))
+                    w = w >= 0 ? size : -size
+                    h = h >= 0 ? size : -size
+                }
+
+                let left = w >= 0 ? start.x : start.x + w
+                let top = h >= 0 ? start.y : start.y + h
+
+                // Fallback for click-without-drag: place default sized character
+                if (toolRef.current.startsWith("symbol:") || toolRef.current.startsWith("emoji:")) {
+                    if (Math.abs(w) < 10 && Math.abs(h) < 10) {
+                        const defaultSize = Math.max(32, Math.round(canvas.width * 0.04))
+                        w = defaultSize
+                        h = defaultSize
+                        left = pt.x - defaultSize / 2
+                        top = pt.y - defaultSize / 2
+                    }
+                }
                 const absW = Math.abs(w)
                 const absH = Math.abs(h)
 
@@ -605,7 +689,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             })
         })
 
-        canvas.on("mouse:over", (opt) => {
+        canvas.on("mouse:over", () => {
             lastLaserPointRef.current = null
         })
 
@@ -629,13 +713,20 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     shapePreviewRef.current = null
                 }
 
-                const w = pt.x - start.x
-                const h = pt.y - start.y
+                let w = pt.x - start.x
+                let h = pt.y - start.y
+
+                if (toolRef.current === "square" || toolRef.current === "circle") {
+                    const size = Math.max(Math.abs(w), Math.abs(h))
+                    w = w >= 0 ? size : -size
+                    h = h >= 0 ? size : -size
+                }
+
                 // Skip tiny clicks (less than 5px)
                 if (Math.abs(w) < 5 && Math.abs(h) < 5) return
 
-                const left = w >= 0 ? start.x : pt.x
-                const top = h >= 0 ? start.y : pt.y
+                const left = w >= 0 ? start.x : start.x + w
+                const top = h >= 0 ? start.y : start.y + h
                 const absW = Math.abs(w)
                 const absH = Math.abs(h)
                 const id = generateId()
@@ -681,9 +772,9 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
         canvas.on("path:created", (opt) => {
             if (localStrokeIdRef.current) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (opt.path as any).id = localStrokeIdRef.current
-                opt.path.set({ selectable: role === "teacher" })
+                (opt.path as BoardFabricObject).id = localStrokeIdRef.current
+                // Local user's own stroke — always selectable so they can move it
+                opt.path.set({ selectable: true, evented: true })
             }
         })
 
@@ -692,31 +783,10 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         canvas.on("object:modified", (opt) => {
             const obj = opt.target
             if (!obj) return
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const id = (obj as any).id
+            const id = (obj as BoardFabricObject).id
             if (!id) return
 
-            // Text object modified (moved, resized, edited)
-            if (obj instanceof IText) {
-                // Compute effective visual fontSize (dragging handles changes scaleX, not fontSize)
-                const effectiveFontSize = obj.fontSize * (obj.scaleX || 1)
-                console.log(`[TEXT] object:modified id=${id}, fontSize=${obj.fontSize}, scaleX=${obj.scaleX}, effectiveFontSize=${effectiveFontSize}`)
-                socket.emit("text_update", {
-                    roomId: sessionId,
-                    payload: {
-                        id,
-                        text: obj.text,
-                        color: obj.fill,
-                        fontSizeRatio: effectiveFontSize / canvas.width,
-                        position: toNorm(obj.left, obj.top, canvas.width),
-                        page: currentPageRef.current,
-                    }
-                })
-                return
-            }
-
-            // Shape modified (moved, resized)
-            /*
+            // Shape modified (moved, resized) — includes symbols & emojis stored in shapeObjsRef
             if (shapeObjsRef.current[id]) {
                 socket.emit("shape_update", {
                     roomId: sessionId,
@@ -730,12 +800,45 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 })
                 return
             }
-            */
+
+            // Text object modified (moved, resized, edited)
+            if (textObjsRef.current[id]) {
+                const textObj = obj as unknown as BoardIText
+                const effectiveFontSize = textObj.fontSize * (textObj.scaleX || 1)
+                console.log(`[TEXT] object:modified id=${id}, effectiveFontSize=${effectiveFontSize}`)
+                socket.emit("text_update", {
+                    roomId: sessionId,
+                    payload: {
+                        id,
+                        text: textObj.text,
+                        color: textObj.fill,
+                        fontSizeRatio: effectiveFontSize / canvas.width,
+                        position: toNorm(obj.left, obj.top, canvas.width),
+                        page: currentPageRef.current,
+                    }
+                })
+                return
+            }
+
+            // Stroke (Path) modified (moved, resized)
+            if (obj instanceof Path) {
+                socket.emit("stroke_update", {
+                    roomId: sessionId,
+                    payload: {
+                        id,
+                        position: toNorm(obj.left, obj.top, canvas.width),
+                        widthRatio: obj.getScaledWidth() / canvas.width,
+                        heightRatio: obj.getScaledHeight() / canvas.width,
+                        page: currentPageRef.current,
+                    }
+                })
+                return
+            }
 
             // Board file (image) modified
             if (role !== "teacher") return
             const widthRatio = obj.getScaledWidth() / canvas.width
-            const heightRatio = obj.getScaledHeight() / canvas.width // Use width as ref for Y too
+            const heightRatio = obj.getScaledHeight() / canvas.width
 
             socket.emit("board_file_update", {
                 roomId: sessionId,
@@ -763,8 +866,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     fill: "transparent", stroke: sColor, strokeWidth: localWidth,
                     selectable: false, evented: false, objectCaching: false,
                 })
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ;(p as any).id = id
+                ;(p as BoardFabricObject).id = id
                 liveFabricObjsRef.current[id] = p
                 canvas.add(p)
             } else if (type === "draw" && liveStrokesRef.current[id]) {
@@ -777,8 +879,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                         fill: "transparent", stroke: data.color, strokeWidth: data.width,
                         selectable: false, evented: false, objectCaching: false,
                     })
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    ;(newPath as any).id = id
+                    ;(newPath as BoardFabricObject).id = id
                     // Add and move to original index to maintain Z-order
                     canvas.add(newPath)
                     newPath.setCoords()
@@ -801,8 +902,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         const handleStrokeAdd = ({ payload }: { payload: FullStrokePayload }) => {
             if (payload.page !== undefined && payload.page !== currentPageRef.current) return
             
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            if (canvas.getObjects().some((o: any) => o.id === payload.id)) return
+            if (canvas.getObjects().some((o) => (o as BoardFabricObject).id === payload.id)) return
 
             import("fabric").then(({ Path }) => {
                 const points = payload.points.map(p => fromNorm(p.x, p.y, canvas.width))
@@ -815,9 +915,24 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     evented: role === "teacher",
                     objectCaching: true
                 })
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ;(p as any).id = payload.id
+                ;(p as BoardFabricObject).id = payload.id
                 canvas.add(p)
+
+                // If the stroke was moved after initial drawing, apply saved position
+                if (payload.movedPosition) {
+                    p.set({
+                        left: payload.movedPosition.x * canvas.width,
+                        top: payload.movedPosition.y * canvas.width,
+                    })
+                    if (payload.movedWidthRatio !== undefined && payload.movedHeightRatio !== undefined) {
+                        p.set({
+                            scaleX: (payload.movedWidthRatio * canvas.width) / (p.width || 1),
+                            scaleY: (payload.movedHeightRatio * canvas.width) / (p.height || 1),
+                        })
+                    }
+                    p.setCoords()
+                }
+
                 canvas.requestRenderAll()
             })
         }
@@ -854,8 +969,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     lockMovementX: role !== "teacher",
                     lockMovementY: role !== "teacher",
                 });
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (fImg as any).id = data.id
+                (fImg as BoardFabricObject).id = data.id
                 boardFileObjsRef.current[data.id] = fImg
                 canvas.add(fImg)
                 canvas.requestRenderAll()
@@ -972,7 +1086,6 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         socket.on("board_color_sync", onBoardColorSync)
         socket.on("view_sync", onViewSync)
         socket.on("board_file_add", ({ payload }) => addImageToCanvas(payload))
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
         // ── Shape Add (from peers) ────────────────────────────────
         const handleShapeAdd = ({ payload }: { payload: ShapePayload }) => {
@@ -981,8 +1094,9 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             if (shapeObjsRef.current[payload.id]) return // Already exists
             const shape = createShapeFromPayload(payload)
             if (shape) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (shape as any).id = payload.id
+                (shape as BoardFabricObject).id = payload.id
+                // Peer shapes: only teacher can move others' objects
+                shape.set({ selectable: role === "teacher", evented: role === "teacher" })
                 shapeObjsRef.current[payload.id] = shape
                 canvas.add(shape)
                 canvas.requestRenderAll()
@@ -1016,10 +1130,32 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             canvas.requestRenderAll()
         }
 
+        // ── Stroke Update (from peers — position/size change) ─────
+        const handleStrokeUpdate = ({ payload }: { payload: { id: string; position?: { x: number; y: number }; widthRatio?: number; heightRatio?: number } }) => {
+            // Find the stroke Path on the canvas by id
+            const obj = canvas.getObjects().find((o) => (o as BoardFabricObject).id === payload.id) as FabricObject | undefined
+            if (!obj) return
+            if (payload.position) {
+                obj.set({
+                    left: payload.position.x * canvas.width,
+                    top: payload.position.y * canvas.width,
+                })
+            }
+            if (payload.widthRatio !== undefined && payload.heightRatio !== undefined) {
+                obj.set({
+                    scaleX: (payload.widthRatio * canvas.width) / (obj.width || 1),
+                    scaleY: (payload.heightRatio * canvas.width) / (obj.height || 1),
+                })
+            }
+            obj.setCoords()
+            canvas.requestRenderAll()
+        }
+
         socket.on("text_add", handleTextAdd)
         socket.on("text_update", handleTextUpdate)
         socket.on("shape_add", handleShapeAdd)
         socket.on("shape_update", handleShapeUpdate)
+        socket.on("stroke_update", handleStrokeUpdate)
         socket.on("board_file_remove", ({ payload }) => {
             const o = boardFileObjsRef.current[payload.id]
             if (o) { canvas.remove(o); delete boardFileObjsRef.current[payload.id]; canvas.renderAll() }
@@ -1029,8 +1165,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
         const handleObjectRemove = ({ payload }: { payload: { id: string } }) => {
             // Find and remove the object with that ID
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const obj = canvas.getObjects().find((o: any) => o.id === payload.id);
+            const obj = canvas.getObjects().find((o) => (o as BoardFabricObject).id === payload.id);
             if (obj) {
                 canvas.remove(obj);
                 // Clean up any potential refs
@@ -1044,7 +1179,6 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
         interface BoardObjectPayload {
             type: "stroke" | "text" | "shape";
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             payload: FullStrokePayload | TextPayload | ShapePayload; 
             timestamp: number;
         }
@@ -1068,9 +1202,9 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         document.addEventListener("undo-trigger", handleUndoTrigger)
         document.addEventListener("redo-trigger", handleRedoTrigger)
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const handleDeleteLocal = (e: any) => {
-            const pageToDelete = e.detail?.page
+        const handleDeleteLocal = (e: Event) => {
+            const customEvent = e as CustomEvent<{ page: number }>
+            const pageToDelete = customEvent.detail?.page
             if (!pageToDelete) return
 
             const newData: Record<number, Record<string, unknown>[]> = {}
@@ -1130,8 +1264,9 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             socket.off("board_file_add")
             socket.off("text_add", handleTextAdd)
             socket.off("text_update", handleTextUpdate)
-            // socket.off("shape_add", handleShapeAdd)
-            // socket.off("shape_update", handleShapeUpdate)
+            socket.off("shape_add", handleShapeAdd)
+            socket.off("shape_update", handleShapeUpdate)
+            socket.off("stroke_update", handleStrokeUpdate)
             socket.off("board_file_remove")
             socket.off("board_file_update", handleBoardFileUpdate)
             socket.off("board_files_state")
@@ -1157,8 +1292,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
         // 1. Save old page objects
         const oldPage = lastPageRef.current
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const objects = canvas.getObjects().map((o: any) => o.toObject(['id']))
+        const objects = canvas.getObjects().map((o) => (o as FabricObject & { toObject: (props: string[]) => Record<string, unknown> }).toObject(['id']))
         pagesDataRef.current[oldPage] = objects
 
         // 2. Clear canvas for new page
@@ -1179,8 +1313,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     objs.forEach(o => {
                         if (o instanceof FabricObject) {
                             o.set({ selectable: role === "teacher", evented: role === "teacher" })
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            const oid = (o as any).id
+                            const oid = (o as BoardFabricObject).id
                             if (oid && o instanceof FImg) boardFileObjsRef.current[oid] = o
                             canvas.add(o)
                         }
