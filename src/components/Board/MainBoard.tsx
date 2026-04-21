@@ -8,6 +8,7 @@ import BoardTopBar from "./BoardTopBar"
 import { SocketProvider, useSocket } from "../providers/socket-provider"
 import { RoomUser } from "../Chat/ChatRoom"
 import { toast } from "sonner"
+import Swal from "sweetalert2"
 
 interface MainBoardProps {
     duration: number
@@ -248,7 +249,7 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
         }
     }, [role, totalPages, socket, sessionId, pageBgColors])
 
-    const handleDeletePage = (pageToDelete: number) => {
+    const handleDeletePage = async (pageToDelete: number) => {
         if (totalPages <= 1 || role !== "teacher") return
 
         // Confirmation dialog with full name
@@ -264,7 +265,17 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
             }
             fullLabel = `Board-${bCount}`
         }
-        if (!confirm(`Delete "${fullLabel}"?`)) return
+
+        const { isConfirmed } = await Swal.fire({
+            title: `Delete \"${fullLabel}\"?`,
+            text: "This action cannot be undone. All drawings on this page will be lost.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#ef4444",
+            cancelButtonColor: "#6b7280",
+            confirmButtonText: "Yes, delete it!"
+        })
+        if (!isConfirmed) return
 
         console.log("Deleting page:", pageToDelete)
 

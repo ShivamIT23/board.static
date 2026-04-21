@@ -2,7 +2,7 @@
 import React, { useCallback, useRef, useState } from "react"
 import ReactDOM from "react-dom"
 import { Palette } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, getContrastColor } from "@/lib/utils"
 import ColorPicker from "./ColorPicker"
 
 interface TextColorPickerProps {
@@ -53,9 +53,13 @@ export default function TextColorPicker({ color, onChange }: TextColorPickerProp
                     type="button"
                     onClick={toggle}
                     className={cn(
-                        "w-3.5 h-3.5 rounded-sm border border-dashed border-muted-foreground flex items-center justify-center text-muted-foreground hover:bg-accent transition-colors",
-                        isOpen && "bg-accent text-foreground border-foreground"
+                        "w-3.5 h-3.5 rounded-sm border border-border flex items-center justify-center transition-colors shadow-sm",
+                        isOpen && "ring-1 ring-primary ring-offset-1"
                     )}
+                    style={{ 
+                        backgroundColor: color,
+                        color: getContrastColor(color)
+                    }}
                     title="Custom Color"
                 >
                     <Palette size={8} />

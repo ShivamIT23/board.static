@@ -1,7 +1,11 @@
 "use client"
 
 import React, { useEffect, useRef, useCallback, useState } from "react"
-import { Canvas, PencilBrush, Path, FabricImage, IText, Line, FabricObject, Rect, Ellipse, Polygon } from "fabric"
+import { Canvas, PencilBrush, Path, FabricImage, IText, Line, FabricObject, Rect, Ellipse, Polygon, Group } from "fabric"
+
+export type BoardFabricObject = FabricObject & { id?: string; _synced?: boolean };
+export type BoardIText = IText & { id?: string; _synced?: boolean };
+
 import { useSocket } from "../providers/socket-provider"
 import { cn } from "@/lib/utils"
 
@@ -86,9 +90,9 @@ interface StoredBoardObject {
     timestamp: number;
 }
 
-const SHAPE_TOOL_IDS = ["rectangle", "square", "circle", "triangle", "right-triangle", "diamond", "rhombus", "star", "line", "arrow", "ellipse", "pentagon", "parallelogram", "graph-axis", "graph-grid"] as const
+const SHAPE_TOOL_IDS = ["rectangle", "square", "circle", "triangle", "right-triangle", "diamond", "rhombus", "star", "line", "arrow", "ellipse", "pentagon", "parallelogram", "graph-axis", "large-grid", "graph-plain", "graph-labeled"] as const
 function isShapeTool(t: string): boolean {
-    return (SHAPE_TOOL_IDS as readonly string[]).includes(t) || t.startsWith("symbol:") || t.startsWith("emoji:")
+    return (SHAPE_TOOL_IDS as readonly string[]).includes(t) || t.startsWith("large-grid:") || t.startsWith("graph-plain:") || t.startsWith("graph-labeled:") || t.startsWith("symbol:") || t.startsWith("emoji:")
 }
 
 // Helper: build shape points for polygon-based shapes
@@ -134,6 +138,7 @@ interface StrokePayload {
     color?: string
     width?: number
     page?: number
+    strokeLineCap?: CanvasLineCap
 }
 
 interface LaserPayload {
@@ -154,22 +159,11 @@ interface FullStrokePayload {
     width: number;
     page?: number;
     timestamp?: number;
+    strokeLineCap?: CanvasLineCap;
     // Saved position after user moved it
     movedPosition?: { x: number; y: number };
     movedWidthRatio?: number;
     movedHeightRatio?: number;
-}
-
-// Extended IText with custom properties for board sync
-interface BoardIText extends IText {
-    id: string
-    _synced?: boolean
-}
-
-// Extended FabricObject with id for board sync tracking
-// id is optional because Fabric objects start without it; we assign it after creation
-interface BoardFabricObject extends FabricObject {
-    id?: string
 }
 
 function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushSize, isViewLocked, currentPage, drawingEnabled, shapeFillColor, shapeBorderColor, textColor, onToolChange }: WhiteboardProps) {
@@ -457,14 +451,6 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     const d = `M 0 ${h / 2} L ${w} ${h / 2} M ${w / 2} 0 L ${w / 2} ${h}`
                     return new Path(d, { ...common, fill: "transparent" })
                 }
-                case "graph-grid": {
-                    const step = Math.max(10, Math.min(w, h) / 10)
-                    let d = ""
-                    for (let i = 0; i <= 10; i++) {
-                        d += `M 0 ${i * step} L ${w} ${i * step} M ${i * step} 0 L ${i * step} ${h} `
-                    }
-                    return new Path(d, { ...common, strokeWidth: strokeWidth * 0.5, fill: "transparent" })
-                }
                 case "line":
                     return new Line([0, 0, w, h], { ...common, fill: undefined })
                 case "arrow": {
@@ -476,15 +462,79 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     return new Path(d, { ...common, fill: "transparent" })
                 }
                 default:
+                    if (data.shapeType.startsWith("graph-plain") || data.shapeType.startsWith("graph-labeled")) {
+                        const isLabeled = data.shapeType.startsWith("graph-labeled")
+                        const range = parseInt(data.shapeType.split(":")[1]) || 8
+                        const intervals = range * 2
+                        
+                        const stepX = w / intervals
+                        const stepY = h / intervals
+                        const midX = w / 2
+                        const midY = h / 2
+                        
+                        let gridD = ""
+                        for (let i = 0; i <= intervals; i++) {
+                            gridD += `M 0 ${i * stepY} L ${w} ${i * stepY} `
+                            gridD += `M ${i * stepX} 0 L ${i * stepX} ${h} `
+                        }
+                        const gridPath = new Path(gridD, { ...common, stroke: "#888888", strokeWidth: 1, opacity: 0.3, fill: "transparent", left: 0, top: 0 })
+                        
+                        const arrowSize = Math.max(4, Math.min(w, h) / 40)
+                        let axesD = `M 0 ${midY} L ${w} ${midY} M ${midX} 0 L ${midX} ${h} `
+                        axesD += `M 0 ${midY} L ${arrowSize} ${midY - arrowSize/2} M 0 ${midY} L ${arrowSize} ${midY + arrowSize/2} `
+                        axesD += `M ${w} ${midY} L ${w - arrowSize} ${midY - arrowSize/2} M ${w} ${midY} L ${w - arrowSize} ${midY + arrowSize/2} `
+                        axesD += `M ${midX} 0 L ${midX - arrowSize/2} ${arrowSize} M ${midX} 0 L ${midX + arrowSize/2} ${arrowSize} `
+                        axesD += `M ${midX} ${h} L ${midX - arrowSize/2} ${h - arrowSize} M ${midX} ${h} L ${midX + arrowSize/2} ${h - arrowSize} `
+                        
+                        const axesPath = new Path(axesD, { ...common, left: 0, top: 0, fill: "transparent" })
+                        
+                        const objs: FabricObject[] = [gridPath, axesPath]
+                        
+                        if (isLabeled) {
+                            const fontSize = Math.max(6, Math.min(w, h) / (range * 5))
+                            const textCommon = { fontSize, fill: stroke, fontFamily: "Inter, sans-serif", originX: "center" as const, originY: "center" as const, selectable: false, evented: false }
+                            
+                            const step = range > 15 ? 2 : 1
+                            for (let i = -range + 1; i <= range - 1; i++) {
+                                if (i === 0) continue
+                                if (i % step !== 0) continue
+                                objs.push(new IText(i.toString(), { ...textCommon, left: midX + i * stepX, top: midY + fontSize }))
+                                objs.push(new IText((-i).toString(), { ...textCommon, left: midX - fontSize, top: midY + i * stepY }))
+                            }
+                            
+                            objs.push(new IText("x", { ...textCommon, fontSize: fontSize * 1.5, fontStyle: "italic", fontWeight: "bold", left: w - fontSize, top: midY + fontSize }))
+                            objs.push(new IText("y", { ...textCommon, fontSize: fontSize * 1.5, fontStyle: "italic", fontWeight: "bold", left: midX + fontSize, top: fontSize }))
+                            
+                            const qDist = w / 4
+                            const qDistY = h / 4
+                            objs.push(new IText("I", { ...textCommon, fontSize: fontSize * 2, opacity: 0.2, left: midX + qDist, top: midY - qDistY }))
+                            objs.push(new IText("II", { ...textCommon, fontSize: fontSize * 2, opacity: 0.2, left: midX - qDist, top: midY - qDistY }))
+                            objs.push(new IText("III", { ...textCommon, fontSize: fontSize * 2, opacity: 0.2, left: midX - qDist, top: midY + qDistY }))
+                            objs.push(new IText("IV", { ...textCommon, fontSize: fontSize * 2, opacity: 0.2, left: midX + qDist, top: midY + qDistY }))
+                        }
+                        
+                        return new Group(objs, { ...common, left, top, width: w, height: h })
+                    }
+                    if (data.shapeType.startsWith("large-grid")) {
+                        const boxes = parseInt(data.shapeType.split(":")[1]) || 3
+                        const stepX = w / boxes
+                        const stepY = h / boxes
+                        let d = ""
+                        for (let i = 0; i <= boxes; i++) {
+                            d += `M 0 ${i * stepY} L ${w} ${i * stepY} `
+                            d += `M ${i * stepX} 0 L ${i * stepX} ${h} `
+                        }
+                        return new Path(d, { ...common, strokeWidth: strokeWidth * 0.5, fill: "transparent" })
+                    }
                     if (data.shapeType.startsWith("symbol:") || data.shapeType.startsWith("emoji:")) {
                         const val = data.shapeType.split(":")[1]
                         const fontSize = Math.max(12, h)
                         return new IText(val, {
                             ...common,
                             fontSize,
-                            fill: data.shapeType.startsWith("emoji:") ? "black" : stroke, 
+                            fill: data.shapeType.startsWith("emoji:") ? "black" : stroke,
                             fontFamily: "Inter, sans-serif",
-                            stroke: undefined, 
+                            stroke: undefined,
                             strokeWidth: 0,
                             originX: "left",
                             originY: "top"
@@ -571,6 +621,19 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 return
             }
 
+            // Object Eraser: Delete clicked object
+            if (toolRef.current === "eraser") {
+                const target = opt.target as BoardFabricObject
+                if (target && target.id) {
+                    const id = target.id;
+                    canvas.remove(target);
+                    socket.emit("object_remove", { roomId: sessionId, payload: { id } });
+                    boardHistoryRef.current = boardHistoryRef.current.filter(obj => (obj.payload as { id: string }).id !== id);
+                    saveToLocalStorage();
+                    canvas.requestRenderAll();
+                }
+                return;
+            }
             if (toolRef.current === "laser") {
                 isLaserActiveRef.current = true
                 const pt = canvas.getScenePoint(opt.e)
@@ -595,6 +658,35 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             if (!canvas.isDrawingMode || (role === "student" && (!drawingEnabledRef.current))) return
             localStrokeIdRef.current = generateId()
             const pt = canvas.getScenePoint(opt.e)
+
+            // Re-configure brush based on current tool if it's a pen tool
+            if (toolRef.current.startsWith("pen:")) {
+                const penType = toolRef.current.startsWith("pen:") ? toolRef.current.split(":")[1] : "pen"
+                const brush = canvas.freeDrawingBrush as PencilBrush
+                if (brush) {
+                    brush.color = colorRef.current
+                    brush.width = brushSizeRef.current
+
+                    if (penType === "highlighter") {
+                        // Highlighter style: semi-transparent, square caps
+                        brush.color = colorRef.current.startsWith("#")
+                            ? `${colorRef.current}80` // Add 50% alpha hex
+                            : colorRef.current
+                        brush.strokeLineCap = "square"
+                        brush.width = brushSizeRef.current * 2.5 // Highlighters are usually thicker
+                    } else if (penType === "crayon") {
+                        brush.strokeLineCap = "round"
+                        brush.strokeLineJoin = "round"
+                        brush.width = brushSizeRef.current * 1.5
+                    } else if (penType === "pen") {
+                        brush.strokeLineCap = "round"
+                        brush.width = Math.max(1, brushSizeRef.current * 0.8)
+                    } else {
+                        brush.strokeLineCap = "round"
+                    }
+                }
+            }
+
             socket.emit("stroke_draw", {
                 roomId: sessionId,
                 payload: {
@@ -603,6 +695,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     point: toNorm(pt.x, pt.y, canvas.width),
                     color: canvas.freeDrawingBrush?.color,
                     width: (canvas.freeDrawingBrush?.width || brushSize) / canvas.width,
+                    strokeLineCap: (canvas.freeDrawingBrush as PencilBrush)?.strokeLineCap,
                     page: currentPageRef.current,
                 },
             })
@@ -870,9 +963,10 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 liveStrokesRef.current[id] = { points: [local], color: sColor || "#fff", width: localWidth }
                 const p = new Path(`M ${local.x} ${local.y} L ${local.x} ${local.y}`, {
                     fill: "transparent", stroke: sColor, strokeWidth: localWidth,
+                    strokeLineCap: payload.strokeLineCap || "round",
                     selectable: false, evented: false, objectCaching: false,
                 })
-                ;(p as BoardFabricObject).id = id
+                    ; (p as BoardFabricObject).id = id
                 liveFabricObjsRef.current[id] = p
                 canvas.add(p)
             } else if (type === "draw" && liveStrokesRef.current[id]) {
@@ -883,9 +977,10 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     const currentIndex = canvas.getObjects().indexOf(existingPath)
                     const newPath = new Path(buildPathStr(data.points), {
                         fill: "transparent", stroke: data.color, strokeWidth: data.width,
+                        strokeLineCap: payload.strokeLineCap || "round",
                         selectable: false, evented: false, objectCaching: false,
                     })
-                    ;(newPath as BoardFabricObject).id = id
+                        ; (newPath as BoardFabricObject).id = id
                     // Add and move to original index to maintain Z-order
                     canvas.add(newPath)
                     newPath.setCoords()
@@ -907,7 +1002,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
         const handleStrokeAdd = ({ payload }: { payload: FullStrokePayload }) => {
             if (payload.page !== undefined && payload.page !== currentPageRef.current) return
-            
+
             if (canvas.getObjects().some((o) => (o as BoardFabricObject).id === payload.id)) return
 
             import("fabric").then(({ Path }) => {
@@ -917,11 +1012,12 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     fill: "transparent",
                     stroke: payload.color,
                     strokeWidth: payload.width * canvas.width,
+                    strokeLineCap: payload.strokeLineCap || "round",
                     selectable: role === "teacher",
                     evented: role === "teacher",
                     objectCaching: true
                 })
-                ;(p as BoardFabricObject).id = payload.id
+                    ; (p as BoardFabricObject).id = payload.id
                 canvas.add(p)
 
                 // If the stroke was moved after initial drawing, apply saved position
@@ -1185,7 +1281,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
         interface BoardObjectPayload {
             type: "stroke" | "text" | "shape";
-            payload: FullStrokePayload | TextPayload | ShapePayload; 
+            payload: FullStrokePayload | TextPayload | ShapePayload;
             timestamp: number;
         }
 
@@ -1353,11 +1449,31 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     useEffect(() => {
         const canvas = fabricRef.current; if (!canvas) return
         const canDraw = role === "teacher" || (drawingEnabled ?? false);
-        canvas.isDrawingMode = (tool === "pencil" || tool === "eraser") && canDraw;
-        canvas.freeDrawingCursor = tool === "pencil" ? PENCIL_CURSOR : ERASER_CURSOR
+        const isPenTool = tool.startsWith("pen:")
+        // Selective eraser uses drawing mode with background color
+        canvas.isDrawingMode = (isPenTool || tool === "partial-eraser") && canDraw;
+        canvas.freeDrawingCursor = isPenTool ? PENCIL_CURSOR : ERASER_CURSOR
         if (canvas.freeDrawingBrush) {
-            canvas.freeDrawingBrush.color = tool === "eraser" ? boardColor : color
-            canvas.freeDrawingBrush.width = tool === "eraser" ? brushSize * 4 : brushSize
+            const brush = canvas.freeDrawingBrush as PencilBrush
+            if (tool === "partial-eraser" || tool === "eraser") {
+                brush.color = boardColor
+                brush.width = brushSize * 4
+                brush.strokeLineCap = "round"
+            } else {
+                const penType = tool.startsWith("pen:") ? tool.split(":")[1] : "pen"
+                brush.color = color
+                brush.width = brushSize
+                brush.strokeLineCap = "round"
+                brush.strokeLineJoin = "round"
+
+                if (penType === "highlighter") {
+                    brush.color = color.startsWith("#") ? `${color}80` : color
+                    brush.strokeLineCap = "square"
+                    brush.width = brushSize * 2.5
+                } else if (penType === "pen") {
+                    brush.width = Math.max(1, brushSize * 0.8)
+                }
+            }
         }
         canvas.defaultCursor = activeTextRef.current ? TEXT_CURSOR : (tool === "laser" ? "crosshair" : tool === "text" ? TEXT_CURSOR : "default")
         // Disable selection when using drawing/laser tools
@@ -1368,10 +1484,10 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             canvas.skipTargetFind = false
         } else {
             canvas.selection = (tool === "select" || tool === "text")
-            canvas.skipTargetFind = (tool === "pencil" || tool === "eraser" || tool === "laser")
+            canvas.skipTargetFind = (isPenTool || tool === "partial-eraser" || tool === "laser") && tool !== "eraser"
         }
-    // canvasReady ensures this effect re-runs after the canvas is initialized
-    // (which happens asynchronously when socket connects)
+        // canvasReady ensures this effect re-runs after the canvas is initialized
+        // (which happens asynchronously when socket connects)
     }, [tool, color, brushSize, boardColor, drawingEnabled, role, canvasReady])
 
     // ── View Sync: Scroll Broadcasting (teacher always, students when drawing enabled) ──

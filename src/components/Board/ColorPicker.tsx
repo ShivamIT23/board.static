@@ -1,6 +1,8 @@
 "use client"
 
 import React, { useCallback, useEffect, useRef, useState } from "react"
+import { Check } from "lucide-react"
+import { getContrastColor } from "@/lib/utils"
 
 // ── HSV ↔ Hex helpers ────────────────────────────────────────
 
@@ -215,21 +217,27 @@ export default function ColorPicker({ color, onChange }: ColorPickerProps) {
 
             {/* Preset grid */}
             <div className="cp-presets">
-                {PRESET_COLORS.map((c) => (
-                    <button
-                        key={c}
-                        className={`cp-preset-btn ${color.toUpperCase() === c.toUpperCase() ? "cp-preset-active" : ""}`}
-                        style={{ backgroundColor: c }}
-                        onClick={() => {
-                            const { h, s, v } = hexToHsv(c)
-                            setHue(h)
-                            setSat(s)
-                            setVal(v)
-                            setHexInput(c)
-                            onChange(c)
-                        }}
-                    />
-                ))}
+                {PRESET_COLORS.map((c) => {
+                    const isActive = color.toUpperCase() === c.toUpperCase()
+                    const contrastColor = getContrastColor(c)
+                    return (
+                        <button
+                            key={c}
+                            className={`cp-preset-btn flex items-center justify-center ${isActive ? "cp-preset-active" : ""}`}
+                            style={{ backgroundColor: c }}
+                            onClick={() => {
+                                const { h, s, v } = hexToHsv(c)
+                                setHue(h)
+                                setSat(s)
+                                setVal(v)
+                                setHexInput(c)
+                                onChange(c)
+                            }}
+                        >
+                            {isActive && <Check size={10} style={{ color: contrastColor }} strokeWidth={4} />}
+                        </button>
+                    )
+                })}
             </div>
         </div>
     )

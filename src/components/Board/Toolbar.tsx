@@ -3,13 +3,19 @@
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import ReactDOM from "react-dom"
 import {
-    Pencil, Eraser, MousePointer2, Trash2, Palette,
+    Highlighter, Pen, Eraser, MousePointer2, Trash2, Palette,
     Square, Circle, Minus, ArrowUpRight, Type, Triangle, Diamond, Star, Ellipse, Pentagon, TriangleRight, RectangleHorizontal,
-    Activity, Calculator
+    Activity, Calculator, Grid3X3, LayoutGrid
 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, getContrastColor } from "@/lib/utils"
 import ColorPicker from "./ColorPicker"
 import TextColorPicker from "./TextColorPicker"
+import Swal from "sweetalert2"
+
+const PEN_TOOLS = [
+    { id: "pen", label: "Pen", icon: Pen },
+    { id: "highlighter", label: "Highlighter", icon: Highlighter },
+] as const
 
 const SHAPE_TOOLS = [
     { id: "rectangle", label: "Rectangle", icon: RectangleHorizontal },
@@ -25,8 +31,18 @@ const SHAPE_TOOLS = [
     { id: "ellipse", label: "Ellipse", icon: Ellipse },
     { id: "pentagon", label: "Pentagon", icon: Pentagon },
     { id: "parallelogram", label: "Parallelogram", icon: RectangleHorizontal },
+] as const
+
+const GRAPH_TOOLS = [
     { id: "graph-axis", label: "Graph Axis", icon: Activity },
-    { id: "graph-grid", label: "Graph Grid", icon: Calculator },
+    { id: "graph-plain", label: "Coordinate Plane", icon: Grid3X3 },
+    { id: "graph-labeled", label: "Labeled Plane", icon: Calculator },
+    { id: "large-grid", label: "Grid", icon: LayoutGrid },
+] as const
+
+const ERASER_TOOLS = [
+    { id: "eraser", label: "Object Eraser", icon: Eraser },
+    { id: "partial-eraser", label: "Selective Eraser", icon: Eraser },
 ] as const
 
 const MATH_SYMBOLS = [
@@ -45,6 +61,7 @@ const MATH_SYMBOLS = [
     { id: "ge", label: "≥", value: "≥" },
     { id: "le", label: "≤", value: "≤" },
 ] as const
+
 const EMOJIS = [
     { id: "smile", label: "Smile", value: "😊" },
     { id: "heart", label: "Heart", value: "❤️" },
@@ -59,7 +76,9 @@ const EMOJIS = [
     { id: "party", label: "Party", value: "🎉" },
     { id: "cry", label: "Cry", value: "😭" },
 ] as const
+
 type ShapeToolId = typeof SHAPE_TOOLS[number]["id"]
+type GraphToolId = typeof GRAPH_TOOLS[number]["id"]
 
 interface ToolbarProps {
     tool: string
@@ -95,29 +114,42 @@ export default function Toolbar({
     onClearCanvas
 }: ToolbarProps) {
     const [showShapeDropdown, setShowShapeDropdown] = useState(false)
+    const [showGraphDropdown, setShowGraphDropdown] = useState(false)
     const [showColorPicker, setShowColorPicker] = useState(false)
     const [showFillPicker, setShowFillPicker] = useState(false)
     const [showBorderPicker, setShowBorderPicker] = useState(false)
     const [showMathDropdown, setShowMathDropdown] = useState(false)
     const [showEmojiDropdown, setShowEmojiDropdown] = useState(false)
+    const [showPenDropdown, setShowPenDropdown] = useState(false)
+    const [showEraserDropdown, setShowEraserDropdown] = useState(false)
+
     const [shapeDropdownPos, setShapeDropdownPos] = useState<{ top: number; left: number } | null>(null)
+    const [graphDropdownPos, setGraphDropdownPos] = useState<{ top: number; left: number } | null>(null)
     const [colorPickerPos, setColorPickerPos] = useState<{ top: number; left: number } | null>(null)
     const [fillPickerPos, setFillPickerPos] = useState<{ top: number; left: number } | null>(null)
     const [borderPickerPos, setBorderPickerPos] = useState<{ top: number; left: number } | null>(null)
     const [mathDropdownPos, setMathDropdownPos] = useState<{ top: number; left: number } | null>(null)
     const [emojiDropdownPos, setEmojiDropdownPos] = useState<{ top: number; left: number } | null>(null)
+    const [penDropdownPos, setPenDropdownPos] = useState<{ top: number; left: number } | null>(null)
+    const [eraserDropdownPos, setEraserDropdownPos] = useState<{ top: number; left: number } | null>(null)
 
     const [selectedShape, setSelectedShape] = useState<ShapeToolId>("rectangle")
+    const [selectedGraph, setSelectedGraph] = useState<GraphToolId>("graph-axis")
+    const [selectedPen, setSelectedPen] = useState<typeof PEN_TOOLS[number]["id"]>("pen")
     const [selectedSymbol, setSelectedSymbol] = useState<string>("π")
     const [selectedEmoji, setSelectedEmoji] = useState<string>("😊")
+
     const brushSizes = [2, 4, 8, 12, 16, 20]
     const scrollAreaRef = useRef<HTMLDivElement>(null)
     const shapeButtonRef = useRef<HTMLDivElement>(null)
+    const graphButtonRef = useRef<HTMLDivElement>(null)
     const colorButtonRef = useRef<HTMLButtonElement>(null)
     const fillButtonRef = useRef<HTMLButtonElement>(null)
     const borderButtonRef = useRef<HTMLButtonElement>(null)
+    const eraserButtonRef = useRef<HTMLDivElement>(null)
     const mathButtonRef = useRef<HTMLDivElement>(null)
     const emojiButtonRef = useRef<HTMLDivElement>(null)
+    const penButtonRef = useRef<HTMLDivElement>(null)
     const [canScrollDown, setCanScrollDown] = useState(false)
     const [canScrollUp, setCanScrollUp] = useState(false)
 
@@ -134,9 +166,16 @@ export default function Toolbar({
 
     const isShapeToolCount = (t: string) => SHAPE_TOOLS.some(s => s.id === t)
     const isShapeTool = isShapeToolCount(tool)
+    const isGraphToolCount = (t: string) => GRAPH_TOOLS.some(g => g.id === t) || t.startsWith("large-grid") || t.startsWith("graph-plain") || t.startsWith("graph-labeled")
+    const isGraphTool = isGraphToolCount(tool)
+    const isPenTool = tool.startsWith("pen:")
     const isMathSymbolTool = tool.startsWith("symbol:")
     const isEmojiTool = tool.startsWith("emoji:")
+
     const ActiveShapeIcon = SHAPE_TOOLS.find(s => s.id === selectedShape)?.icon || Square
+    const ActiveGraphIcon = GRAPH_TOOLS.find(g => g.id === selectedGraph)?.icon || Activity
+    const ActivePenIcon = PEN_TOOLS.find(p => p.id === selectedPen)?.icon || Pen
+    const ActiveEraserIcon = ERASER_TOOLS.find(e => e.id === tool || (e.id === "eraser" && tool === "partial-eraser"))?.icon || Eraser
 
     const toggleShapeDropdown = useCallback(() => {
         if (showShapeDropdown) {
@@ -152,6 +191,36 @@ export default function Toolbar({
         }
         setShowShapeDropdown(true)
     }, [showShapeDropdown])
+
+    const toggleGraphDropdown = useCallback(() => {
+        if (showGraphDropdown) {
+            setShowGraphDropdown(false)
+            return
+        }
+        if (graphButtonRef.current) {
+            const rect = graphButtonRef.current.getBoundingClientRect()
+            setGraphDropdownPos({
+                top: rect.top + rect.height / 2 - 20,
+                left: rect.right + 8,
+            })
+        }
+        setShowGraphDropdown(true)
+    }, [showGraphDropdown])
+
+    const togglePenDropdown = useCallback(() => {
+        if (showPenDropdown) {
+            setShowPenDropdown(false)
+            return
+        }
+        if (penButtonRef.current) {
+            const rect = penButtonRef.current.getBoundingClientRect()
+            setPenDropdownPos({
+                top: rect.top + rect.height / 2 - 20,
+                left: rect.right + 8,
+            })
+        }
+        setShowPenDropdown(true)
+    }, [showPenDropdown])
 
     const toggleColorPicker = useCallback(() => {
         if (showColorPicker) {
@@ -237,6 +306,44 @@ export default function Toolbar({
         setShowEmojiDropdown(false)
     }
 
+    const handleGraphItemClick = async (gId: GraphToolId) => {
+        if (gId === "large-grid" || gId === "graph-plain" || gId === "graph-labeled") {
+            let title = "Grid Size"
+            let label = "Enter number of boxes"
+            let defVal = "3"
+
+            if (gId !== "large-grid") {
+                title = "Coordinate Range"
+                label = "Enter coordinate limit (e.g. 10 for -9 to 9)"
+                defVal = "8"
+            }
+
+            const { value: count } = await Swal.fire({
+                title,
+                input: "number",
+                inputLabel: label,
+                inputValue: defVal,
+                showCancelButton: true,
+                inputAttributes: {
+                    min: "1",
+                    max: "50",
+                    step: "1"
+                }
+            })
+
+            if (count) {
+                const n = parseInt(count)
+                setTool(`${gId}:${n}`)
+            } else {
+                setTool(`${gId}:${defVal}`)
+            }
+        } else {
+            setTool(gId)
+        }
+        setSelectedGraph(gId)
+        setShowGraphDropdown(false)
+    }
+
     return (
         <nav className="w-12 flex no-scrollbar flex-col items-center bg-sidebar border-r border-border z-30 shrink-0 h-full max-h-screen">
 
@@ -264,12 +371,153 @@ export default function Toolbar({
                         <button type="button" onClick={() => setTool("select")} className={cn("p-2 rounded-[5px] transition-all duration-300", tool === "select" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Selection Tool">
                             <MousePointer2 size={18} />
                         </button>
-                        <button type="button" onClick={() => setTool("pencil")} className={cn("p-2 rounded-[5px] transition-all duration-300", tool === "pencil" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Pencil Tool">
-                            <Pencil size={18} />
-                        </button>
-                        <button type="button" onClick={() => setTool("eraser")} className={cn("p-2 rounded-[5px] transition-all duration-300", tool === "eraser" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Eraser Tool">
-                            <Eraser size={18} />
-                        </button>
+
+                        {/* Pen tools - pen, highlighter */}
+                        <div className="relative group" ref={penButtonRef}>
+                            <div className={cn(
+                                "flex flex-col items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
+                                isPenTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                            )}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setTool(`pen:${selectedPen}`)
+                                        if (!isPenTool) setShowPenDropdown(false)
+                                    }}
+                                    onContextMenu={(e) => { e.preventDefault(); togglePenDropdown() }}
+                                    className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10"
+                                    title={`Use ${selectedPen}`}
+                                >
+                                    <ActivePenIcon size={18} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        togglePenDropdown()
+                                    }}
+                                    className={cn(
+                                        "py-0.5 flex items-center justify-center transition-colors hover:bg-white/20 border-t border-white/10",
+                                        isPenTool ? "text-primary-foreground" : "text-muted-foreground"
+                                    )}
+                                    title="Choose pen type"
+                                >
+                                    <svg className="w-2 h-2 opacity-80" viewBox="0 0 10 10" fill="currentColor">
+                                        <path d="M2 4 L8 4 L5 8 Z" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {showPenDropdown && penDropdownPos && ReactDOM.createPortal(
+                                <>
+                                    <div className="fixed inset-0 z-9998" onClick={() => setShowPenDropdown(false)} />
+                                    <div
+                                        className="fixed z-9999 flex flex-col gap-1 p-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-left-2 duration-200"
+                                        style={{ top: penDropdownPos.top, left: penDropdownPos.left }}
+                                    >
+                                        {PEN_TOOLS.map((p) => {
+                                            const Icon = p.icon
+                                            return (
+                                                <button
+                                                    key={p.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedPen(p.id)
+                                                        setTool(`pen:${p.id}`)
+                                                        setShowPenDropdown(false)
+                                                    }}
+                                                    className={cn(
+                                                        "p-2 rounded-[5px] flex items-center gap-2 transition-all duration-200",
+                                                        (tool === `pen:${p.id}`)
+                                                            ? "bg-primary text-primary-foreground shadow-md"
+                                                            : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                                    )}
+                                                    title={p.label}
+                                                >
+                                                    <Icon size={16} />
+                                                    <span className="text-[10px] font-medium pr-1">{p.label}</span>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </>,
+                                document.body
+                            )}
+                        </div>
+                        <div className="relative group" ref={eraserButtonRef}>
+                            <div className={cn(
+                                "flex flex-col items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
+                                (tool === "eraser" || tool === "partial-eraser") ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                            )}>
+                                <button
+                                    type="button"
+                                    onClick={() => setTool(tool === "partial-eraser" ? "partial-eraser" : "eraser")}
+                                    onContextMenu={(e) => {
+                                        e.preventDefault()
+                                        if (eraserButtonRef.current) {
+                                            const rect = eraserButtonRef.current.getBoundingClientRect()
+                                            setEraserDropdownPos({ top: rect.top, left: rect.right + 10 })
+                                            setShowEraserDropdown(true)
+                                        }
+                                    }}
+                                    className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10 min-h-[30px]"
+                                    title="Eraser Tool (Right click for options)"
+                                >
+                                    <ActiveEraserIcon size={18} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (eraserButtonRef.current) {
+                                            const rect = eraserButtonRef.current.getBoundingClientRect()
+                                            setEraserDropdownPos({ top: rect.top, left: rect.right + 10 })
+                                            setShowEraserDropdown(!showEraserDropdown)
+                                        }
+                                    }}
+                                    className="h-2 flex items-center justify-center hover:bg-white/20 transition-colors border-t border-white/5"
+                                    title="Choose eraser tool"
+                                >
+                                    <svg className="w-2 h-2 opacity-80" viewBox="0 0 10 10" fill="currentColor">
+                                        <path d="M2 4 L8 4 L5 8 Z" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {showEraserDropdown && eraserDropdownPos && ReactDOM.createPortal(
+                                <>
+                                    <div className="fixed inset-0 z-9998" onClick={() => setShowEraserDropdown(false)} />
+                                    <div
+                                        className="fixed z-9999 flex flex-col gap-1 p-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-left-2 duration-200"
+                                        style={{ top: eraserDropdownPos.top, left: eraserDropdownPos.left }}
+                                    >
+                                        {ERASER_TOOLS.map((e) => {
+                                            const Icon = e.icon
+                                            return (
+                                                <button
+                                                    key={e.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setTool(e.id)
+                                                        setShowEraserDropdown(false)
+                                                    }}
+                                                    className={cn(
+                                                        "p-2 rounded-[5px] flex items-center gap-2 transition-all duration-200",
+                                                        tool === e.id
+                                                            ? "bg-primary text-primary-foreground shadow-md"
+                                                            : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                                    )}
+                                                    title={e.label}
+                                                >
+                                                    <Icon size={16} />
+                                                    <span className="text-[10px] font-medium pr-1">{e.label}</span>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </>,
+                                document.body
+                            )}
+                        </div>
                         <button type="button" onClick={() => setTool("text")} className={cn("p-2 rounded-[5px] transition-all duration-300", tool === "text" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Text Tool">
                             <Type size={18} />
                         </button>
@@ -285,7 +533,7 @@ export default function Toolbar({
                         {/* Shapes — single button with horizontal dropdown */}
                         <div className="relative group" ref={shapeButtonRef}>
                             <div className={cn(
-                                "flex flex-col items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
+                                "focus-within:ring-2 focus-within:ring-primary flex flex-col items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
                                 isShapeTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
                             )}>
                                 <button
@@ -345,6 +593,72 @@ export default function Toolbar({
                                                     title={shape.label}
                                                 >
                                                     <Icon size={16} className={`${shape.id == "parallelogram" && "-skew-x-24"}`} />
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </>,
+                                document.body
+                            )}
+                        </div>
+
+                        {/* Graph Tools — Simplified Section */}
+                        <div className="relative group" ref={graphButtonRef}>
+                            <div className={cn(
+                                "flex flex-col items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
+                                isGraphTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                            )}>
+                                <button
+                                    type="button"
+                                    onClick={() => handleGraphItemClick(selectedGraph)}
+                                    onContextMenu={(e) => { e.preventDefault(); toggleGraphDropdown() }}
+                                    className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10"
+                                    title={`Use ${selectedGraph}`}
+                                >
+                                    <ActiveGraphIcon size={18} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        toggleGraphDropdown()
+                                    }}
+                                    className={cn(
+                                        "py-0.5 flex items-center justify-center transition-colors hover:bg-white/20 border-t border-white/10",
+                                        isGraphTool ? "text-primary-foreground" : "text-muted-foreground"
+                                    )}
+                                    title="Choose graph tool"
+                                >
+                                    <svg className="w-2 h-2 opacity-80" viewBox="0 0 10 10" fill="currentColor">
+                                        <path d="M2 4 L8 4 L5 8 Z" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {showGraphDropdown && graphDropdownPos && ReactDOM.createPortal(
+                                <>
+                                    <div className="fixed inset-0 z-9998" onClick={() => setShowGraphDropdown(false)} />
+                                    <div
+                                        className="fixed z-9999 flex flex-col gap-1 p-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-left-2 duration-200"
+                                        style={{ top: graphDropdownPos.top, left: graphDropdownPos.left }}
+                                    >
+                                        {GRAPH_TOOLS.map((g) => {
+                                            const Icon = g.icon
+                                            return (
+                                                <button
+                                                    key={g.id}
+                                                    type="button"
+                                                    onClick={() => handleGraphItemClick(g.id)}
+                                                    className={cn(
+                                                        "p-2 rounded-[5px] flex items-center gap-2 transition-all duration-200",
+                                                        tool === g.id
+                                                            ? "bg-primary text-primary-foreground shadow-md"
+                                                            : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                                    )}
+                                                    title={g.label}
+                                                >
+                                                    <Icon size={16} />
+                                                    <span className="text-[10px] font-medium pr-1">{g.label}</span>
                                                 </button>
                                             )
                                         })}
@@ -414,6 +728,8 @@ export default function Toolbar({
                                 document.body
                             )}
                         </div>
+
+                        {/* Commented out Emoji code preserved as requested */}
                         {/* <div className="relative group" ref={emojiButtonRef}>
                             <div className={cn(
                                 "flex flex-col items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
@@ -489,7 +805,18 @@ export default function Toolbar({
                             <div className="w-10 h-px bg-border -mt-1" />
                             <button
                                 type="button"
-                                onClick={() => { if (confirm("Clear the canvas for all users?")) onClearCanvas() }}
+                                onClick={async () => {
+                                    const { isConfirmed } = await Swal.fire({
+                                        title: "Clear Canvas?",
+                                        text: "This will clear the canvas for all users. Are you sure?",
+                                        icon: "warning",
+                                        showCancelButton: true,
+                                        confirmButtonColor: "#ef4444",
+                                        cancelButtonColor: "#6b7280",
+                                        confirmButtonText: "Yes, clear it!"
+                                    })
+                                    if (isConfirmed) onClearCanvas()
+                                }}
                                 className="p-2 rounded-[5px] transition-all duration-300 text-red-500 hover:text-red-400 hover:bg-red-500/10"
                                 title="Clear Canvas (All Users)"
                             >
@@ -511,7 +838,11 @@ export default function Toolbar({
                                     ref={colorButtonRef}
                                     type="button"
                                     onClick={() => toggleColorPicker()}
-                                    className="w-6 h-6 rounded-[2px] border-2 border-dashed border-muted-foreground flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+                                    className="w-6 h-6 rounded-[2px] border border-border flex items-center justify-center transition-colors cursor-pointer shadow-sm"
+                                    style={{
+                                        backgroundColor: color,
+                                        color: getContrastColor(color)
+                                    }}
                                 >
                                     <Palette size={12} />
                                 </button>
@@ -558,7 +889,7 @@ export default function Toolbar({
                     </div>
 
                     {/* Shape Fill & Border Colors — only when a shape tool is active */}
-                    {isShapeTool && (
+                    {(isShapeTool) && (
                         <div className="flex flex-col gap-4 py-2 border-t border-border w-full items-center mb-6 animate-in slide-in-from-bottom-2 duration-300">
                             {/* Fill Color */}
                             <div className="flex flex-col gap-2 items-center">
@@ -583,7 +914,14 @@ export default function Toolbar({
                                     <button
                                         ref={fillButtonRef}
                                         onClick={() => toggleFillPicker()}
-                                        className="w-4 h-4 rounded-sm border border-dashed border-muted-foreground flex items-center justify-center text-muted-foreground hover:bg-accent transition-colors"
+                                        className={cn(
+                                            "w-4 h-4 rounded-sm border border-border flex items-center justify-center transition-colors shadow-sm",
+                                            shapeFillColor === "transparent" ? "text-muted-foreground bg-accent" : ""
+                                        )}
+                                        style={shapeFillColor !== "transparent" ? {
+                                            backgroundColor: shapeFillColor,
+                                            color: getContrastColor(shapeFillColor)
+                                        } : {}}
                                     >
                                         <Palette size={8} />
                                     </button>
@@ -617,7 +955,53 @@ export default function Toolbar({
                                     <button
                                         ref={borderButtonRef}
                                         onClick={() => toggleBorderPicker()}
-                                        className="w-4 h-4 rounded-full border-2 border-dashed border-muted-foreground flex items-center justify-center text-muted-foreground hover:bg-accent transition-colors"
+                                        className="w-4 h-4 rounded-full border border-border flex items-center justify-center transition-colors shadow-sm"
+                                        style={{
+                                            backgroundColor: shapeBorderColor,
+                                            color: getContrastColor(shapeBorderColor)
+                                        }}
+                                    >
+                                        <Palette size={8} />
+                                    </button>
+                                </div>
+                                {showBorderPicker && borderPickerPos && ReactDOM.createPortal(
+                                    <>
+                                        <div className="fixed inset-0 z-9998" onClick={() => setShowBorderPicker(false)} />
+                                        <div className="fixed z-9999 animate-in fade-in slide-in-from-left-2 duration-200" style={{ top: borderPickerPos.top, left: borderPickerPos.left }}>
+                                            <div className="p-1.5 bg-sidebar border border-border rounded-[5px] shadow-2xl">
+                                                <ColorPicker color={shapeBorderColor} onChange={(hex) => setShapeBorderColor(hex)} />
+                                            </div>
+                                        </div>
+                                    </>,
+                                    document.body
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    {(isGraphTool) && (
+                        <div className="flex flex-col gap-4 py-2 border-t border-border w-full items-center mb-6 animate-in slide-in-from-bottom-2 duration-300">
+
+                            {/* Border Color */}
+                            <div className="flex flex-col gap-2 items-center">
+                                <span className="text-[7px] font-black uppercase tracking-widest text-muted-foreground text-center">Highlight</span>
+                                <div className="grid grid-cols-2 gap-1 px-1">
+                                    <button
+                                        onClick={() => setShapeBorderColor("#FFFFFF")}
+                                        className={cn(
+                                            "w-4 h-4 rounded-full border-2 transition-all duration-200",
+                                            shapeBorderColor === "#FFFFFF" ? "border-white scale-110 z-10 shadow-sm" : "border-transparent hover:scale-110"
+                                        )}
+                                        style={{ backgroundColor: "#FFFFFF" }}
+                                        title="White"
+                                    />
+                                    <button
+                                        ref={borderButtonRef}
+                                        onClick={() => toggleBorderPicker()}
+                                        className="w-4 h-4 rounded-full border border-border flex items-center justify-center transition-colors shadow-sm"
+                                        style={{
+                                            backgroundColor: shapeBorderColor,
+                                            color: getContrastColor(shapeBorderColor)
+                                        }}
                                     >
                                         <Palette size={8} />
                                     </button>

@@ -14,10 +14,11 @@ import ReactDOM from "react-dom"
 import BackgroundPicker from "./BackgroundPicker"
 import { leaveSession } from "@/app/actions/auth"
 import ThemeToggle from "../theme-toggle"
-import { cn } from "@/lib/utils"
+import { cn, getContrastColor } from "@/lib/utils"
 import { useSocket } from "../providers/socket-provider"
 import { toast } from "sonner"
 import { SessionTimer } from "./SessionTimer"
+import Swal from "sweetalert2"
 
 
 
@@ -238,16 +239,17 @@ export default function BoardTopBar({
                                         type="button"
                                         onClick={toggleBgPicker}
                                         className={cn(
-                                            "flex items-center gap-1.5 px-2 py-1 rounded-[5px] border transition-all duration-300",
-                                            showBgPicker ? "bg-primary/20 border-primary text-primary" : "bg-muted/30 border-border/50 text-muted-foreground hover:bg-accent"
+                                            "flex items-center gap-1.5 px-2 py-1 rounded-[5px] border transition-all duration-300 shadow-sm",
+                                            showBgPicker ? "ring-2 ring-primary ring-offset-1 border-primary" : "border-border/50"
                                         )}
+                                        style={{
+                                            backgroundColor: boardColor,
+                                            color: getContrastColor(boardColor)
+                                        }}
                                         title="Custom Board Color"
                                     >
                                         <Palette size={14} />
-                                        <div
-                                            className="w-3 h-3 rounded-full border border-white/20"
-                                            style={{ backgroundColor: boardColor }}
-                                        />
+                                        <span className="text-[10px] font-bold">Desk Color</span>
                                     </button>
                                 </div>
                             </div>
@@ -322,7 +324,18 @@ export default function BoardTopBar({
 
                 <button
                     type="button"
-                    onClick={() => { if (confirm("Are you sure you want to leave this session?")) leaveSession(sessionId) }}
+                    onClick={async () => {
+                        const { isConfirmed } = await Swal.fire({
+                            title: "Leave Session?",
+                            text: "Are you sure you want to leave this session?",
+                            icon: "question",
+                            showCancelButton: true,
+                            confirmButtonColor: "#ef4444",
+                            cancelButtonColor: "#6b7280",
+                            confirmButtonText: "Yes, leave"
+                        })
+                        if (isConfirmed) leaveSession(sessionId)
+                    }}
                     className="flex items-center justify-center p-2 h-8 w-8 bg-red-500 dark:bg-red-500/80 hover:bg-red-600 dark:hover:bg-red-500 text-white rounded-[5px] transition-all duration-300 shadow-lg shadow-red-500/20 active:scale-95 group"
                     title="Leave Session"
                 >

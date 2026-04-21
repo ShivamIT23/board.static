@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "PORT=3004 next dev",
+    "dev": "PORT=3003 next dev",
     "build": "next build",
     "start": "PORT=3003 next start",
     "lint": "eslint",
@@ -31,6 +31,7 @@
     "react-dom": "19.2.4",
     "socket.io-client": "^4.8.3",
     "sonner": "^2.0.7",
+    "sweetalert2": "^11.26.24",
     "tailwind-merge": "^3.5.0",
     "tw-animate-css": "^1.4.0",
     "use-debounce": "^10.1.1",
