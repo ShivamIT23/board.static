@@ -37,8 +37,17 @@ export const SocketProvider = ({
 
   useEffect(() => {
     const socketInstance = io(url, {
-      transports: ["websocket"],
+      path: "/socket.io/", // Ensures it hits the LiteSpeed proxy rule
+      transports: ["websocket", "polling"],
       reconnectionAttempts: 5,
+    });
+
+    socketInstance.on("connect", () => {
+      console.log("Connected successfully:", socketInstance.id);
+    });
+
+    socketInstance.on("connect_error", (err) => {
+      console.error("Connection failed:", err.message);
     });
 
     socketInstance.on("connect", () => {
@@ -51,7 +60,7 @@ export const SocketProvider = ({
 
       socketInstance.emit("join", {
         roomId,
-        payload: { 
+        payload: {
           user: userRef.current,
           lastSyncTimestamp
         },

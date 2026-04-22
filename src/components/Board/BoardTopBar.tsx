@@ -8,7 +8,10 @@ import {
     FileUp,
     LocateFixed,
     Locate,
-    Palette
+    Palette,
+    MousePointer2,
+    Square, Circle, Minus, ArrowUpRight, Triangle, Diamond, Star, Ellipse, Pentagon, TriangleRight, RectangleHorizontal,
+    Activity, Calculator, Grid3X3, LayoutGrid
 } from "lucide-react"
 import ReactDOM from "react-dom"
 import BackgroundPicker from "./BackgroundPicker"
@@ -24,6 +27,8 @@ import Swal from "sweetalert2"
 
 interface BoardTopBarProps {
     zoom: number
+    tool: string
+    setTool: (tool: string) => void
     onZoomChange: (zoom: number) => void
     isOpen: boolean
     duration: number
@@ -31,14 +36,74 @@ interface BoardTopBarProps {
     setBoardColor: (color: string) => void
     role: "teacher" | "student"
     sessionId: string
-    onPdfUpload?: (file: File) => void
     isViewLocked?: boolean
     userName: string;
     onToggleViewLocked?: (enabled: boolean) => void
 }
 
+const SHAPE_TOOLS = [
+    { id: "rectangle", label: "Rectangle", icon: RectangleHorizontal },
+    { id: "square", label: "Square", icon: Square },
+    { id: "circle", label: "Circle", icon: Circle },
+    { id: "triangle", label: "Triangle", icon: Triangle },
+    { id: "right-triangle", label: "RightTriangle", icon: TriangleRight },
+    { id: "diamond", label: "Diamond", icon: Diamond },
+    { id: "rhombus", label: "Rhombus", icon: Diamond },
+    { id: "star", label: "Star", icon: Star },
+    { id: "line", label: "Line", icon: Minus },
+    { id: "arrow", label: "Arrow", icon: ArrowUpRight },
+    { id: "ellipse", label: "Ellipse", icon: Ellipse },
+    { id: "pentagon", label: "Pentagon", icon: Pentagon },
+    { id: "parallelogram", label: "Parallelogram", icon: RectangleHorizontal },
+] as const
+
+const GRAPH_TOOLS = [
+    { id: "graph-axis", label: "Graph Axis", icon: Activity },
+    { id: "graph-plain", label: "Coordinate Plane", icon: Grid3X3 },
+    { id: "graph-labeled", label: "Labeled Plane", icon: Calculator },
+    { id: "large-grid", label: "Grid", icon: LayoutGrid },
+] as const
+
+
+const MATH_SYMBOLS = [
+    { id: "pi", label: "π", value: "π" },
+    { id: "sigma", label: "Σ", value: "Σ" },
+    { id: "infinity", label: "∞", value: "∞" },
+    { id: "integral", label: "∫", value: "∫" },
+    { id: "sqrt", label: "√", value: "√" },
+    { id: "theta", label: "θ", value: "θ" },
+    { id: "alpha", label: "α", value: "α" },
+    { id: "beta", label: "β", value: "β" },
+    { id: "delta", label: "Δ", value: "Δ" },
+    { id: "plusminus", label: "±", value: "±" },
+    { id: "notequal", label: "≠", value: "≠" },
+    { id: "approx", label: "≈", value: "≈" },
+    { id: "ge", label: "≥", value: "≥" },
+    { id: "le", label: "≤", value: "≤" },
+] as const
+
+const EMOJIS = [
+    { id: "smile", label: "Smile", value: "😊" },
+    { id: "heart", label: "Heart", value: "❤️" },
+    { id: "thumb", label: "Thumbs Up", value: "👍" },
+    { id: "clap", label: "Clap", value: "👏" },
+    { id: "star-eye", label: "Star Eye", value: "🤩" },
+    { id: "fire", label: "Fire", value: "🔥" },
+    { id: "rocket", label: "Rocket", value: "🚀" },
+    { id: "check", label: "Check", value: "✅" },
+    { id: "warn", label: "Warning", value: "⚠️" },
+    { id: "idea", label: "Idea", value: "💡" },
+    { id: "party", label: "Party", value: "🎉" },
+    { id: "cry", label: "Cry", value: "😭" },
+] as const
+
+type ShapeToolId = typeof SHAPE_TOOLS[number]["id"]
+type GraphToolId = typeof GRAPH_TOOLS[number]["id"]
+
 export default function BoardTopBar({
     zoom,
+    tool,
+    setTool,
     onZoomChange,
     isOpen,
     duration,
@@ -46,20 +111,38 @@ export default function BoardTopBar({
     setBoardColor,
     role,
     sessionId,
-    onPdfUpload,
     isViewLocked = true,
     userName,
     onToggleViewLocked
 }: BoardTopBarProps) {
-    const { socket } = useSocket()
-    const boardFileInputRef = useRef<HTMLInputElement>(null)
-    const pdfFileInputRef = useRef<HTMLInputElement>(null)
     const scrollBarRef = useRef<HTMLDivElement>(null)
     const bgButtonRef = useRef<HTMLDivElement>(null)
 
     const [showBgPicker, setShowBgPicker] = useState(false)
     const [bgPickerPos, setBgPickerPos] = useState<{ top: number; left: number } | null>(null)
     const [canScrollRight, setCanScrollRight] = useState(false)
+    const isMathSymbolTool = tool.startsWith("symbol:")
+    const isEmojiTool = tool.startsWith("emoji:")
+    const mathButtonRef = useRef<HTMLDivElement>(null)
+    const emojiButtonRef = useRef<HTMLDivElement>(null)
+    const shapeButtonRef = useRef<HTMLDivElement>(null)
+    const graphButtonRef = useRef<HTMLDivElement>(null)
+    const [selectedSymbol, setSelectedSymbol] = useState<string>("π")
+    const [selectedEmoji, setSelectedEmoji] = useState<string>("😊")
+    const [selectedShape, setSelectedShape] = useState<ShapeToolId>("rectangle")
+    const [selectedGraph, setSelectedGraph] = useState<GraphToolId>("graph-axis")
+    const [shapeDropdownPos, setShapeDropdownPos] = useState<{ bottom: number; left: number } | null>(null)
+    const [graphDropdownPos, setGraphDropdownPos] = useState<{ bottom: number; left: number } | null>(null)
+    const [showMathDropdown, setShowMathDropdown] = useState(false)
+    const [showEmojiDropdown, setShowEmojiDropdown] = useState(false)
+    const [showShapeDropdown, setShowShapeDropdown] = useState(false)
+    const [showGraphDropdown, setShowGraphDropdown] = useState(false)
+
+    const [mathDropdownPos, setMathDropdownPos] = useState<{ top: number; left: number } | null>(null)
+    const [emojiDropdownPos, setEmojiDropdownPos] = useState<{ top: number; left: number } | null>(null)
+
+    const ActiveShapeIcon = SHAPE_TOOLS.find(s => s.id === selectedShape)?.icon || Square
+    const ActiveGraphIcon = GRAPH_TOOLS.find(g => g.id === selectedGraph)?.icon || Activity
 
     const checkScroll = useCallback(() => {
         const el = scrollBarRef.current
@@ -73,57 +156,6 @@ export default function BoardTopBar({
         return () => window.removeEventListener('resize', checkScroll)
     }, [checkScroll, isOpen])
 
-    const handleBoardFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file || !socket) return
-
-        if (!file.type.startsWith("image/")) {
-            toast.error("Only image files can be added to the board")
-            if (boardFileInputRef.current) boardFileInputRef.current.value = ""
-            return
-        }
-
-        if (file.size > 5 * 1024 * 1024) {
-            toast.error("Image must be less than 5MB")
-            if (boardFileInputRef.current) boardFileInputRef.current.value = ""
-            return
-        }
-
-        const reader = new FileReader()
-        reader.onloadend = () => {
-            socket.emit("board_file_add", {
-                payload: {
-                    id: crypto.randomUUID(),
-                    url: reader.result as string,
-                    name: file.name,
-                    position: { x: 0.3, y: 0.3 },
-                    scale: 0.25,
-                }
-            })
-        }
-        reader.readAsDataURL(file)
-        if (boardFileInputRef.current) boardFileInputRef.current.value = ""
-    }
-
-    const handlePdfFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file) return
-
-        if (file.type !== "application/pdf") {
-            toast.error("Only PDF files are supported")
-            if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
-            return
-        }
-
-        if (file.size > 25 * 1024 * 1024) {
-            toast.error("PDF must be less than 25MB")
-            if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
-            return
-        }
-
-        onPdfUpload?.(file)
-        if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
-    }
 
     const toggleBgPicker = useCallback(() => {
         if (showBgPicker) {
@@ -166,6 +198,121 @@ export default function BoardTopBar({
         return () => window.removeEventListener('keydown', handleKeyDown)
     }, [])
 
+    const toggleShapeDropdown = useCallback(() => {
+        if (showShapeDropdown) {
+            setShowShapeDropdown(false)
+            return
+        }
+        if (shapeButtonRef.current) {
+            const rect = shapeButtonRef.current.getBoundingClientRect()
+            setShapeDropdownPos({
+                bottom: rect.bottom + rect.height / 2 - 20,
+                left: rect.left + 8,
+            })
+        }
+        setShowShapeDropdown(true)
+    }, [showShapeDropdown])
+
+    const isShapeToolCount = (t: string) => SHAPE_TOOLS.some(s => s.id === t)
+    const isShapeTool = isShapeToolCount(tool)
+    const isGraphToolCount = (t: string) => GRAPH_TOOLS.some(g => g.id === t) || t.startsWith("large-grid") || t.startsWith("graph-plain") || t.startsWith("graph-labeled")
+    const isGraphTool = isGraphToolCount(tool)
+
+    const toggleGraphDropdown = useCallback(() => {
+        if (showGraphDropdown) {
+            setShowGraphDropdown(false)
+            return
+        }
+        if (graphButtonRef.current) {
+            const rect = graphButtonRef.current.getBoundingClientRect()
+            setGraphDropdownPos({
+                bottom: rect.bottom + rect.height / 2 - 20,
+                left: rect.right + 8,
+            })
+        }
+        setShowGraphDropdown(true)
+    }, [showGraphDropdown])
+
+    const toggleMathDropdown = useCallback(() => {
+        if (showMathDropdown) {
+            setShowMathDropdown(false)
+            return
+        }
+        if (mathButtonRef.current) {
+            const rect = mathButtonRef.current.getBoundingClientRect()
+            setMathDropdownPos({
+                top: Math.max(10, Math.min(window.innerHeight - 300, rect.top - 100)),
+                left: rect.right + 8,
+            })
+            setShowMathDropdown(true)
+        }
+    }, [showMathDropdown])
+
+    const toggleEmojiDropdown = useCallback(() => {
+        if (showEmojiDropdown) {
+            setShowEmojiDropdown(false)
+            return
+        }
+        if (emojiButtonRef.current) {
+            const rect = emojiButtonRef.current.getBoundingClientRect()
+            setEmojiDropdownPos({
+                top: Math.max(10, Math.min(window.innerHeight - 300, rect.top - 150)),
+                left: rect.right + 8,
+            })
+            setShowEmojiDropdown(true)
+        }
+    }, [showEmojiDropdown])
+
+    const handleSymbolClick = (val: string) => {
+        setSelectedSymbol(val)
+        setTool(`symbol:${val}`)
+        setShowMathDropdown(false)
+    }
+
+    const handleEmojiClick = (val: string) => {
+        setSelectedEmoji(val)
+        setTool(`emoji:${val}`)
+        setShowEmojiDropdown(false)
+    }
+
+    const handleGraphItemClick = async (gId: GraphToolId) => {
+        if (gId === "large-grid" || gId === "graph-plain" || gId === "graph-labeled") {
+            let title = "Grid Size"
+            let label = "Enter number of boxes"
+            let defVal = "3"
+
+            if (gId !== "large-grid") {
+                title = "Coordinate Range"
+                label = "Enter coordinate limit (e.g. 10 for -9 to 9)"
+                defVal = "8"
+            }
+
+            const { value: count } = await Swal.fire({
+                title,
+                input: "number",
+                inputLabel: label,
+                inputValue: defVal,
+                showCancelButton: true,
+                inputAttributes: {
+                    min: "1",
+                    max: "50",
+                    step: "1"
+                }
+            })
+
+            if (count) {
+                const n = parseInt(count)
+                setTool(`${gId}:${n}`)
+            } else {
+                setTool(`${gId}:${defVal}`)
+            }
+        } else {
+            setTool(gId)
+        }
+        setSelectedGraph(gId)
+        setShowGraphDropdown(false)
+    }
+
 
 
     return (
@@ -182,30 +329,272 @@ export default function BoardTopBar({
                     onScroll={checkScroll}
                     className="flex items-center h-full gap-2 sm:gap-3 px-3 sm:px-4 py-2 w-full overflow-x-auto no-scrollbar scroll-smooth"
                 >
-                    {/* Upload Buttons (Inside scrollable, but to the right of timer) */}
-                    {role === "teacher" && (
-                        <div className="flex items-center gap-2 shrink-0 pl-1">
-                            <input type="file" ref={boardFileInputRef} onChange={handleBoardFileSelect} className="hidden" accept="image/*" />
-                            <button
-                                type="button"
-                                onClick={() => boardFileInputRef.current?.click()}
-                                className="p-1.5 rounded-[5px] transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent border border-border/50 shadow-sm"
-                                title="Add Image to Board"
-                            >
-                                <ImagePlus size={16} />
-                            </button>
 
-                            <input type="file" ref={pdfFileInputRef} onChange={handlePdfFileSelect} className="hidden" accept="application/pdf" />
+
+                    <button type="button" onClick={() => setTool("select")} className={cn("p-2 border rounded-[5px] border-primary/40 transition-all duration-300", tool === "select" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Selection Tool">
+                        <MousePointer2 size={18} />
+                    </button>
+
+                    {/* Shapes — single button with horizontal dropdown */}
+                    <div className="relative group border rounded-[5px] border-primary/40" ref={shapeButtonRef}>
+                        <div className={cn(
+                            "focus-within:ring-2 focus-within:ring-primary flex items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent h-full",
+                            isShapeTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                        )}>
                             <button
                                 type="button"
-                                onClick={() => pdfFileInputRef.current?.click()}
-                                className="p-1.5 rounded-[5px] transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent border border-border/50 shadow-sm"
-                                title="Upload PDF to Board"
+                                onClick={() => {
+                                    setTool(selectedShape)
+                                    if (!isShapeTool) setShowShapeDropdown(false)
+                                }}
+                                onContextMenu={(e) => { e.preventDefault(); toggleShapeDropdown() }}
+                                className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10"
+                                title={`Use ${selectedShape}`}
                             >
-                                <FileUp size={16} />
+                                <ActiveShapeIcon size={18} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleShapeDropdown()
+                                }}
+                                className={cn(
+                                    "py-0.5 flex items-center justify-center transition-colors hover:bg-white/20 border-t border-white/10",
+                                    isShapeTool ? "text-primary-foreground" : "text-muted-foreground"
+                                )}
+                                title="Choose shape"
+                            >
+                                <svg className="w-2 h-2 opacity-80" viewBox="0 0 10 10" fill="currentColor">
+                                    <path d="M2 4 L8 4 L5 8 Z" />
+                                </svg>
                             </button>
                         </div>
-                    )}
+
+                        {showShapeDropdown && shapeDropdownPos && ReactDOM.createPortal(
+                            <>
+                                <div className="fixed inset-0 z-9998" onClick={() => setShowShapeDropdown(false)} />
+                                <div
+                                    className="fixed z-9999 flex flex-col flex-wrap items-center gap-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-left-2 duration-200 h-[73px]"
+                                    style={{ top: shapeDropdownPos.bottom, left: shapeDropdownPos.left }}
+                                >
+                                    {SHAPE_TOOLS.map((shape) => {
+                                        const Icon = shape.icon
+                                        return (
+                                            <button
+                                                key={shape.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedShape(shape.id)
+                                                    setTool(shape.id)
+                                                    setShowShapeDropdown(false)
+                                                }}
+                                                className={cn(
+                                                    "p-2 rounded-[5px] transition-all duration-200",
+                                                    tool === shape.id
+                                                        ? "bg-primary text-primary-foreground shadow-md"
+                                                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                                )}
+                                                title={shape.label}
+                                            >
+                                                <Icon size={16} className={`${shape.id == "parallelogram" && "-skew-x-24"}`} />
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </>,
+                            document.body
+                        )}
+                    </div>
+
+                    {/* Graph Tools — Simplified Section */}
+                    <div className="relative group border rounded-[5px] border-primary/40" ref={graphButtonRef}>
+                        <div className={cn(
+                            "flex items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
+                            isGraphTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                        )}>
+                            <button
+                                type="button"
+                                onClick={() => handleGraphItemClick(selectedGraph)}
+                                onContextMenu={(e) => { e.preventDefault(); toggleGraphDropdown() }}
+                                className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10"
+                                title={`Use ${selectedGraph}`}
+                            >
+                                <ActiveGraphIcon size={18} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleGraphDropdown()
+                                }}
+                                className={cn(
+                                    "py-0.5 flex items-center justify-center transition-colors hover:bg-white/20 border-t border-white/10",
+                                    isGraphTool ? "text-primary-foreground" : "text-muted-foreground"
+                                )}
+                                title="Choose graph tool"
+                            >
+                                <svg className="w-2 h-2 opacity-80" viewBox="0 0 10 10" fill="currentColor">
+                                    <path d="M2 4 L8 4 L5 8 Z" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {showGraphDropdown && graphDropdownPos && ReactDOM.createPortal(
+                            <>
+                                <div className="fixed inset-0 z-9998" onClick={() => setShowGraphDropdown(false)} />
+                                <div
+                                    className="fixed z-9999 flex flex-col gap-1 p-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-left-2 duration-200"
+                                    style={{ top: graphDropdownPos.bottom, left: graphDropdownPos.left }}
+                                >
+                                    {GRAPH_TOOLS.map((g) => {
+                                        const Icon = g.icon
+                                        return (
+                                            <button
+                                                key={g.id}
+                                                type="button"
+                                                onClick={() => handleGraphItemClick(g.id)}
+                                                className={cn(
+                                                    "p-2 rounded-[5px] flex items-center gap-2 transition-all duration-200",
+                                                    tool === g.id
+                                                        ? "bg-primary text-primary-foreground shadow-md"
+                                                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                                )}
+                                                title={g.label}
+                                            >
+                                                <Icon size={16} />
+                                                <span className="text-[10px] font-medium pr-1">{g.label}</span>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </>,
+                            document.body
+                        )}
+                    </div>
+                    {/* Math Symbols — Simplified Section */}
+                    <div className="relative group border rounded-[5px] border-primary/40" ref={mathButtonRef}>
+                        <div className={cn(
+                            "flex items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
+                            isMathSymbolTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                        )}>
+                            <button
+                                type="button"
+                                onClick={() => setTool(`symbol:${selectedSymbol}`)}
+                                onContextMenu={(e) => { e.preventDefault(); toggleMathDropdown() }}
+                                className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10 min-h-[30px]"
+                                title={`Use ${selectedSymbol}`}
+                            >
+                                <span className="text-lg font-bold leading-none">{selectedSymbol}</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleMathDropdown()
+                                }}
+                                className={cn(
+                                    "py-0.5 flex items-center justify-center transition-colors hover:bg-white/20 border-t border-white/10",
+                                    isMathSymbolTool ? "text-primary-foreground" : "text-muted-foreground"
+                                )}
+                                title="Choose symbol"
+                            >
+                                <svg className="w-2 h-2 opacity-80" viewBox="0 0 10 10" fill="currentColor">
+                                    <path d="M2 4 L8 4 L5 8 Z" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {showMathDropdown && mathDropdownPos && ReactDOM.createPortal(
+                            <>
+                                <div className="fixed inset-0 z-9998" onClick={() => setShowMathDropdown(false)} />
+                                <div
+                                    className="fixed z-9999 grid grid-cols-4 gap-1 p-2 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-left-2 duration-200 w-[160px]"
+                                    style={{ top: mathDropdownPos.top, left: mathDropdownPos.left }}
+                                >
+                                    {MATH_SYMBOLS.map((s) => (
+                                        <button
+                                            key={s.id}
+                                            type="button"
+                                            onClick={() => handleSymbolClick(s.value)}
+                                            className={cn(
+                                                "h-8 w-8 flex items-center justify-center text-sm font-medium rounded-[4px] transition-colors",
+                                                selectedSymbol === s.value
+                                                    ? "bg-primary text-primary-foreground"
+                                                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                            )}
+                                            title={s.label}
+                                        >
+                                            {s.value}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>,
+                            document.body
+                        )}
+                    </div>
+
+                    {/* Commented out Emoji code preserved as requested */}
+                    {/* <div className="relative group border rounded-[5px] border-primary/40" ref={emojiButtonRef}>
+                        <div className={cn(
+                            "flex items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
+                            isEmojiTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                        )}>
+                            <button
+                                type="button"
+                                onClick={() => setTool(`emoji:${selectedEmoji}`)}
+                                onContextMenu={(e) => { e.preventDefault(); toggleEmojiDropdown() }}
+                                className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10 min-h-[30px]"
+                                title={`Use ${selectedEmoji}`}
+                            >
+                                <span className="text-xl leading-none">{selectedEmoji}</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleEmojiDropdown()
+                                }}
+                                className={cn(
+                                    "py-0.5 flex items-center justify-center transition-colors hover:bg-white/20 border-t border-white/10",
+                                    isEmojiTool ? "text-primary-foreground" : "text-muted-foreground"
+                                )}
+                                title="Choose emoji"
+                            >
+                                <svg className="w-2 h-2 opacity-80" viewBox="0 0 10 10" fill="currentColor">
+                                    <path d="M2 4 L8 4 L5 8 Z" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {showEmojiDropdown && emojiDropdownPos && ReactDOM.createPortal(
+                            <>
+                                <div className="fixed inset-0 z-9998" onClick={() => setShowEmojiDropdown(false)} />
+                                <div
+                                    className="fixed z-9999 grid grid-cols-4 gap-1 p-2 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-left-2 duration-200 w-[160px]"
+                                    style={{ top: emojiDropdownPos.top, left: emojiDropdownPos.left }}
+                                >
+                                    {EMOJIS.map((e) => (
+                                        <button
+                                            key={e.id}
+                                            type="button"
+                                            onClick={() => handleEmojiClick(e.value)}
+                                            className={cn(
+                                                "h-8 w-8 flex items-center justify-center text-lg rounded-[4px] transition-colors",
+                                                selectedEmoji === e.value
+                                                    ? "bg-primary text-primary-foreground"
+                                                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                            )}
+                                            title={e.label}
+                                        >
+                                            {e.value}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>,
+                            document.body
+                        )}
+                    </div> */}
 
                     {/* Undo/Redo */}
                     {role == 'teacher' && (
@@ -213,7 +602,7 @@ export default function BoardTopBar({
                             <button
                                 type="button"
                                 onClick={() => document.dispatchEvent(new CustomEvent("undo-trigger"))}
-                                className="p-1 sm:p-1.5 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                className="p-1 sm:p-1.5 border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
                                 title="Undo (Ctrl+Z)"
                             >
                                 <RotateCcw size={13} className="sm:w-[15px] sm:h-[15px]" />
@@ -221,7 +610,7 @@ export default function BoardTopBar({
                             <button
                                 type="button"
                                 onClick={() => document.dispatchEvent(new CustomEvent("redo-trigger"))}
-                                className="p-1 sm:p-1.5 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                className="p-1 sm:p-1.5 border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
                                 title="Redo (Ctrl+Shift+Z)"
                             >
                                 <RotateCw size={13} className="sm:w-[15px] sm:h-[15px]" />
@@ -233,7 +622,7 @@ export default function BoardTopBar({
                         <div className="flex items-center gap-1 shrink-0 sm:gap-2 px-1 border-r border-border/50 h-7">
                             <span className="hidden lg:block text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-muted-foreground/50">Desk</span>
                             <span className="block lg:hidden text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-muted-foreground/50">D</span>
-                            <div className="flex gap-1 sm:gap-1.5 items-center">
+                            <div className="flex gap-1 sm:gap-1.5 items-center border rounded-[5px] border-primary/40">
                                 <div ref={bgButtonRef}>
                                     <button
                                         type="button"

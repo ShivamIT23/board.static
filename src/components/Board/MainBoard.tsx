@@ -93,7 +93,7 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
         }
         socket.on("room_users", handleRoomUsersDrawing)
 
-    
+
 
         // Global view lock state
         const handleViewLockedState = ({ payload }: { payload: { isLocked: boolean } }) => {
@@ -349,6 +349,8 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                 <div className="flex flex-col flex-1 overflow-hidden">
                     <BoardTopBar
                         zoom={zoom}
+                        tool={tool}
+                        setTool={setTool}
                         onZoomChange={setZoom}
                         isOpen={isChatOpen}
                         duration={duration}
@@ -357,7 +359,6 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                         setBoardColor={updateBoardBackground}
                         role={role}
                         sessionId={sessionId}
-                        onPdfUpload={role === "teacher" ? handlePdfUpload : undefined}
                         isViewLocked={isViewLocked}
                         onToggleViewLocked={toggleViewLocked}
                     />
@@ -377,6 +378,7 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                             setShapeBorderColor={setShapeBorderColor}
                             textColor={textColor}
                             setTextColor={setTextColor}
+                            onPdfUpload={role === "teacher" ? handlePdfUpload : undefined}
                             onClearCanvas={role === "teacher" ? () => {
                                 document.dispatchEvent(new CustomEvent("clear-canvas-emit"))
                             } : undefined}
@@ -460,20 +462,20 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                             />
                         </div>
                         <ChatRoom
-                    userCount={userCount}
-                    roomUsers={roomUsers}
-                    setRoomUsers={setRoomUsers}
-                    setUserCount={setUserCount}
-                    role={role}
-                    userName={userName}
-                    sessionId={sessionId}
-                    isOpen={isChatOpen}
-                    setIsOpen={setIsChatOpen}
-                />
+                            userCount={userCount}
+                            roomUsers={roomUsers}
+                            setRoomUsers={setRoomUsers}
+                            setUserCount={setUserCount}
+                            role={role}
+                            userName={userName}
+                            sessionId={sessionId}
+                            isOpen={isChatOpen}
+                            setIsOpen={setIsChatOpen}
+                        />
                     </div>
-                    
+
                 </div>
-                
+
             </div>
         </div>
     )
