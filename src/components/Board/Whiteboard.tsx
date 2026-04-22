@@ -178,6 +178,10 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
     const pagesDataRef = useRef<Record<number, Record<string, unknown>[]>>({})
     const liveStrokesRef = useRef<Record<string, LiveStroke>>({})
+    
+    // Track active text editing for UI overlay
+    const [editingTextPos, setEditingTextPos] = useState<{ x: number, y: number } | null>(null)
+    const activeTextObjRef = useRef<IText | null>(null)
     const liveFabricObjsRef = useRef<Record<string, Path>>({})
     const boardFileObjsRef = useRef<Record<string, FabricImage>>({})
     const textObjsRef = useRef<Record<string, IText>>({})
@@ -244,6 +248,18 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     useEffect(() => {
         toolRef.current = tool
     }, [tool])
+
+    useEffect(() => {
+        brushSizeRef.current = brushSize
+    }, [brushSize])
+
+    useEffect(() => {
+        colorRef.current = color
+    }, [color])
+
+    useEffect(() => {
+        textColorRef.current = textColor || "#FFFFFF"
+    }, [textColor])
 
     useEffect(() => {
         onToolChangeRef.current = onToolChange
@@ -564,6 +580,15 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 const pt = canvas.getScenePoint(opt.e)
                 const id = generateId()
                 // fontSize proportional to canvas width, minimum 12px
+                // const baseSize = Math.max(12, Math.round(canvas.width * 0.025))
+                
+                // /* ── START OF BRUSH-DEPENDENT TEXT SIZE (COMMENTABLE) ──── */
+                // // Adjust text size based on brush size (default is 4, so we scale relative to that)
+                // const proportionalFontSize = baseSize * (brushSizeRef.current / 4)
+                // /* ── END OF BRUSH-DEPENDENT TEXT SIZE ──────────────────── */
+                // // const proportionalFontSize = baseSize
+
+                // console.log(`[TEXT] Creating text at (${pt.x}, ${pt.y}). canvas.width=${canvas.width}, fontSize=${proportionalFontSize}, brushSize=${brushSizeRef.current}`)
                 const proportionalFontSize = Math.max(12, Math.round(canvas.width * 0.025))
                 console.log(`[TEXT] Creating text at (${pt.x}, ${pt.y}). canvas.width=${canvas.width}, fontSize=${proportionalFontSize}`)
                 const textObj = new IText("", {
@@ -577,14 +602,34 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     cursorColor: textColorRef.current,
                     cursorWidth: 2,
                     editingBorderColor: "rgba(100, 100, 255, 0.4)",
+                    hasControls: false, // Hide Fabric controls, we'll use HTML
                 }) as unknown as BoardIText
                 textObj.id = id
                 textObjsRef.current[id] = textObj
                 canvas.add(textObj)
                 canvas.setActiveObject(textObj)
                 textObj.enterEditing()
+
+                activeTextObjRef.current = textObj
+                
+                const updateDoneButtonPos = () => {
+                    if (!textObj || !fabricRef.current) return
+                    const bound = textObj.getBoundingRect()
+                    // Transform canvas coords to viewport coords
+                    const canvasEl = fabricRef.current.getElement()
+                    const rect = canvasEl.getBoundingClientRect()
+                    setEditingTextPos({
+                        x: rect.left + bound.left + bound.width,
+                        y: rect.top + bound.top + bound.height
+                    })
+                }
+
+                updateDoneButtonPos()
+                textObj.on("changed", updateDoneButtonPos)
+                textObj.on("moving", updateDoneButtonPos)
+                textObj.on("scaling", updateDoneButtonPos)
+
                 // Fabric.js uses a hidden textarea for keyboard input — must be explicitly focused
-                // especially when called programmatically inside mouse:down
                 const textarea = (textObj as unknown as { hiddenTextarea?: HTMLTextAreaElement }).hiddenTextarea
                 if (textarea) textarea.focus()
                 activeTextRef.current = textObj
@@ -592,6 +637,12 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
                 // Emit to peers when editing finishes
                 textObj.on("editing:exited", () => {
+                    setEditingTextPos(null)
+                    activeTextObjRef.current = null
+                    textObj.off("changed", updateDoneButtonPos)
+                    textObj.off("moving", updateDoneButtonPos)
+                    textObj.off("scaling", updateDoneButtonPos)
+
                     activeTextRef.current = null
                     if (!textObj.text?.trim()) {
                         canvas.remove(textObj)
@@ -1126,9 +1177,21 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 fontFamily: "Inter, sans-serif",
                 selectable: role === "teacher",
                 editable: role === "teacher",
+                hasControls: true,
+                hasBorders: true,
             }) as unknown as BoardIText
             textObj.id = payload.id
             textObjsRef.current[payload.id] = textObj
+            
+            // For teachers, ensure the 'done' button is visible
+            if (role === "teacher") {
+                textObj.setControlsVisibility({ 
+                    bl: false, br: false, tl: false, tr: false, 
+                    mb: false, ml: false, mr: false, mt: false, mtr: false,
+                    done: true 
+                });
+            }
+
             canvas.add(textObj)
             canvas.requestRenderAll()
         }
@@ -1545,6 +1608,33 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             >
                 <canvas ref={canvasRef} />
             </div>
+
+            {/* Done Button Overlay for Text Tool */}
+            {editingTextPos && (
+                <div 
+                    className="fixed z-9999 pointer-events-auto animate-in fade-in zoom-in duration-200"
+                    style={{ 
+                        left: editingTextPos.x + 10, 
+                        top: editingTextPos.y + 10 
+                    }}
+                >
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            if (activeTextObjRef.current) {
+                                activeTextObjRef.current.exitEditing()
+                                if (onToolChangeRef.current) onToolChangeRef.current("select")
+                            }
+                        }}
+                        className="flex items-center justify-center w-10 h-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-lg transition-all active:scale-90 group border-2 border-white/20"
+                        title="Finish typing"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                    </button>
+                </div>
+            )}
         </div>
     )
 }
