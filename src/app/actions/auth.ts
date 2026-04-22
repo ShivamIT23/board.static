@@ -51,3 +51,26 @@ export async function getHistoricalChats(sessionId: string, before?: number) {
         return { status: 'error', data: [] };
     }
 }
+
+// ─── END SESSION LOGIC (MODULAR) ────────────────────────────────
+/**
+ * Marks the class as ended in the DB and notifies the socket server.
+ * This block can be commented out to disable the "End Session" feature.
+ */
+export async function endSessionAction(sessionId: string, userId: string) {
+    try {
+        // 1. Notify Socket Server (Socket server will then notify main backend)
+        const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3005";
+        await fetch(`${socketUrl}/api/room/${sessionId}/end`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId })
+        });
+
+        return { status: 'success' };
+    } catch (error) {
+        console.error("Failed to end session via server action:", error);
+        return { status: 'error' };
+    }
+}
+// ────────────────────────────────────────────────────────────────

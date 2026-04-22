@@ -7,6 +7,7 @@ import ChatRoom from "../Chat/ChatRoom"
 import BoardTopBar from "./BoardTopBar"
 import { SocketProvider, useSocket } from "../providers/socket-provider"
 import { RoomUser } from "../Chat/ChatRoom"
+import { endSessionAction } from "@/app/actions/auth"
 import { toast } from "sonner"
 import Swal from "sweetalert2"
 
@@ -17,12 +18,18 @@ interface MainBoardProps {
     userName: string
     userId?: string
     visitorId?: number
+    isClassEnded?: boolean
+    endedAt?: number
 }
 
 
 
-function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps) {
+function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, setIsClassEnded, endedAt, setEndedAt }: MainBoardProps & {
+    setIsClassEnded: React.Dispatch<React.SetStateAction<boolean | undefined>>,
+    setEndedAt: React.Dispatch<React.SetStateAction<number | undefined>>
+}) {
     // Board State
+    const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
     const [tool, setTool] = useState("pencil")
     const [color, setColor] = useState("#FFFFFF")
     const [pageBgColors, setPageBgColors] = useState<Record<number, string>>({ 1: "#18181b" })
@@ -42,8 +49,6 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
 
     // Shape colors
     const [shapeFillColor, setShapeFillColor] = useState("transparent")
-    const [shapeBorderColor, setShapeBorderColor] = useState("#FFFFFF")
-    const [textColor, setTextColor] = useState("#FFFFFF")
 
     const { socket } = useSocket()
 
@@ -102,6 +107,20 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
         }
         socket.on("view_locked_state", handleViewLockedState)
 
+        /* ─── START OF SESSION ENDED LISTENER (COMMENTABLE) ────
+        const handleSessionEnded = () => {
+            const now = Date.now();
+            setEndedAt(now);
+            setIsClassEnded(true);
+            setDrawingEnabled(true);
+            setIsViewLocked(false);
+            toast.warning("This session has been ended by the teacher. You can still view and use the board for 10 minutes.", { duration: 10000 });
+            // Disable socket to prevent further updates
+            socket.disconnect();
+        }
+        socket.on("session_ended", handleSessionEnded);
+        ─── END OF SESSION ENDED LISTENER ────────────────────── */
+
         return () => {
             socket.off("board_color_sync", handleBoardColorSync)
             socket.off("page_update", handlePageUpdate)
@@ -109,8 +128,40 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
             socket.off("drawing_permission", handleDrawingPermission)
             socket.off("room_users", handleRoomUsersDrawing)
             socket.off("view_locked_state", handleViewLockedState)
+            // socket.off("session_ended", handleSessionEnded)
         }
-    }, [socket, role])
+    }, [socket, role, setIsClassEnded, setEndedAt])
+
+    /* ─── PERSISTENT GRACE PERIOD REDIRECTION (COMMENTABLE) ────────
+    useEffect(() => {
+        if (isClassEnded && endedAt) {
+            const updateRemaining = () => {
+                const now = Date.now();
+                const elapsed = now - endedAt;
+                const gracePeriod = 10 * 60 * 1000;
+                const remaining = Math.max(0, Math.floor((gracePeriod - elapsed) / 1000));
+                setRemainingSeconds(remaining);
+
+                if (remaining <= 0) {
+                    window.location.href = "https://tutorarc.cloud";
+                }
+            };
+
+            updateRemaining();
+            const interval = setInterval(updateRemaining, 1000);
+            return () => clearInterval(interval);
+        }
+    }, [isClassEnded, endedAt]);
+    ────────────────────────────────────────────────────────────── */
+
+    /* ─── POST-SESSION ACCESS (COMMENTABLE) ──────────────────────
+    useEffect(() => {
+        if (isClassEnded) {
+            setDrawingEnabled(true);
+            setIsViewLocked(false);
+        }
+    }, [isClassEnded]);
+    ────────────────────────────────────────────────────────────── */
 
     const pageLabels = useMemo(() => {
         let bCount = 0;
@@ -334,6 +385,27 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
 
 
 
+    const handleEndSession = async (sid: string) => {
+        try {
+            /* ─── START OF END SESSION ACTION CALL (COMMENTABLE) ────
+            const result = await endSessionAction(sid, role === 'teacher' ? `teacher-${sid}` : 'unknown');
+
+            if (result.status === 'success') {
+                const now = Date.now();
+                setEndedAt(now);
+                setIsClassEnded(true);
+                setDrawingEnabled(true);
+                setIsViewLocked(false);
+            } else {
+                toast.error("Failed to end session properly via server action.");
+            }
+            ─── END OF END SESSION ACTION CALL ────────────────────── */
+        } catch (err) {
+            console.error("Failed to end session:", err);
+            toast.error("An error occurred while ending the session.");
+        }
+    }
+
     const toggleViewLocked = (enabled: boolean) => {
         if (role === "teacher" && socket) {
             socket.emit("board_toggle_view_lock", {
@@ -361,7 +433,25 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                         sessionId={sessionId}
                         isViewLocked={isViewLocked}
                         onToggleViewLocked={toggleViewLocked}
+                        drawingEnabled={drawingEnabled}
+                        onEndSession={handleEndSession}
+                        isClassEnded={isClassEnded}
                     />
+
+                    {/* ─── SESSION ENDED COUNTDOWN UI (COMMENTABLE) ────────
+                    {isClassEnded && remainingSeconds !== null && (
+                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-100 flex items-center gap-3 px-6 py-3 bg-zinc-900/90 backdrop-blur-md border border-orange-500/50 rounded-[5px] shadow-2xl shadow-orange-500/20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                            <span className="text-sm font-medium text-zinc-100 whitespace-nowrap">
+                                Session Ended. Closing in
+                            </span>
+                            <span className="text-lg font-bold text-orange-500 font-mono min-w-[60px]">
+                                {Math.floor(remainingSeconds / 60)}:{(remainingSeconds % 60).toString().padStart(2, '0')}
+                            </span>
+                        </div>
+                    )}
+                    ─────────────────────────────────────────────────── */}
+
                     <div className="flex-1 overflow-hidden relative flex">
 
                         <Toolbar
@@ -374,14 +464,11 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                             setBrushSize={setBrushSize}
                             shapeFillColor={shapeFillColor}
                             setShapeFillColor={setShapeFillColor}
-                            shapeBorderColor={shapeBorderColor}
-                            setShapeBorderColor={setShapeBorderColor}
-                            textColor={textColor}
-                            setTextColor={setTextColor}
                             onPdfUpload={role === "teacher" ? handlePdfUpload : undefined}
                             onClearCanvas={role === "teacher" ? () => {
                                 document.dispatchEvent(new CustomEvent("clear-canvas-emit"))
                             } : undefined}
+                            isClassEnded={isClassEnded}
                         />
                         <div className="flex-1 relative flex flex-col overflow-hidden">
                             {/* Chrome Tabs Style Pagination */}
@@ -457,8 +544,8 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
                                 currentPage={currentPage}
                                 onToolChange={setTool}
                                 shapeFillColor={shapeFillColor}
-                                shapeBorderColor={shapeBorderColor}
-                                textColor={textColor}
+                                shapeBorderColor={color}
+                                textColor={color}
                             />
                         </div>
                         <ChatRoom
@@ -481,7 +568,10 @@ function MainBoardInner({ duration, sessionId, role, userName }: MainBoardProps)
     )
 }
 
-export default function MainBoard({ duration, sessionId, role, userName, userId, visitorId }: MainBoardProps) {
+export default function MainBoard({ duration, sessionId, role, userName, userId, visitorId, isClassEnded: initialIsClassEnded, endedAt: initialEndedAt }: MainBoardProps) {
+    const [isClassEnded, setIsClassEnded] = useState(initialIsClassEnded)
+    const [endedAt, setEndedAt] = useState(initialEndedAt)
+
     // Socket server URL
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3005"
 
@@ -493,7 +583,7 @@ export default function MainBoard({ duration, sessionId, role, userName, userId,
     }), [userId, userName, role, visitorId]);
 
     return (
-        <SocketProvider url={socketUrl} roomId={sessionId} user={user}>
+        <SocketProvider url={socketUrl} roomId={sessionId} user={user} enabled={true}>
             <MainBoardInner
                 duration={duration}
                 sessionId={sessionId}
@@ -501,6 +591,10 @@ export default function MainBoard({ duration, sessionId, role, userName, userId,
                 userName={userName}
                 userId={userId}
                 visitorId={visitorId}
+                isClassEnded={isClassEnded}
+                setIsClassEnded={setIsClassEnded}
+                endedAt={endedAt}
+                setEndedAt={setEndedAt}
             />
         </SocketProvider>
     )

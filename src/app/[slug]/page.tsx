@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import MainBoard from "@/components/Board/MainBoard";
 import StudentGate from "@/components/Board/StudentGate";
 import { cookies } from "next/headers";
+// import { redirect } from "next/navigation";
 
 export default async function LiveSlugPage({
     params,
@@ -20,6 +21,15 @@ export default async function LiveSlugPage({
     });
 
     if (teacherSession) {
+        /* ─── START OF END SESSION REDIRECT LOGIC (COMMENTABLE) ────
+        if (teacherSession.isClassEnded === 1) {
+            const endedAt = teacherSession.endedAt ? new Date(teacherSession.endedAt).getTime() : 0;
+            const now = new Date().getTime(); 
+            if (now - endedAt > 10 * 60 * 1000) {
+                return redirect("https://tutorarc.cloud");
+            }
+        }
+        ─── END OF END SESSION REDIRECT LOGIC ────────────────────── */
         return (
             <div className="flex flex-col h-screen overflow-hidden">
                 <MainBoard 
@@ -28,6 +38,8 @@ export default async function LiveSlugPage({
                     role="teacher" 
                     userName="Teacher"
                     userId={`teacher-${teacherSession.teacherId}`}
+                    // isClassEnded={teacherSession.isClassEnded === 1}
+                    // endedAt={teacherSession.endedAt ? new Date(teacherSession.endedAt).getTime() : undefined}
                 />
             </div>
         );
@@ -39,6 +51,15 @@ export default async function LiveSlugPage({
     });
 
     if (studentSession) {
+        /* ─── START OF END SESSION REDIRECT LOGIC (COMMENTABLE) ────
+        if (studentSession.isClassEnded === 1) {
+            const endedAt = studentSession.endedAt ? new Date(studentSession.endedAt).getTime() : 0;
+            const now = new Date().getTime(); 
+            if (now - endedAt > 10 * 60 * 1000) {
+                return redirect("https://tutorarc.cloud");
+            }
+        }
+        ─── END OF END SESSION REDIRECT LOGIC ────────────────────── */
         const cookieStore = await cookies();
         const authCookie = cookieStore.get(`board_auth_${studentSession.sessionId}`);
         let authData = authCookie ? JSON.parse(authCookie.value) : null;
@@ -70,6 +91,8 @@ export default async function LiveSlugPage({
                     userName={authData.name}
                     userId={studentSession.isRestricted ? authData.email : authData.name}
                     visitorId={authData.visitorId}
+                    // isClassEnded={studentSession.isClassEnded === 1}
+                    // endedAt={studentSession.endedAt ? new Date(studentSession.endedAt).getTime() : undefined}
                 />
             </div>
         );

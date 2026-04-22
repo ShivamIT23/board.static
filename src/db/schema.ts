@@ -211,7 +211,8 @@ export const classes = mysqlTable('tb_classes', {
   studentToken: varchar('student_token', { length: 255 }),
 
   teacherPresent: tinyint('teacher_present').default(0),
-  
+  // isClassEnded: tinyint('is_class_ended').default(0),
+  // endedAt: timestamp('ended_at'),
 });
 
 export const notifications = mysqlTable('tb_notifications', {

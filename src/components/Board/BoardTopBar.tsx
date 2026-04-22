@@ -22,6 +22,8 @@ import { useSocket } from "../providers/socket-provider"
 import { toast } from "sonner"
 import { SessionTimer } from "./SessionTimer"
 import Swal from "sweetalert2"
+import Image from "next/image"
+import logo from "../../../public/logo.png"
 
 
 
@@ -39,6 +41,9 @@ interface BoardTopBarProps {
     isViewLocked?: boolean
     userName: string;
     onToggleViewLocked?: (enabled: boolean) => void
+    drawingEnabled?: boolean
+    onEndSession?: (sid: string) => void
+    isClassEnded?: boolean
 }
 
 const SHAPE_TOOLS = [
@@ -80,6 +85,8 @@ const MATH_SYMBOLS = [
     { id: "approx", label: "≈", value: "≈" },
     { id: "ge", label: "≥", value: "≥" },
     { id: "le", label: "≤", value: "≤" },
+    { id: "matrix", label: "[ ]", value: "[ ]" },
+    { id: "determinant", label: "| |", value: "| |" },
 ] as const
 
 const EMOJIS = [
@@ -113,7 +120,10 @@ export default function BoardTopBar({
     sessionId,
     isViewLocked = true,
     userName,
-    onToggleViewLocked
+    onToggleViewLocked,
+    drawingEnabled,
+    onEndSession,
+    isClassEnded
 }: BoardTopBarProps) {
     const scrollBarRef = useRef<HTMLDivElement>(null)
     const bgButtonRef = useRef<HTMLDivElement>(null)
@@ -318,8 +328,8 @@ export default function BoardTopBar({
     return (
         <div className="relative flex w-full items-center min-h-[48px] bg-sidebar backdrop-blur-xl border-b border-border/50 shadow-md animate-in fade-in slide-in-from-top-4 duration-500 overflow-hidden">
             {/* Fixed Left Section */}
-            <div className="flex items-center px-3 sm:px-4 py-2 border-r border-border/50 bg-sidebar shrink-0 z-40">
-                <span className="text-primary font-bold tracking-tighter text-lg">Board</span>
+            <div className="flex items-center px-1 sm:px-2 py-0.5 border-r border-border/50 bg-sidebar shrink-0 z-40">
+                <Image alt="Board" src={logo} height={20} width={50} />
             </div>
 
             {/* Scrollable Area */}
@@ -518,7 +528,7 @@ export default function BoardTopBar({
                                             type="button"
                                             onClick={() => handleSymbolClick(s.value)}
                                             className={cn(
-                                                "h-8 w-8 flex items-center justify-center text-sm font-medium rounded-[4px] transition-colors",
+                                                "h-8 w-8 flex items-center justify-center text-sm font-thin rounded-[4px] transition-colors",
                                                 selectedSymbol === s.value
                                                     ? "bg-primary text-primary-foreground"
                                                     : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -535,8 +545,8 @@ export default function BoardTopBar({
                     </div>
 
                     {/* Commented out Emoji code preserved as requested */}
-                    {/* <div className="relative group border rounded-[5px] border-primary/40" ref={emojiButtonRef}>
-                        <div className={cn(
+                    {/* <div className="relative group border rounded-[5px] border-primary/40" ref={emojiButtonRef}> */}
+                        {/* <div className={cn(
                             "flex items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
                             isEmojiTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
                         )}>
@@ -565,9 +575,9 @@ export default function BoardTopBar({
                                     <path d="M2 4 L8 4 L5 8 Z" />
                                 </svg>
                             </button>
-                        </div>
+                        </div> */}
 
-                        {showEmojiDropdown && emojiDropdownPos && ReactDOM.createPortal(
+                        {/* {showEmojiDropdown && emojiDropdownPos && ReactDOM.createPortal(
                             <>
                                 <div className="fixed inset-0 z-9998" onClick={() => setShowEmojiDropdown(false)} />
                                 <div
@@ -593,33 +603,33 @@ export default function BoardTopBar({
                                 </div>
                             </>,
                             document.body
-                        )}
-                    </div> */}
+                        )} */}
+                    {/* </div> */}
 
                     {/* Undo/Redo */}
-                    {role == 'teacher' && (
-                        <div className="flex items-center gap-0.5 sm:gap-1 px-1 sm:px-2 border-r border-border/50 h-7 shrink-0">
+                    {(role === 'teacher') && (
+                        <div className="flex items-center gap-0.5 h-full py-0.5 sm:gap-1 px-1 sm:px-2 border-r border-border/50 shrink-0">
                             <button
                                 type="button"
                                 onClick={() => document.dispatchEvent(new CustomEvent("undo-trigger"))}
-                                className="p-1 sm:p-1.5 border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                className="p-1 sm:p-1.5 aspect-square h-full border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
                                 title="Undo (Ctrl+Z)"
                             >
-                                <RotateCcw size={13} className="sm:w-[15px] sm:h-[15px]" />
+                                <RotateCcw size={17} className="mx-auto" />
                             </button>
                             <button
                                 type="button"
                                 onClick={() => document.dispatchEvent(new CustomEvent("redo-trigger"))}
-                                className="p-1 sm:p-1.5 border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                className="p-1 sm:p-1.5 aspect-square h-full border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
                                 title="Redo (Ctrl+Shift+Z)"
                             >
-                                <RotateCw size={13} className="sm:w-[15px] sm:h-[15px]" />
+                                <RotateCw size={17} className="mx-auto" />
                             </button>
                         </div>
                     )}
 
-                    {role === 'teacher' && (
-                        <div className="flex items-center gap-1 shrink-0 sm:gap-2 px-1 border-r border-border/50 h-7">
+                    {(role === 'teacher') && (
+                        <div className="flex items-center gap-1 shrink-0 sm:gap-2 px-1 border-r border-border/50 h-full py-0.5">
                             <span className="hidden lg:block text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-muted-foreground/50">Desk</span>
                             <span className="block lg:hidden text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-muted-foreground/50">D</span>
                             <div className="flex gap-1 sm:gap-1.5 items-center border rounded-[5px] border-primary/40">
@@ -637,7 +647,7 @@ export default function BoardTopBar({
                                         }}
                                         title="Custom Board Color"
                                     >
-                                        <Palette size={14} />
+                                        <Palette size={16} />
                                         <span className="text-[10px] font-bold">Desk Color</span>
                                     </button>
                                 </div>
@@ -661,7 +671,7 @@ export default function BoardTopBar({
                     )}
 
                     {/* Board Controls Toggles */}
-                    {role === "teacher" && (
+                    {(role === "teacher") && (
                         <div className="flex items-center gap-1.5 shrink-0 px-2 border-r border-border/50 h-8">
 
                             <button
@@ -701,16 +711,33 @@ export default function BoardTopBar({
             </div>
 
             {/* Fixed Action Cluster (Very Right, Always Visible) */}
-            <div className="flex items-center  px-1 py-0.5 h-full border-r border-border/50 bg-sidebar shrink-0 z-40 ">
-                <SessionTimer initialDuration={duration} role={role} sessionId={sessionId} />
-            </div>
-            <div className="flex items-center gap-2 px-3 py-2 border-l border-border/50 bg-sidebar shrink-0 z-40 shadow-[-8px_0_12px_rgba(0,0,0,0.05)]">
-                {/* <div className="h-[41px] flex items-center justify-between px-3 sm:px-6 border-b border-border shrink-0"> */}
-                {/* </div> */}
-                <div className="h-8 flex items-center">
-                    <ThemeToggle cn="w-8 h-8 rounded-[5px]" iconSize={14} />
-                </div>
-
+            <div className="flex items-center px-1 py-0.5 h-full border-r border-border/50 bg-sidebar shrink-0 z-40 gap-2">
+                {role === "student" && drawingEnabled === false && (
+                    <div className="text-[10px] font-bold whitespace-nowrap px-2 py-1 bg-red-500/10 text-red-500 rounded-[5px] border border-red-500/20 shadow-sm">
+                        No Canvas Access
+                    </div>
+                )}
+                {/* {role === "teacher" && (
+                    <button
+                        type="button"
+                        onClick={async () => {
+                            const { isConfirmed } = await Swal.fire({
+                                title: "End Session?",
+                                text: "Are you sure you want to end this session for everyone?",
+                                icon: "warning",
+                                showCancelButton: true,
+                                confirmButtonColor: "#f97316",
+                                cancelButtonColor: "#6b7280",
+                                confirmButtonText: "Yes, end session"
+                            })
+                            if (isConfirmed && onEndSession) onEndSession(sessionId)
+                        }}
+                        className="flex items-center justify-center py-1 px-2 h-8 w-fit text-[12px] font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-[5px] transition-all duration-300 shadow-lg shadow-orange-500/20 active:scale-95 group"
+                        title="End Session for everyone"
+                    >
+                        End Class
+                    </button>
+                )} */}
                 <button
                     type="button"
                     onClick={async () => {
@@ -725,12 +752,22 @@ export default function BoardTopBar({
                         })
                         if (isConfirmed) leaveSession(sessionId)
                     }}
-                    className="flex items-center justify-center p-2 h-8 w-8 bg-red-500 dark:bg-red-500/80 hover:bg-red-600 dark:hover:bg-red-500 text-white rounded-[5px] transition-all duration-300 shadow-lg shadow-red-500/20 active:scale-95 group"
+                    className="flex items-center justify-center py-1 px-2 h-8 w-fit text-[12px] font-medium bg-red-500 dark:bg-red-500/80 hover:bg-red-600 dark:hover:bg-red-500 text-white rounded-[5px] transition-all duration-300 shadow-lg shadow-red-500/20 active:scale-95 group"
                     title="Leave Session"
                 >
-                    <LogOut size={14} className="group-hover:-translate-x-0.5 transition-transform" />
+                    Leave Class
                 </button>
-                <span className="text-[10px] sm:text-xs font-black tracking-widest text-muted-background">{userName} <span className=" text-muted-foreground">{role == "teacher" ? "(T)" : "(S)"}</span></span>
+            </div>
+            <div className="flex items-center  px-1 py-0.5 h-full border-r border-border/50 bg-sidebar shrink-0 z-40 ">
+                <SessionTimer initialDuration={duration} role={role} sessionId={sessionId} />
+            </div>
+            <div className="flex items-center gap-2 px-3 py-2 border-l border-border/50 bg-sidebar shrink-0 z-40 shadow-[-8px_0_12px_rgba(0,0,0,0.05)]">
+                {/* <div className="h-[41px] flex items-center justify-between px-3 sm:px-6 border-b border-border shrink-0"> */}
+                {/* </div> */}
+                <span className="text-[10px] sm:text-xs font-black flex flex-col tracking-widest text-muted-background">{userName} <span className=" text-muted-foreground text-[0.7em]">{role == "teacher" ? "(Teacher)" : "(Student)"}</span></span>
+                <div className="h-8 flex items-center">
+                    <ThemeToggle cn="w-8 h-8 rounded-[5px]" iconSize={14} />
+                </div>
             </div>
         </div>
     )

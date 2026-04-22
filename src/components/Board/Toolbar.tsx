@@ -4,12 +4,10 @@ import React, { useCallback, useEffect, useRef, useState } from "react"
 import ReactDOM from "react-dom"
 import {
     Highlighter, Pen, Eraser, Trash2, Palette,
-    Square, Circle, Minus, ArrowUpRight, Type, Triangle, Diamond, Star, Ellipse, Pentagon, TriangleRight, RectangleHorizontal,
-    Activity, Calculator, Grid3X3, LayoutGrid, FileUp, ImagePlus
+    Square, Circle, Minus, ArrowUpRight, Type, Triangle, Diamond, Star, Ellipse, Pentagon, TriangleRight, RectangleHorizontal, FileUp, ImagePlus
 } from "lucide-react"
 import { cn, getContrastColor } from "@/lib/utils"
 import ColorPicker from "./ColorPicker"
-import TextColorPicker from "./TextColorPicker"
 import Swal from "sweetalert2"
 import { toast } from "sonner"
 import { useSocket } from "../providers/socket-provider"
@@ -35,12 +33,7 @@ const SHAPE_TOOLS = [
     { id: "parallelogram", label: "Parallelogram", icon: RectangleHorizontal },
 ] as const
 
-const GRAPH_TOOLS = [
-    { id: "graph-axis", label: "Graph Axis", icon: Activity },
-    { id: "graph-plain", label: "Coordinate Plane", icon: Grid3X3 },
-    { id: "graph-labeled", label: "Labeled Plane", icon: Calculator },
-    { id: "large-grid", label: "Grid", icon: LayoutGrid },
-] as const
+
 
 const ERASER_TOOLS = [
     { id: "eraser", label: "Object Eraser", icon: Eraser },
@@ -58,12 +51,9 @@ interface ToolbarProps {
     setBrushSize: (size: number) => void
     shapeFillColor: string
     setShapeFillColor: (color: string) => void
-    shapeBorderColor: string
-    setShapeBorderColor: (color: string) => void
-    textColor: string
-    setTextColor: (color: string) => void
     onClearCanvas?: () => void
     onPdfUpload?: (file: File) => void
+    isClassEnded?: boolean
 }
 
 export default function Toolbar({
@@ -76,24 +66,19 @@ export default function Toolbar({
     setBrushSize,
     shapeFillColor,
     setShapeFillColor,
-    shapeBorderColor,
-    setShapeBorderColor,
-    textColor,
-    setTextColor,
     onClearCanvas,
-    onPdfUpload
+    onPdfUpload,
+    isClassEnded
 }: ToolbarProps) {
 
     const { socket } = useSocket()
     const [showColorPicker, setShowColorPicker] = useState(false)
     const [showFillPicker, setShowFillPicker] = useState(false)
-    const [showBorderPicker, setShowBorderPicker] = useState(false)
     const [showPenDropdown, setShowPenDropdown] = useState(false)
     const [showEraserDropdown, setShowEraserDropdown] = useState(false)
 
     const [colorPickerPos, setColorPickerPos] = useState<{ top: number; left: number } | null>(null)
     const [fillPickerPos, setFillPickerPos] = useState<{ top: number; left: number } | null>(null)
-    const [borderPickerPos, setBorderPickerPos] = useState<{ top: number; left: number } | null>(null)
     const [penDropdownPos, setPenDropdownPos] = useState<{ top: number; left: number } | null>(null)
     const [eraserDropdownPos, setEraserDropdownPos] = useState<{ top: number; left: number } | null>(null)
 
@@ -108,7 +93,6 @@ export default function Toolbar({
     const scrollAreaRef = useRef<HTMLDivElement>(null)
     const colorButtonRef = useRef<HTMLButtonElement>(null)
     const fillButtonRef = useRef<HTMLButtonElement>(null)
-    const borderButtonRef = useRef<HTMLButtonElement>(null)
     const eraserButtonRef = useRef<HTMLDivElement>(null)
 
     const penButtonRef = useRef<HTMLDivElement>(null)
@@ -128,8 +112,6 @@ export default function Toolbar({
 
     const isShapeToolCount = (t: string) => SHAPE_TOOLS.some(s => s.id === t)
     const isShapeTool = isShapeToolCount(tool)
-    const isGraphToolCount = (t: string) => GRAPH_TOOLS.some(g => g.id === t) || t.startsWith("large-grid") || t.startsWith("graph-plain") || t.startsWith("graph-labeled")
-    const isGraphTool = isGraphToolCount(tool)
     const isPenTool = tool.startsWith("pen:")
 
     const ActivePenIcon = PEN_TOOLS.find(p => p.id === selectedPen)?.icon || Pen
@@ -232,22 +214,6 @@ export default function Toolbar({
         onPdfUpload?.(file)
         if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
     }
-
-    const toggleBorderPicker = useCallback(() => {
-        if (showBorderPicker) {
-            setShowBorderPicker(false)
-            return
-        }
-        if (borderButtonRef.current) {
-            const rect = borderButtonRef.current.getBoundingClientRect()
-            const pickerHeight = 420
-            const top = Math.max(8, Math.min(window.innerHeight - pickerHeight - 8, rect.top - pickerHeight / 2 + rect.height / 2))
-            setBorderPickerPos({ top, left: rect.right + 16 })
-        }
-        setShowBorderPicker(true)
-    }, [showBorderPicker])
-
-
 
     return (
         <nav className="w-12 flex no-scrollbar flex-col items-center bg-sidebar border-r border-border z-30 shrink-0 h-full max-h-screen">
@@ -480,13 +446,6 @@ export default function Toolbar({
                         <button type="button" onClick={() => setTool("text")} className={cn("p-2 border rounded-[5px] border-primary/40 transition-all duration-300", tool === "text" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Text Tool">
                             <Type size={20} className="mx-auto" />
                         </button>
-                        {/* Text Color — only when text tool is active */}
-                        {tool === "text" && (
-                            <>
-                                {/* <div className="w-8 h-px bg-border my-1" /> */}
-                                <TextColorPicker color={textColor} onChange={setTextColor} />
-                            </>
-                        )}
 
                         <button type="button" onClick={() => setTool("laser")} className={cn("p-2 border rounded-[5px] border-primary/40 w-full  transition-all duration-300", tool === "laser" ? "bg-red-500 text-white shadow-lg shadow-red-500/30" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Laser Pointer">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="mx-auto" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -496,8 +455,8 @@ export default function Toolbar({
                         </button>
                     </div>
 
-                    {/* Clear Canvas - Teacher Only */}
-                    {role === "teacher" && onClearCanvas && (
+                    {/* Clear Canvas - Teacher or Post-Session */}
+                    {(role === "teacher" /* || isClassEnded */) && onClearCanvas && (
                         <>
                             <button
                                 type="button"
@@ -571,88 +530,9 @@ export default function Toolbar({
                                     document.body
                                 )}
                             </div>
-
-                            {/* Border Color */}
-                            <div className="flex flex-col gap-2 items-center">
-                                <span className="text-[7px] font-black uppercase tracking-widest text-muted-foreground text-center">Border</span>
-                                <div className="grid grid-cols-2 gap-1">
-                                    <button
-                                        onClick={() => setShapeBorderColor("#FFFFFF")}
-                                        className={cn(
-                                            "w-3.5 h-3.5 rounded-full border-2 transition-all duration-200",
-                                            shapeBorderColor === "#FFFFFF" ? "border-white scale-110 z-10 shadow-sm" : "border-transparent hover:scale-110"
-                                        )}
-                                        style={{ backgroundColor: "#FFFFFF" }}
-                                        title="White"
-                                    />
-                                    <button
-                                        ref={borderButtonRef}
-                                        onClick={() => toggleBorderPicker()}
-                                        className="w-3.5 h-3.5 rounded-full border border-border flex items-center justify-center transition-colors shadow-sm"
-                                        style={{
-                                            backgroundColor: shapeBorderColor,
-                                            color: getContrastColor(shapeBorderColor)
-                                        }}
-                                    >
-                                        <Palette size={8} />
-                                    </button>
-                                </div>
-                                {showBorderPicker && borderPickerPos && ReactDOM.createPortal(
-                                    <>
-                                        <div className="fixed inset-0 z-9998" onClick={() => setShowBorderPicker(false)} />
-                                        <div className="fixed z-9999 animate-in fade-in slide-in-from-left-2 duration-200" style={{ top: borderPickerPos.top, left: borderPickerPos.left }}>
-                                            <div className="p-1.5 bg-sidebar border border-border rounded-[5px] shadow-2xl">
-                                                <ColorPicker color={shapeBorderColor} onChange={(hex) => setShapeBorderColor(hex)} />
-                                            </div>
-                                        </div>
-                                    </>,
-                                    document.body
-                                )}
-                            </div>
                         </div>
                     )}
-                    {(isGraphTool) && (
-                        <div className="flex flex-col gap-2 py-2 border-t border-border w-full items-center mb-2 animate-in slide-in-from-bottom-2 duration-300">
 
-                            {/* Border Color */}
-                            <div className="flex flex-col gap-2 items-center">
-                                <span className="text-[7px] font-black uppercase tracking-widest text-muted-foreground text-center">Highlight</span>
-                                <div className="grid grid-cols-2 gap-1">
-                                    <button
-                                        onClick={() => setShapeBorderColor("#FFFFFF")}
-                                        className={cn(
-                                            "w-3.5 h-3.5 rounded-full border-2 transition-all duration-200",
-                                            shapeBorderColor === "#FFFFFF" ? "border-white scale-110 z-10 shadow-sm" : "border-transparent hover:scale-110"
-                                        )}
-                                        style={{ backgroundColor: "#FFFFFF" }}
-                                        title="White"
-                                    />
-                                    <button
-                                        ref={borderButtonRef}
-                                        onClick={() => toggleBorderPicker()}
-                                        className="w-3.5 h-3.5 rounded-full border border-border flex items-center justify-center transition-colors shadow-sm"
-                                        style={{
-                                            backgroundColor: shapeBorderColor,
-                                            color: getContrastColor(shapeBorderColor)
-                                        }}
-                                    >
-                                        <Palette size={8} />
-                                    </button>
-                                </div>
-                                {showBorderPicker && borderPickerPos && ReactDOM.createPortal(
-                                    <>
-                                        <div className="fixed inset-0 z-9998" onClick={() => setShowBorderPicker(false)} />
-                                        <div className="fixed z-9999 animate-in fade-in slide-in-from-left-2 duration-200" style={{ top: borderPickerPos.top, left: borderPickerPos.left }}>
-                                            <div className="p-1.5 bg-sidebar border border-border rounded-[5px] shadow-2xl">
-                                                <ColorPicker color={shapeBorderColor} onChange={(hex) => setShapeBorderColor(hex)} />
-                                            </div>
-                                        </div>
-                                    </>,
-                                    document.body
-                                )}
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 {/* Bottom fade scroll affordance — visible only when more content is below */}

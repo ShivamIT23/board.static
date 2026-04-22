@@ -9,6 +9,13 @@ interface SocketContextType {
   isConnected: boolean;
 }
 
+interface RoomUser {
+  socket_id: string;
+  username: string;
+  role?: string;
+  [key: string]: unknown;
+}
+
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
@@ -21,21 +28,26 @@ export const SocketProvider = ({
   url,
   roomId,
   user,
+  enabled = true,
 }: {
   children: React.ReactNode;
   url: string;
   roomId: string;
   user: { id: string; name: string; isTeacher: boolean; visitorId?: number };
+  enabled?: boolean;
 }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const userRef = useRef(user);
+  const previousUsersRef = useRef<RoomUser[]>([]);
 
   useEffect(() => {
     userRef.current = user;
   }, [user]);
 
   useEffect(() => {
+    if (!enabled) return;
+
     const socketInstance = io(url, {
       path: "/socket.io/", // Ensures it hits the LiteSpeed proxy rule
       transports: ["websocket", "polling"],
@@ -74,13 +86,32 @@ export const SocketProvider = ({
     socketInstance.on("disconnect", () => {
       console.log("Disconnected from socket server");
       setIsConnected(false);
+      previousUsersRef.current = [];
+    });
+
+    socketInstance.on("room_users", ({ payload }: { payload: { count: number; users: RoomUser[] } }) => {
+      if (payload && payload.users) {
+        previousUsersRef.current = payload.users;
+      }
+    });
+
+    socketInstance.on("user_join", ({ payload }: { payload: { user: { id: string; name: string } } }) => {
+      if (userRef.current.isTeacher && payload.user.name && payload.user.id !== userRef.current.id) {
+        toast.info(`Student ${payload.user.name} joined the class`, { duration: 3000 });
+      }
+    });
+
+    socketInstance.on("user_leave", ({ payload }: { payload: { userId: string, name: string } }) => {
+      if (userRef.current.isTeacher && payload.name) {
+        toast.info(`Student ${payload.name} left the class`, { duration: 3000 });
+      }
     });
 
     return () => {
       socketInstance.disconnect();
       setSocket(null);
     };
-  }, [url, roomId]);
+  }, [url, roomId, enabled]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected }}>

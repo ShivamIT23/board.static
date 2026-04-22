@@ -393,7 +393,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     }, [setBgImagesOnCanvas])
 
     useEffect(() => {
-        if (!canvasRef.current || !wrapperRef.current || !socket) return
+        if (!canvasRef.current || !wrapperRef.current) return
 
         const initialWidth = wrapperRef.current?.clientWidth || 800
         const initialHeight = initialWidth * 3
@@ -466,34 +466,34 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                         const isLabeled = data.shapeType.startsWith("graph-labeled")
                         const range = parseInt(data.shapeType.split(":")[1]) || 8
                         const intervals = range * 2
-                        
+
                         const stepX = w / intervals
                         const stepY = h / intervals
                         const midX = w / 2
                         const midY = h / 2
-                        
+
                         let gridD = ""
                         for (let i = 0; i <= intervals; i++) {
                             gridD += `M 0 ${i * stepY} L ${w} ${i * stepY} `
                             gridD += `M ${i * stepX} 0 L ${i * stepX} ${h} `
                         }
                         const gridPath = new Path(gridD, { ...common, stroke: "#888888", strokeWidth: 1, opacity: 0.3, fill: "transparent", left: 0, top: 0 })
-                        
+
                         const arrowSize = Math.max(4, Math.min(w, h) / 40)
                         let axesD = `M 0 ${midY} L ${w} ${midY} M ${midX} 0 L ${midX} ${h} `
-                        axesD += `M 0 ${midY} L ${arrowSize} ${midY - arrowSize/2} M 0 ${midY} L ${arrowSize} ${midY + arrowSize/2} `
-                        axesD += `M ${w} ${midY} L ${w - arrowSize} ${midY - arrowSize/2} M ${w} ${midY} L ${w - arrowSize} ${midY + arrowSize/2} `
-                        axesD += `M ${midX} 0 L ${midX - arrowSize/2} ${arrowSize} M ${midX} 0 L ${midX + arrowSize/2} ${arrowSize} `
-                        axesD += `M ${midX} ${h} L ${midX - arrowSize/2} ${h - arrowSize} M ${midX} ${h} L ${midX + arrowSize/2} ${h - arrowSize} `
-                        
+                        axesD += `M 0 ${midY} L ${arrowSize} ${midY - arrowSize / 2} M 0 ${midY} L ${arrowSize} ${midY + arrowSize / 2} `
+                        axesD += `M ${w} ${midY} L ${w - arrowSize} ${midY - arrowSize / 2} M ${w} ${midY} L ${w - arrowSize} ${midY + arrowSize / 2} `
+                        axesD += `M ${midX} 0 L ${midX - arrowSize / 2} ${arrowSize} M ${midX} 0 L ${midX + arrowSize / 2} ${arrowSize} `
+                        axesD += `M ${midX} ${h} L ${midX - arrowSize / 2} ${h - arrowSize} M ${midX} ${h} L ${midX + arrowSize / 2} ${h - arrowSize} `
+
                         const axesPath = new Path(axesD, { ...common, left: 0, top: 0, fill: "transparent" })
-                        
+
                         const objs: FabricObject[] = [gridPath, axesPath]
-                        
+
                         if (isLabeled) {
                             const fontSize = Math.max(6, Math.min(w, h) / (range * 5))
                             const textCommon = { fontSize, fill: stroke, fontFamily: "Inter, sans-serif", originX: "center" as const, originY: "center" as const, selectable: false, evented: false }
-                            
+
                             const step = range > 15 ? 2 : 1
                             for (let i = -range + 1; i <= range - 1; i++) {
                                 if (i === 0) continue
@@ -501,10 +501,10 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                                 objs.push(new IText(i.toString(), { ...textCommon, left: midX + i * stepX, top: midY + fontSize }))
                                 objs.push(new IText((-i).toString(), { ...textCommon, left: midX - fontSize, top: midY + i * stepY }))
                             }
-                            
+
                             objs.push(new IText("x", { ...textCommon, fontSize: fontSize * 1.5, fontStyle: "italic", fontWeight: "bold", left: w - fontSize, top: midY + fontSize }))
                             objs.push(new IText("y", { ...textCommon, fontSize: fontSize * 1.5, fontStyle: "italic", fontWeight: "bold", left: midX + fontSize, top: fontSize }))
-                            
+
                             const qDist = w / 4
                             const qDistY = h / 4
                             objs.push(new IText("I", { ...textCommon, fontSize: fontSize * 2, opacity: 0.2, left: midX + qDist, top: midY - qDistY }))
@@ -512,7 +512,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                             objs.push(new IText("III", { ...textCommon, fontSize: fontSize * 2, opacity: 0.2, left: midX - qDist, top: midY + qDistY }))
                             objs.push(new IText("IV", { ...textCommon, fontSize: fontSize * 2, opacity: 0.2, left: midX + qDist, top: midY + qDistY }))
                         }
-                        
+
                         return new Group(objs, { ...common, left, top, width: w, height: h })
                     }
                     if (data.shapeType.startsWith("large-grid")) {
@@ -529,13 +529,14 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     if (data.shapeType.startsWith("symbol:") || data.shapeType.startsWith("emoji:")) {
                         const val = data.shapeType.split(":")[1]
                         const fontSize = Math.max(12, h)
+                        const isEmoji = data.shapeType.startsWith("emoji:")
                         return new IText(val, {
                             ...common,
                             fontSize,
-                            fill: data.shapeType.startsWith("emoji:") ? "black" : stroke,
+                            fill: isEmoji ? "black" : stroke,
                             fontFamily: "Inter, sans-serif",
-                            stroke: undefined,
-                            strokeWidth: 0,
+                            stroke: isEmoji ? undefined : stroke,
+                            strokeWidth: isEmoji ? 0 : strokeWidth * 0.1,
                             originX: "left",
                             originY: "top"
                         })
@@ -611,11 +612,11 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     // First time → text_add, subsequent edits → text_update
                     if (textObj._synced) {
                         console.log(`[TEXT] Emitting text_update (re-edit):`, payload)
-                        socket.emit("text_update", { roomId: sessionId, payload })
+                        socket?.emit("text_update", { roomId: sessionId, payload })
                     } else {
                         textObj._synced = true
                         console.log(`[TEXT] Emitting text_add:`, payload)
-                        socket.emit("text_add", { roomId: sessionId, payload })
+                        socket?.emit("text_add", { roomId: sessionId, payload })
                     }
                 })
                 return
@@ -627,7 +628,9 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 if (target && target.id) {
                     const id = target.id;
                     canvas.remove(target);
+                if (socket) {
                     socket.emit("object_remove", { roomId: sessionId, payload: { id } });
+                }
                     boardHistoryRef.current = boardHistoryRef.current.filter(obj => (obj.payload as { id: string }).id !== id);
                     saveToLocalStorage();
                     canvas.requestRenderAll();
@@ -638,7 +641,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 isLaserActiveRef.current = true
                 const pt = canvas.getScenePoint(opt.e)
                 const point = toNorm(pt.x, pt.y, canvas.width)
-                socket.emit("laser_pointer", {
+                socket?.emit("laser_pointer", {
                     roomId: sessionId,
                     payload: { point }
                 })
@@ -649,7 +652,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
             // Shape tool: start drawing a shape
             if (isShapeTool(toolRef.current)) {
-                if (role === "student" && isViewLocked) return
+                if (role === "student" && (!drawingEnabledRef.current)) return
                 const pt = canvas.getScenePoint(opt.e)
                 shapeStartRef.current = { x: pt.x, y: pt.y }
                 return
@@ -687,7 +690,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 }
             }
 
-            socket.emit("stroke_draw", {
+            socket?.emit("stroke_draw", {
                 roomId: sessionId,
                 payload: {
                     id: localStrokeIdRef.current,
@@ -761,7 +764,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 if (!isLaserActiveRef.current) return
                 const pt = canvas.getScenePoint(opt.e)
                 const point = toNorm(pt.x, pt.y, canvas.width)
-                socket.emit("laser_pointer", {
+                socket?.emit("laser_pointer", {
                     roomId: sessionId,
                     payload: {
                         point,
@@ -777,7 +780,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
             if (!localStrokeIdRef.current) return
             const pt = canvas.getScenePoint(opt.e)
-            socket.emit("stroke_draw", {
+            socket?.emit("stroke_draw", {
                 roomId: sessionId,
                 payload: {
                     id: localStrokeIdRef.current,
@@ -850,14 +853,14 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     canvas.add(shape)
                     canvas.requestRenderAll()
 
-                    socket.emit("shape_add", { roomId: sessionId, payload: shapePayload })
+                    socket?.emit("shape_add", { roomId: sessionId, payload: shapePayload })
                     if (onToolChangeRef.current) onToolChangeRef.current("select")
                 }
                 return
             }
 
             if (!localStrokeIdRef.current) return
-            socket.emit("stroke_draw", {
+            socket?.emit("stroke_draw", {
                 roomId: sessionId,
                 payload: {
                     id: localStrokeIdRef.current,
@@ -887,7 +890,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
             // Shape modified (moved, resized) — includes symbols & emojis stored in shapeObjsRef
             if (shapeObjsRef.current[id]) {
-                socket.emit("shape_update", {
+                socket?.emit("shape_update", {
                     roomId: sessionId,
                     payload: {
                         id,
@@ -905,7 +908,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 const textObj = obj as unknown as BoardIText
                 const effectiveFontSize = textObj.fontSize * (textObj.scaleX || 1)
                 console.log(`[TEXT] object:modified id=${id}, effectiveFontSize=${effectiveFontSize}`)
-                socket.emit("text_update", {
+                socket?.emit("text_update", {
                     roomId: sessionId,
                     payload: {
                         id,
@@ -921,7 +924,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
             // Stroke (Path) modified (moved, resized)
             if (obj instanceof Path) {
-                socket.emit("stroke_update", {
+                socket?.emit("stroke_update", {
                     roomId: sessionId,
                     payload: {
                         id,
@@ -939,7 +942,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             const widthRatio = obj.getScaledWidth() / canvas.width
             const heightRatio = obj.getScaledHeight() / canvas.width
 
-            socket.emit("board_file_update", {
+            socket?.emit("board_file_update", {
                 roomId: sessionId,
                 payload: {
                     id,
@@ -1174,20 +1177,22 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
         const onViewSync = (data: { payload: { ratio: number; senderId?: string } }) => {
             // Everyone receives view_sync, but ignore our own broadcasts
-            if (data.payload.senderId === socket.id) return
+            if (socket && data.payload.senderId === socket.id) return
             if (wrapperRef.current) {
                 const wrapper = wrapperRef.current
                 wrapper.scrollTop = data.payload.ratio * wrapper.scrollHeight
             }
         }
 
-        socket.on("stroke_draw", handleStrokeDraw)
-        socket.on("stroke_add", handleStrokeAdd)
-        socket.on("laser_pointer", handleLaserPointer)
-        socket.on("clear_canvas", handleClearCanvas)
-        socket.on("board_color_sync", onBoardColorSync)
-        socket.on("view_sync", onViewSync)
-        socket.on("board_file_add", ({ payload }) => addImageToCanvas(payload))
+        if (socket) {
+            socket.on("stroke_draw", handleStrokeDraw)
+            socket.on("stroke_add", handleStrokeAdd)
+            socket.on("laser_pointer", handleLaserPointer)
+            socket.on("clear_canvas", handleClearCanvas)
+            socket.on("board_color_sync", onBoardColorSync)
+            socket.on("view_sync", onViewSync)
+            socket.on("board_file_add", ({ payload }: { payload: ImagePayload }) => addImageToCanvas(payload))
+        }
 
         // ── Shape Add (from peers) ────────────────────────────────
         const handleShapeAdd = ({ payload }: { payload: ShapePayload }) => {
@@ -1253,17 +1258,21 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             canvas.requestRenderAll()
         }
 
-        socket.on("text_add", handleTextAdd)
-        socket.on("text_update", handleTextUpdate)
-        socket.on("shape_add", handleShapeAdd)
-        socket.on("shape_update", handleShapeUpdate)
-        socket.on("stroke_update", handleStrokeUpdate)
-        socket.on("board_file_remove", ({ payload }) => {
-            const o = boardFileObjsRef.current[payload.id]
-            if (o) { canvas.remove(o); delete boardFileObjsRef.current[payload.id]; canvas.renderAll() }
-        })
-        socket.on("board_file_update", handleBoardFileUpdate)
-        socket.on("board_files_state", ({ payload }) => payload.forEach(addImageToCanvas))
+        if (socket) {
+            socket.on("text_add", handleTextAdd)
+            socket.on("text_update", handleTextUpdate)
+            socket.on("shape_add", handleShapeAdd)
+            socket.on("shape_update", handleShapeUpdate)
+            socket.on("stroke_update", handleStrokeUpdate)
+        }
+        if (socket) {
+            socket.on("board_file_remove", ({ payload }: { payload: { id: string } }) => {
+                const o = boardFileObjsRef.current[payload.id]
+                if (o) { canvas.remove(o); delete boardFileObjsRef.current[payload.id]; canvas.renderAll() }
+            })
+            socket.on("board_file_update", handleBoardFileUpdate)
+            socket.on("board_files_state", ({ payload }: { payload: ImagePayload[] }) => payload.forEach(addImageToCanvas))
+        }
 
         const handleObjectRemove = ({ payload }: { payload: { id: string } }) => {
             // Find and remove the object with that ID
@@ -1277,7 +1286,9 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 canvas.renderAll();
             }
         }
-        socket.on("object_remove", handleObjectRemove);
+        if (socket) {
+            socket.on("object_remove", handleObjectRemove);
+        }
 
         interface BoardObjectPayload {
             type: "stroke" | "text" | "shape";
@@ -1285,22 +1296,24 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             timestamp: number;
         }
 
-        socket.on("board_objects_state", ({ payload }: { payload: BoardObjectPayload[] }) => {
-            console.log("[board_objects_state] Restoring objects:", payload.length)
-            payload.forEach(obj => {
-                // handleStrokeAdd/handleTextAdd handle the current-page-only rendering AND storage
-                const fullPayload = { ...obj.payload, timestamp: obj.timestamp };
-                if (obj.type === "stroke") handleStrokeAdd({ payload: fullPayload as unknown as FullStrokePayload })
-                else if (obj.type === "text") handleTextAdd({ payload: fullPayload as unknown as TextPayload })
-                else if (obj.type === "shape") handleShapeAdd({ payload: fullPayload as unknown as ShapePayload })
+        if (socket) {
+            socket.on("board_objects_state", ({ payload }: { payload: BoardObjectPayload[] }) => {
+                console.log("[board_objects_state] Restoring objects:", payload.length)
+                payload.forEach(obj => {
+                    // handleStrokeAdd/handleTextAdd handle the current-page-only rendering AND storage
+                    const fullPayload = { ...obj.payload, timestamp: obj.timestamp };
+                    if (obj.type === "stroke") handleStrokeAdd({ payload: fullPayload as unknown as FullStrokePayload })
+                    else if (obj.type === "text") handleTextAdd({ payload: fullPayload as unknown as TextPayload })
+                    else if (obj.type === "shape") handleShapeAdd({ payload: fullPayload as unknown as ShapePayload })
+                })
             })
-        })
+        }
 
-        const handleClearEmit = () => socket.emit("clear_canvas", { roomId: sessionId })
+        const handleClearEmit = () => socket && socket.emit("clear_canvas", { roomId: sessionId })
         document.addEventListener("clear-canvas-emit", handleClearEmit)
 
-        const handleUndoTrigger = () => socket.emit("board_undo", { roomId: sessionId })
-        const handleRedoTrigger = () => socket.emit("board_redo", { roomId: sessionId })
+        const handleUndoTrigger = () => socket && socket.emit("board_undo", { roomId: sessionId })
+        const handleRedoTrigger = () => socket && socket.emit("board_redo", { roomId: sessionId })
         document.addEventListener("undo-trigger", handleUndoTrigger)
         document.addEventListener("redo-trigger", handleRedoTrigger)
 
@@ -1359,26 +1372,28 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         resizeObserver.observe(wrapperRef.current)
 
         return () => {
-            socket.off("stroke_draw", handleStrokeDraw)
-            socket.off("stroke_add", handleStrokeAdd)
-            socket.off("laser_pointer", handleLaserPointer)
-            socket.off("clear_canvas", handleClearCanvas)
-            socket.off("board_file_add")
-            socket.off("text_add", handleTextAdd)
-            socket.off("text_update", handleTextUpdate)
-            socket.off("shape_add", handleShapeAdd)
-            socket.off("shape_update", handleShapeUpdate)
-            socket.off("stroke_update", handleStrokeUpdate)
-            socket.off("board_file_remove")
-            socket.off("board_file_update", handleBoardFileUpdate)
-            socket.off("board_files_state")
-            socket.off("object_remove", handleObjectRemove)
+            if (socket) {
+                socket.off("stroke_draw", handleStrokeDraw)
+                socket.off("stroke_add", handleStrokeAdd)
+                socket.off("laser_pointer", handleLaserPointer)
+                socket.off("clear_canvas", handleClearCanvas)
+                socket.off("board_file_add")
+                socket.off("text_add", handleTextAdd)
+                socket.off("text_update", handleTextUpdate)
+                socket.off("shape_add", handleShapeAdd)
+                socket.off("shape_update", handleShapeUpdate)
+                socket.off("stroke_update", handleStrokeUpdate)
+                socket.off("board_file_remove")
+                socket.off("board_file_update", handleBoardFileUpdate)
+                socket.off("board_files_state")
+                socket.off("object_remove", handleObjectRemove)
+                socket.off("board_color_sync", onBoardColorSync)
+                socket.off("view_sync", onViewSync)
+            }
             document.removeEventListener("clear-canvas-emit", handleClearEmit)
             document.removeEventListener("undo-trigger", handleUndoTrigger)
             document.removeEventListener("redo-trigger", handleRedoTrigger)
             document.removeEventListener("delete-page-local", handleDeleteLocal)
-            socket.off("board_color_sync", onBoardColorSync)
-            socket.off("view_sync", onViewSync)
             setCanvasReady(false)
             canvas.dispose()
             resizeObserver.disconnect()
@@ -1508,7 +1523,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
             // Calculate ratio based on scroll position relative to total height
             const ratio = wrapper.scrollTop / wrapper.scrollHeight
-            socket.emit("view_sync", {
+            socket?.emit("view_sync", {
                 roomId: sessionId,
                 payload: { ratio, senderId: socket.id }
             })
