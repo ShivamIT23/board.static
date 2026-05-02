@@ -3,7 +3,6 @@ import React, { useEffect, useRef, useState, useCallback } from "react"
 import {
     RotateCcw,
     RotateCw,
-    LogOut,
     ImagePlus,
     FileUp,
     LocateFixed,
@@ -28,10 +27,8 @@ import logo from "../../../public/logo.png"
 
 
 interface BoardTopBarProps {
-    zoom: number
     tool: string
     setTool: (tool: string) => void
-    onZoomChange: (zoom: number) => void
     isOpen: boolean
     duration: number
     boardColor: string
@@ -42,8 +39,7 @@ interface BoardTopBarProps {
     userName: string;
     onToggleViewLocked?: (enabled: boolean) => void
     drawingEnabled?: boolean
-    onEndSession?: (sid: string) => void
-    isClassEnded?: boolean
+    onPdfUpload?: (file: File) => void
 }
 
 const SHAPE_TOOLS = [
@@ -108,10 +104,8 @@ type ShapeToolId = typeof SHAPE_TOOLS[number]["id"]
 type GraphToolId = typeof GRAPH_TOOLS[number]["id"]
 
 export default function BoardTopBar({
-    zoom,
     tool,
     setTool,
-    onZoomChange,
     isOpen,
     duration,
     boardColor,
@@ -122,9 +116,10 @@ export default function BoardTopBar({
     userName,
     onToggleViewLocked,
     drawingEnabled,
-    onEndSession,
-    isClassEnded
+    onPdfUpload,
 }: BoardTopBarProps) {
+
+    const { socket } = useSocket()
     const scrollBarRef = useRef<HTMLDivElement>(null)
     const bgButtonRef = useRef<HTMLDivElement>(null)
 
@@ -141,18 +136,23 @@ export default function BoardTopBar({
     const [selectedEmoji, setSelectedEmoji] = useState<string>("😊")
     const [selectedShape, setSelectedShape] = useState<ShapeToolId>("rectangle")
     const [selectedGraph, setSelectedGraph] = useState<GraphToolId>("graph-axis")
-    const [shapeDropdownPos, setShapeDropdownPos] = useState<{ bottom: number; left: number } | null>(null)
-    const [graphDropdownPos, setGraphDropdownPos] = useState<{ bottom: number; left: number } | null>(null)
     const [showMathDropdown, setShowMathDropdown] = useState(false)
     const [showEmojiDropdown, setShowEmojiDropdown] = useState(false)
     const [showShapeDropdown, setShowShapeDropdown] = useState(false)
     const [showGraphDropdown, setShowGraphDropdown] = useState(false)
 
+    const [shapeDropdownPos, setShapeDropdownPos] = useState<{ top: number; left: number } | null>(null)
+    const [graphDropdownPos, setGraphDropdownPos] = useState<{ top: number; left: number } | null>(null)
     const [mathDropdownPos, setMathDropdownPos] = useState<{ top: number; left: number } | null>(null)
     const [emojiDropdownPos, setEmojiDropdownPos] = useState<{ top: number; left: number } | null>(null)
 
     const ActiveShapeIcon = SHAPE_TOOLS.find(s => s.id === selectedShape)?.icon || Square
     const ActiveGraphIcon = GRAPH_TOOLS.find(g => g.id === selectedGraph)?.icon || Activity
+
+
+    const boardFileInputRef = useRef<HTMLInputElement>(null)
+    const pdfFileInputRef = useRef<HTMLInputElement>(null)
+
 
     const checkScroll = useCallback(() => {
         const el = scrollBarRef.current
@@ -216,8 +216,8 @@ export default function BoardTopBar({
         if (shapeButtonRef.current) {
             const rect = shapeButtonRef.current.getBoundingClientRect()
             setShapeDropdownPos({
-                bottom: rect.bottom + rect.height / 2 - 20,
-                left: rect.left + 8,
+                top: rect.bottom + 8,
+                left: rect.left + rect.width / 2,
             })
         }
         setShowShapeDropdown(true)
@@ -236,8 +236,8 @@ export default function BoardTopBar({
         if (graphButtonRef.current) {
             const rect = graphButtonRef.current.getBoundingClientRect()
             setGraphDropdownPos({
-                bottom: rect.bottom + rect.height / 2 - 20,
-                left: rect.right + 8,
+                top: rect.bottom + 8,
+                left: rect.left + rect.width / 2,
             })
         }
         setShowGraphDropdown(true)
@@ -251,8 +251,8 @@ export default function BoardTopBar({
         if (mathButtonRef.current) {
             const rect = mathButtonRef.current.getBoundingClientRect()
             setMathDropdownPos({
-                top: Math.max(10, Math.min(window.innerHeight - 300, rect.top - 100)),
-                left: rect.right + 8,
+                top: rect.bottom + 8,
+                left: rect.left + rect.width / 2,
             })
             setShowMathDropdown(true)
         }
@@ -266,8 +266,8 @@ export default function BoardTopBar({
         if (emojiButtonRef.current) {
             const rect = emojiButtonRef.current.getBoundingClientRect()
             setEmojiDropdownPos({
-                top: Math.max(10, Math.min(window.innerHeight - 300, rect.top - 150)),
-                left: rect.right + 8,
+                top: rect.bottom + 8,
+                left: rect.left + rect.width / 2,
             })
             setShowEmojiDropdown(true)
         }
@@ -284,6 +284,60 @@ export default function BoardTopBar({
         setTool(`emoji:${val}`)
         setShowEmojiDropdown(false)
     }
+
+
+    const handleBoardFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file || !socket) return
+
+        if (!file.type.startsWith("image/")) {
+            toast.error("Only image files can be added to the board")
+            if (boardFileInputRef.current) boardFileInputRef.current.value = ""
+            return
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error("Image must be less than 5MB")
+            if (boardFileInputRef.current) boardFileInputRef.current.value = ""
+            return
+        }
+
+        const reader = new FileReader()
+        reader.onloadend = () => {
+            socket.emit("board_file_add", {
+                payload: {
+                    id: crypto.randomUUID(),
+                    url: reader.result as string,
+                    name: file.name,
+                    position: { x: 0.3, y: 0.3 },
+                    scale: 0.25,
+                }
+            })
+        }
+        reader.readAsDataURL(file)
+        if (boardFileInputRef.current) boardFileInputRef.current.value = ""
+    }
+
+    const handlePdfFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        if (file.type !== "application/pdf") {
+            toast.error("Only PDF files are supported")
+            if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
+            return
+        }
+
+        if (file.size > 25 * 1024 * 1024) {
+            toast.error("PDF must be less than 25MB")
+            if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
+            return
+        }
+
+        onPdfUpload?.(file)
+        if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
+    }
+
 
     const handleGraphItemClick = async (gId: GraphToolId) => {
         if (gId === "large-grid" || gId === "graph-plain" || gId === "graph-labeled") {
@@ -328,7 +382,7 @@ export default function BoardTopBar({
     return (
         <div className="relative flex w-full items-center min-h-[48px] bg-sidebar backdrop-blur-xl border-b border-border/50 shadow-md animate-in fade-in slide-in-from-top-4 duration-500 overflow-hidden">
             {/* Fixed Left Section */}
-            <div className="flex items-center px-1 sm:px-2 py-0.5 border-r border-border/50 bg-sidebar shrink-0 z-40">
+            <div className="flex items-center px-1 sm:px-2 h-8 border-r border-border/50 bg-sidebar shrink-0 z-40">
                 <Image alt="Board" src={logo} height={20} width={50} />
             </div>
 
@@ -341,52 +395,30 @@ export default function BoardTopBar({
                 >
 
 
-                    <button type="button" onClick={() => setTool("select")} className={cn("p-2 border rounded-[5px] border-primary/40 transition-all duration-300", tool === "select" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Selection Tool">
+                    <button type="button" onClick={() => setTool("select")} className={cn("p-1.5 w-8 h-8 border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center", tool === "select" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Selection Tool">
                         <MousePointer2 size={18} />
                     </button>
 
                     {/* Shapes — single button with horizontal dropdown */}
-                    <div className="relative group border rounded-[5px] border-primary/40" ref={shapeButtonRef}>
-                        <div className={cn(
-                            "focus-within:ring-2 focus-within:ring-primary flex items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent h-full",
-                            isShapeTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
-                        )}>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setTool(selectedShape)
-                                    if (!isShapeTool) setShowShapeDropdown(false)
-                                }}
-                                onContextMenu={(e) => { e.preventDefault(); toggleShapeDropdown() }}
-                                className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10"
-                                title={`Use ${selectedShape}`}
-                            >
-                                <ActiveShapeIcon size={18} />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    toggleShapeDropdown()
-                                }}
-                                className={cn(
-                                    "py-0.5 flex items-center justify-center transition-colors hover:bg-white/20 border-t border-white/10",
-                                    isShapeTool ? "text-primary-foreground" : "text-muted-foreground"
-                                )}
-                                title="Choose shape"
-                            >
-                                <svg className="w-2 h-2 opacity-80" viewBox="0 0 10 10" fill="currentColor">
-                                    <path d="M2 4 L8 4 L5 8 Z" />
-                                </svg>
-                            </button>
-                        </div>
+                    <div className="relative group border rounded-[5px] border-primary/40 h-8 w-8" ref={shapeButtonRef}>
+                        <button
+                            type="button"
+                            onClick={() => toggleShapeDropdown()}
+                            className={cn(
+                                "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
+                                isShapeTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                            )}
+                            title={`Choose shape (Current: ${selectedShape})`}
+                        >
+                            <ActiveShapeIcon size={18} />
+                        </button>
 
                         {showShapeDropdown && shapeDropdownPos && ReactDOM.createPortal(
                             <>
                                 <div className="fixed inset-0 z-9998" onClick={() => setShowShapeDropdown(false)} />
                                 <div
-                                    className="fixed z-9999 flex flex-col flex-wrap items-center gap-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-left-2 duration-200 h-[73px]"
-                                    style={{ top: shapeDropdownPos.bottom, left: shapeDropdownPos.left }}
+                                    className="fixed z-9999 flex flex-col flex-wrap items-center gap-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-top-2 duration-200 h-[73px]"
+                                    style={{ top: shapeDropdownPos.top, left: shapeDropdownPos.left, transform: "translateX(-50%)" }}
                                 >
                                     {SHAPE_TOOLS.map((shape) => {
                                         const Icon = shape.icon
@@ -400,7 +432,7 @@ export default function BoardTopBar({
                                                     setShowShapeDropdown(false)
                                                 }}
                                                 className={cn(
-                                                    "p-2 rounded-[5px] transition-all duration-200",
+                                                    "p-1.5 rounded-[5px] transition-all duration-200",
                                                     tool === shape.id
                                                         ? "bg-primary text-primary-foreground shadow-md"
                                                         : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -418,44 +450,25 @@ export default function BoardTopBar({
                     </div>
 
                     {/* Graph Tools — Simplified Section */}
-                    <div className="relative group border rounded-[5px] border-primary/40" ref={graphButtonRef}>
-                        <div className={cn(
-                            "flex items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
-                            isGraphTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
-                        )}>
-                            <button
-                                type="button"
-                                onClick={() => handleGraphItemClick(selectedGraph)}
-                                onContextMenu={(e) => { e.preventDefault(); toggleGraphDropdown() }}
-                                className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10"
-                                title={`Use ${selectedGraph}`}
-                            >
-                                <ActiveGraphIcon size={18} />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    toggleGraphDropdown()
-                                }}
-                                className={cn(
-                                    "py-0.5 flex items-center justify-center transition-colors hover:bg-white/20 border-t border-white/10",
-                                    isGraphTool ? "text-primary-foreground" : "text-muted-foreground"
-                                )}
-                                title="Choose graph tool"
-                            >
-                                <svg className="w-2 h-2 opacity-80" viewBox="0 0 10 10" fill="currentColor">
-                                    <path d="M2 4 L8 4 L5 8 Z" />
-                                </svg>
-                            </button>
-                        </div>
+                    <div className="relative group border rounded-[5px] border-primary/40 h-8 w-8" ref={graphButtonRef}>
+                        <button
+                            type="button"
+                            onClick={() => toggleGraphDropdown()}
+                            className={cn(
+                                "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
+                                isGraphTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                            )}
+                            title={`Choose graph tool (Current: ${selectedGraph})`}
+                        >
+                            <ActiveGraphIcon size={18} />
+                        </button>
 
                         {showGraphDropdown && graphDropdownPos && ReactDOM.createPortal(
                             <>
                                 <div className="fixed inset-0 z-9998" onClick={() => setShowGraphDropdown(false)} />
                                 <div
-                                    className="fixed z-9999 flex flex-col gap-1 p-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-left-2 duration-200"
-                                    style={{ top: graphDropdownPos.bottom, left: graphDropdownPos.left }}
+                                    className="fixed z-9999 flex flex-col gap-1 p-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-top-2 duration-200"
+                                    style={{ top: graphDropdownPos.top, left: graphDropdownPos.left, transform: "translateX(-50%)" }}
                                 >
                                     {GRAPH_TOOLS.map((g) => {
                                         const Icon = g.icon
@@ -465,7 +478,7 @@ export default function BoardTopBar({
                                                 type="button"
                                                 onClick={() => handleGraphItemClick(g.id)}
                                                 className={cn(
-                                                    "p-2 rounded-[5px] flex items-center gap-2 transition-all duration-200",
+                                                    "p-1.5 rounded-[5px] flex items-center gap-2 transition-all duration-200",
                                                     tool === g.id
                                                         ? "bg-primary text-primary-foreground shadow-md"
                                                         : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -483,44 +496,25 @@ export default function BoardTopBar({
                         )}
                     </div>
                     {/* Math Symbols — Simplified Section */}
-                    <div className="relative group border rounded-[5px] border-primary/40" ref={mathButtonRef}>
-                        <div className={cn(
-                            "flex items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
-                            isMathSymbolTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
-                        )}>
-                            <button
-                                type="button"
-                                onClick={() => setTool(`symbol:${selectedSymbol}`)}
-                                onContextMenu={(e) => { e.preventDefault(); toggleMathDropdown() }}
-                                className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10 min-h-[30px]"
-                                title={`Use ${selectedSymbol}`}
-                            >
-                                <span className="text-lg font-bold leading-none">{selectedSymbol}</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    toggleMathDropdown()
-                                }}
-                                className={cn(
-                                    "py-0.5 flex items-center justify-center transition-colors hover:bg-white/20 border-t border-white/10",
-                                    isMathSymbolTool ? "text-primary-foreground" : "text-muted-foreground"
-                                )}
-                                title="Choose symbol"
-                            >
-                                <svg className="w-2 h-2 opacity-80" viewBox="0 0 10 10" fill="currentColor">
-                                    <path d="M2 4 L8 4 L5 8 Z" />
-                                </svg>
-                            </button>
-                        </div>
+                    <div className="relative group border rounded-[5px] border-primary/40 h-8 w-8" ref={mathButtonRef}>
+                        <button
+                            type="button"
+                            onClick={() => toggleMathDropdown()}
+                            className={cn(
+                                "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
+                                isMathSymbolTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                            )}
+                            title={`Choose math symbol (Current: ${selectedSymbol})`}
+                        >
+                            <span className="text-lg font-bold leading-none">{selectedSymbol}</span>
+                        </button>
 
                         {showMathDropdown && mathDropdownPos && ReactDOM.createPortal(
                             <>
                                 <div className="fixed inset-0 z-9998" onClick={() => setShowMathDropdown(false)} />
                                 <div
-                                    className="fixed z-9999 grid grid-cols-4 gap-1 p-2 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-left-2 duration-200 w-[160px]"
-                                    style={{ top: mathDropdownPos.top, left: mathDropdownPos.left }}
+                                    className="fixed z-9999 grid grid-cols-4 gap-1 p-2 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-[160px]"
+                                    style={{ top: mathDropdownPos.top, left: mathDropdownPos.left, transform: "translateX(-50%)" }}
                                 >
                                     {MATH_SYMBOLS.map((s) => (
                                         <button
@@ -528,7 +522,7 @@ export default function BoardTopBar({
                                             type="button"
                                             onClick={() => handleSymbolClick(s.value)}
                                             className={cn(
-                                                "h-8 w-8 flex items-center justify-center text-sm font-thin rounded-[4px] transition-colors",
+                                                "p-1.5 flex items-center justify-center text-sm font-thin rounded-[5px] transition-all duration-200",
                                                 selectedSymbol === s.value
                                                     ? "bg-primary text-primary-foreground"
                                                     : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -544,45 +538,26 @@ export default function BoardTopBar({
                         )}
                     </div>
 
-                    {/* Commented out Emoji code preserved as requested */}
-                    {/* <div className="relative group border rounded-[5px] border-primary/40" ref={emojiButtonRef}> */}
-                        {/* <div className={cn(
-                            "flex items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
-                            isEmojiTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
-                        )}>
-                            <button
-                                type="button"
-                                onClick={() => setTool(`emoji:${selectedEmoji}`)}
-                                onContextMenu={(e) => { e.preventDefault(); toggleEmojiDropdown() }}
-                                className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10 min-h-[30px]"
-                                title={`Use ${selectedEmoji}`}
-                            >
-                                <span className="text-xl leading-none">{selectedEmoji}</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    toggleEmojiDropdown()
-                                }}
-                                className={cn(
-                                    "py-0.5 flex items-center justify-center transition-colors hover:bg-white/20 border-t border-white/10",
-                                    isEmojiTool ? "text-primary-foreground" : "text-muted-foreground"
-                                )}
-                                title="Choose emoji"
-                            >
-                                <svg className="w-2 h-2 opacity-80" viewBox="0 0 10 10" fill="currentColor">
-                                    <path d="M2 4 L8 4 L5 8 Z" />
-                                </svg>
-                            </button>
-                        </div> */}
 
-                        {/* {showEmojiDropdown && emojiDropdownPos && ReactDOM.createPortal(
+                    <div className="relative group border rounded-[5px] border-primary/40 h-8 w-8" ref={emojiButtonRef}>
+                        <button
+                            type="button"
+                            onClick={() => toggleEmojiDropdown()}
+                            className={cn(
+                                "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
+                                isEmojiTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                            )}
+                            title={`Choose emoji (Current: ${selectedEmoji})`}
+                        >
+                            <span className="text-xl leading-none">{selectedEmoji}</span>
+                        </button>
+
+                        {showEmojiDropdown && emojiDropdownPos && ReactDOM.createPortal(
                             <>
                                 <div className="fixed inset-0 z-9998" onClick={() => setShowEmojiDropdown(false)} />
                                 <div
-                                    className="fixed z-9999 grid grid-cols-4 gap-1 p-2 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-left-2 duration-200 w-[160px]"
-                                    style={{ top: emojiDropdownPos.top, left: emojiDropdownPos.left }}
+                                    className="fixed z-9999 grid grid-cols-4 gap-1 p-2 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-[160px]"
+                                    style={{ top: emojiDropdownPos.top, left: emojiDropdownPos.left, transform: "translateX(-50%)" }}
                                 >
                                     {EMOJIS.map((e) => (
                                         <button
@@ -590,7 +565,7 @@ export default function BoardTopBar({
                                             type="button"
                                             onClick={() => handleEmojiClick(e.value)}
                                             className={cn(
-                                                "h-8 w-8 flex items-center justify-center text-lg rounded-[4px] transition-colors",
+                                                "p-1.5 flex items-center justify-center text-lg rounded-[5px] transition-all duration-200",
                                                 selectedEmoji === e.value
                                                     ? "bg-primary text-primary-foreground"
                                                     : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -603,54 +578,75 @@ export default function BoardTopBar({
                                 </div>
                             </>,
                             document.body
-                        )} */}
-                    {/* </div> */}
+                        )}
+                    </div>
 
                     {/* Undo/Redo */}
                     {(role === 'teacher') && (
-                        <div className="flex items-center gap-0.5 h-full py-0.5 sm:gap-1 px-1 sm:px-2 border-r border-border/50 shrink-0">
+                        <div className="flex items-center gap-0.5 h-8 sm:gap-1 px-1 sm:px-2 border-r border-border/50 shrink-0">
                             <button
                                 type="button"
                                 onClick={() => document.dispatchEvent(new CustomEvent("undo-trigger"))}
-                                className="p-1 sm:p-1.5 aspect-square h-full border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                className="p-1.5 aspect-square h-8 border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-300 shadow-sm shrink-0"
                                 title="Undo (Ctrl+Z)"
                             >
-                                <RotateCcw size={17} className="mx-auto" />
+                                <RotateCcw size={18} className="mx-auto" />
                             </button>
                             <button
                                 type="button"
                                 onClick={() => document.dispatchEvent(new CustomEvent("redo-trigger"))}
-                                className="p-1 sm:p-1.5 aspect-square h-full border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                className="p-1.5 aspect-square h-8 border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-300 shadow-sm shrink-0"
                                 title="Redo (Ctrl+Shift+Z)"
                             >
-                                <RotateCw size={17} className="mx-auto" />
+                                <RotateCw size={18} className="mx-auto" />
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Upload Buttons */}
+                    {role === "teacher" && (
+                        <div className="flex justify-center items-center w-fit h-8 gap-2 shrink-0 px-2 border-r border-border">
+                            <input type="file" ref={boardFileInputRef} onChange={handleBoardFileSelect} className="hidden" accept="image/*" />
+                            <button
+                                type="button"
+                                onClick={() => boardFileInputRef.current?.click()}
+                                className="p-1.5 transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent border rounded-[5px] border-primary/40 shadow-sm"
+                                title="Add Image to Board"
+                            >
+                                <ImagePlus size={18} />
+                            </button>
+
+                            <input type="file" ref={pdfFileInputRef} onChange={handlePdfFileSelect} className="hidden" accept="application/pdf" />
+                            <button
+                                type="button"
+                                onClick={() => pdfFileInputRef.current?.click()}
+                                className="p-1.5 border rounded-[5px] border-primary/40 transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent shadow-sm"
+                                title="Upload PDF to Board"
+                            >
+                                <FileUp size={18} />
                             </button>
                         </div>
                     )}
 
                     {(role === 'teacher') && (
-                        <div className="flex items-center gap-1 shrink-0 sm:gap-2 px-1 border-r border-border/50 h-full py-0.5">
-                            <span className="hidden lg:block text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-muted-foreground/50">Desk</span>
-                            <span className="block lg:hidden text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-muted-foreground/50">D</span>
-                            <div className="flex gap-1 sm:gap-1.5 items-center border rounded-[5px] border-primary/40">
-                                <div ref={bgButtonRef}>
-                                    <button
-                                        type="button"
-                                        onClick={toggleBgPicker}
-                                        className={cn(
-                                            "flex items-center gap-1.5 px-2 py-1 rounded-[5px] border transition-all duration-300 shadow-sm",
-                                            showBgPicker ? "ring-2 ring-primary ring-offset-1 border-primary" : "border-border/50"
-                                        )}
-                                        style={{
-                                            backgroundColor: boardColor,
-                                            color: getContrastColor(boardColor)
-                                        }}
-                                        title="Custom Board Color"
-                                    >
-                                        <Palette size={16} />
-                                        <span className="text-[10px] font-bold">Desk Color</span>
-                                    </button>
-                                </div>
+                        <div className="flex items-center gap-2 px-2 border-r border-border/50 h-8">
+                            <span className="block lg:hidden text-[9px] font-black uppercase tracking-widest text-muted-foreground/50 leading-none">D</span>
+                            <div ref={bgButtonRef} className="h-8">
+                                <button
+                                    type="button"
+                                    onClick={toggleBgPicker}
+                                    className={cn(
+                                        "flex items-center gap-1.5 p-1.5 rounded-[5px] border h-8 transition-all duration-300 shadow-sm",
+                                        showBgPicker ? "ring-2 ring-primary ring-offset-1 border-primary" : "border-primary/40"
+                                    )}
+                                    style={{
+                                        backgroundColor: boardColor,
+                                        color: getContrastColor(boardColor)
+                                    }}
+                                    title="Custom Board Color"
+                                >
+                                    <Palette size={18} />
+                                </button>
                             </div>
                         </div>
                     )}
@@ -673,19 +669,18 @@ export default function BoardTopBar({
                     {/* Board Controls Toggles */}
                     {(role === "teacher") && (
                         <div className="flex items-center gap-1.5 shrink-0 px-2 border-r border-border/50 h-8">
-
                             <button
                                 type="button"
                                 onClick={() => onToggleViewLocked?.(!isViewLocked)}
                                 className={cn(
-                                    "flex items-center gap-1.5 px-2 py-1 rounded-[5px] border transition-all duration-300",
+                                    "flex items-center gap-1.5 p-1.5 h-8 rounded-[5px] border transition-all duration-300 shadow-sm",
                                     isViewLocked
                                         ? "bg-blue-500/10 border-blue-500/30 text-blue-500 hover:bg-blue-500/20"
                                         : "bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20"
                                 )}
                                 title={isViewLocked ? "Students' view is frozen to yours" : "Students can scroll independently"}
                             >
-                                {isViewLocked ? <LocateFixed size={14} /> : <Locate size={14} />}
+                                {isViewLocked ? <LocateFixed size={18} /> : <Locate size={18} />}
                                 <span className="hidden xl:block text-[10px] font-black uppercase tracking-wider">{isViewLocked ? "Synced" : "Free"} View</span>
                             </button>
                         </div>
@@ -711,7 +706,7 @@ export default function BoardTopBar({
             </div>
 
             {/* Fixed Action Cluster (Very Right, Always Visible) */}
-            <div className="flex items-center px-1 py-0.5 h-full border-r border-border/50 bg-sidebar shrink-0 z-40 gap-2">
+            <div className="flex items-center px-1 h-8 border-r border-border/50 bg-sidebar shrink-0 z-40 gap-2">
                 {role === "student" && drawingEnabled === false && (
                     <div className="text-[10px] font-bold whitespace-nowrap px-2 py-1 bg-red-500/10 text-red-500 rounded-[5px] border border-red-500/20 shadow-sm">
                         No Canvas Access
@@ -758,10 +753,10 @@ export default function BoardTopBar({
                     Leave Class
                 </button>
             </div>
-            <div className="flex items-center  px-1 py-0.5 h-full border-r border-border/50 bg-sidebar shrink-0 z-40 ">
+            <div className="flex items-center px-1 h-8 border-r border-border/50 bg-sidebar shrink-0 z-40">
                 <SessionTimer initialDuration={duration} role={role} sessionId={sessionId} />
             </div>
-            <div className="flex items-center gap-2 px-3 py-2 border-l border-border/50 bg-sidebar shrink-0 z-40 shadow-[-8px_0_12px_rgba(0,0,0,0.05)]">
+            <div className="flex items-center gap-2 px-3 h-8 border-l border-border/50 bg-sidebar shrink-0 z-40 shadow-[-8px_0_12px_rgba(0,0,0,0.05)]">
                 {/* <div className="h-[41px] flex items-center justify-between px-3 sm:px-6 border-b border-border shrink-0"> */}
                 {/* </div> */}
                 <span className="text-[10px] sm:text-xs font-black flex flex-col tracking-widest text-muted-background">{userName} <span className=" text-muted-foreground text-[0.7em]">{role == "teacher" ? "(Teacher)" : "(Student)"}</span></span>

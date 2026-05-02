@@ -435,6 +435,7 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
                         onToggleViewLocked={toggleViewLocked}
                         drawingEnabled={drawingEnabled}
                         onEndSession={handleEndSession}
+                        onPdfUpload={role === "teacher" ? handlePdfUpload : undefined}
                         isClassEnded={isClassEnded}
                     />
 
@@ -464,7 +465,6 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
                             setBrushSize={setBrushSize}
                             shapeFillColor={shapeFillColor}
                             setShapeFillColor={setShapeFillColor}
-                            onPdfUpload={role === "teacher" ? handlePdfUpload : undefined}
                             onClearCanvas={role === "teacher" ? () => {
                                 document.dispatchEvent(new CustomEvent("clear-canvas-emit"))
                             } : undefined}

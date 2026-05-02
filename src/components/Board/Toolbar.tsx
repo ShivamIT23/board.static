@@ -237,7 +237,7 @@ export default function Toolbar({
                     className="flex flex-col no-scrollbar overflow-y-auto h-full w-full items-center py-3 gap-2 px-1"
                 >
                     {/* Tools Section */}
-                    <div className="flex flex-col space-y-2 w-full h-fit">
+                    <div className="flex flex-col items-center space-y-2 w-full h-fit">
                         <span className="text-[7px] font-black uppercase tracking-widest text-muted-foreground mb-1 text-center">Tools</span>
 
                         {/* Color Section */}
@@ -250,13 +250,13 @@ export default function Toolbar({
                                         ref={colorButtonRef}
                                         type="button"
                                         onClick={() => toggleColorPicker()}
-                                        className="w-10 h-11 border rounded-[5px] border-primary/40 flex items-center justify-center transition-colors cursor-pointer shadow-sm"
+                                        className="p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 flex items-center justify-center transition-all duration-300 cursor-pointer shadow-sm"
                                         style={{
                                             backgroundColor: color,
                                             color: getContrastColor(color)
                                         }}
                                     >
-                                        <Palette size={12} />
+                                        <Palette size={16} />
                                     </button>
 
                                     {showColorPicker && colorPickerPos && ReactDOM.createPortal(
@@ -281,40 +281,18 @@ export default function Toolbar({
                         </div>
 
                         {/* Pen tools - pen, highlighter */}
-                        <div className="relative group border rounded-[5px] border-primary/40" ref={penButtonRef}>
-                            <div className={cn(
-                                "flex flex-col items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
-                                isPenTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
-                            )}>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setTool(`pen:${selectedPen}`)
-                                        if (!isPenTool) setShowPenDropdown(false)
-                                    }}
-                                    onContextMenu={(e) => { e.preventDefault(); togglePenDropdown() }}
-                                    className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10"
-                                    title={`Use ${selectedPen}`}
-                                >
-                                    <ActivePenIcon size={18} />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation()
-                                        togglePenDropdown()
-                                    }}
-                                    className={cn(
-                                        "py-0.5 flex items-center justify-center transition-colors hover:bg-white/20 border-t border-white/10",
-                                        isPenTool ? "text-primary-foreground" : "text-muted-foreground"
-                                    )}
-                                    title="Choose pen type"
-                                >
-                                    <svg className="w-2 h-2 opacity-80" viewBox="0 0 10 10" fill="currentColor">
-                                        <path d="M2 4 L8 4 L5 8 Z" />
-                                    </svg>
-                                </button>
-                            </div>
+                        <div className="relative group border rounded-[5px] border-primary/40 w-[30px] h-[30px]" ref={penButtonRef}>
+                            <button
+                                type="button"
+                                onClick={() => togglePenDropdown()}
+                                className={cn(
+                                    "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
+                                    isPenTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                                )}
+                                title={`Choose pen type (Current: ${selectedPen})`}
+                            >
+                                <ActivePenIcon size={16} />
+                            </button>
 
                             {showPenDropdown && penDropdownPos && ReactDOM.createPortal(
                                 <>
@@ -335,7 +313,7 @@ export default function Toolbar({
                                                         setShowPenDropdown(false)
                                                     }}
                                                     className={cn(
-                                                        "p-2 rounded-[5px] flex items-center gap-2 transition-all duration-200",
+                                                        "p-1.5 rounded-[5px] flex items-center gap-2 transition-all duration-200",
                                                         (tool === `pen:${p.id}`)
                                                             ? "bg-primary text-primary-foreground shadow-md"
                                                             : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -353,7 +331,7 @@ export default function Toolbar({
                             )}
                         </div>
                         {/* Brush Size */}
-                        <div className="flex flex-col w-full gap-2 items-center mb-2">
+                        <div className="flex flex-col w-full gap-2 items-center mb-3">
                             <span className="text-[6px] font-black uppercase tracking-widest text-muted-foreground text-center flex flex-wrap justify-center items-center gap-0.5 p-0.5">Size <span className="text-[8px] font-bold text-muted-foreground">({brushSize})</span></span>
                             <div className="flex flex-col w-full items-center bg-muted/50 rounded-[3px] gap-2">
                                 {brushSizes.map((size) => (
@@ -361,52 +339,32 @@ export default function Toolbar({
                                         key={size}
                                         type="button"
                                         onClick={() => setBrushSize(size)}
-                                        className={cn("w-full flex items-center justify-center relative group border rounded-[2px] border-primary/40 transition-all py-1.5", brushSize === size ? "bg-primary text-primary-foreground shadow-sm" : "hover:bg-accent text-muted-foreground hover:text-foreground")}
+                                        className={cn("flex items-center justify-center relative group border rounded-[5px] border-primary/40 transition-all duration-300 p-1.5 py-0.5 shadow-sm w-[30px] h-[20px]", brushSize === size ? "bg-primary text-primary-foreground" : "hover:bg-accent text-muted-foreground hover:text-foreground")}
                                         title={`Size ${size}`}
                                     >
-                                        <div className="w-7 rounded-[2px] bg-current transition-all" style={{ height: `${Math.max(1.5, size / 2.5)}px` }} />
+                                        <div className="w-full rounded-[2px] bg-current transition-all" style={{ height: `${Math.max(1.5, size / 2.5)}px` }} />
                                     </button>
                                 ))}
                             </div>
                         </div>
-                        <div className="relative group border rounded-[5px] border-primary/40" ref={eraserButtonRef}>
-                            <div className={cn(
-                                "flex flex-col items-stretch rounded-[5px] overflow-hidden transition-all duration-300 border border-transparent",
-                                (tool === "eraser" || tool === "partial-eraser") ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
-                            )}>
-                                <button
-                                    type="button"
-                                    onClick={() => setTool(tool === "partial-eraser" ? "partial-eraser" : "eraser")}
-                                    onContextMenu={(e) => {
-                                        e.preventDefault()
-                                        if (eraserButtonRef.current) {
-                                            const rect = eraserButtonRef.current.getBoundingClientRect()
-                                            setEraserDropdownPos({ top: rect.top, left: rect.right + 10 })
-                                            setShowEraserDropdown(true)
-                                        }
-                                    }}
-                                    className="p-1.5 flex-1 flex items-center justify-center transition-colors hover:bg-white/10 min-h-[30px]"
-                                    title="Eraser Tool (Right click for options)"
-                                >
-                                    <ActiveEraserIcon size={18} />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (eraserButtonRef.current) {
-                                            const rect = eraserButtonRef.current.getBoundingClientRect()
-                                            setEraserDropdownPos({ top: rect.top, left: rect.right + 10 })
-                                            setShowEraserDropdown(!showEraserDropdown)
-                                        }
-                                    }}
-                                    className="h-2 flex items-center justify-center hover:bg-white/20 transition-colors border-t border-white/5"
-                                    title="Choose eraser tool"
-                                >
-                                    <svg className="w-2 h-2 opacity-80" viewBox="0 0 10 10" fill="currentColor">
-                                        <path d="M2 4 L8 4 L5 8 Z" />
-                                    </svg>
-                                </button>
-                            </div>
+                        <div className="relative group border rounded-[5px] border-primary/40 w-[30px] h-[30px]" ref={eraserButtonRef}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (eraserButtonRef.current) {
+                                        const rect = eraserButtonRef.current.getBoundingClientRect()
+                                        setEraserDropdownPos({ top: rect.top, left: rect.right + 10 })
+                                        setShowEraserDropdown(!showEraserDropdown)
+                                    }
+                                }}
+                                className={cn(
+                                    "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
+                                    (tool === "eraser" || tool === "partial-eraser") ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                                )}
+                                title="Eraser Tool"
+                            >
+                                <ActiveEraserIcon size={16} />
+                            </button>
 
                             {showEraserDropdown && eraserDropdownPos && ReactDOM.createPortal(
                                 <>
@@ -426,7 +384,7 @@ export default function Toolbar({
                                                         setShowEraserDropdown(false)
                                                     }}
                                                     className={cn(
-                                                        "p-2 rounded-[5px] flex items-center gap-2 transition-all duration-200",
+                                                        "p-1.5 rounded-[5px] flex items-center gap-2 transition-all duration-200",
                                                         tool === e.id
                                                             ? "bg-primary text-primary-foreground shadow-md"
                                                             : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -443,12 +401,12 @@ export default function Toolbar({
                                 document.body
                             )}
                         </div>
-                        <button type="button" onClick={() => setTool("text")} className={cn("p-2 border rounded-[5px] border-primary/40 transition-all duration-300", tool === "text" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Text Tool">
-                            <Type size={20} className="mx-auto" />
+                        <button type="button" onClick={() => setTool("text")} className={cn("p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center", tool === "text" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Text Tool">
+                            <Type size={18} />
                         </button>
 
-                        <button type="button" onClick={() => setTool("laser")} className={cn("p-2 border rounded-[5px] border-primary/40 w-full  transition-all duration-300", tool === "laser" ? "bg-red-500 text-white shadow-lg shadow-red-500/30" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Laser Pointer">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="mx-auto" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <button type="button" onClick={() => setTool("laser")} className={cn("p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center", tool === "laser" ? "bg-red-500 text-white shadow-lg shadow-red-500/30" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Laser Pointer">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.8" />
                                 <path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" opacity="0.5" />
                             </svg>
@@ -472,10 +430,10 @@ export default function Toolbar({
                                     })
                                     if (isConfirmed) onClearCanvas()
                                 }}
-                                className="p-2  border rounded-[5px] border-primary/40 w-full transition-all duration-300 text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                                className="p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 text-red-500 hover:text-red-400 hover:bg-red-500/10 shadow-sm flex items-center justify-center"
                                 title="Clear Canvas (All Users)"
                             >
-                                <Trash2 size={20} className="mx-auto" />
+                                <Trash2 size={18} />
                             </button>
                         </>
                     )}
@@ -554,7 +512,7 @@ export default function Toolbar({
                     <button
                         type="button"
                         onClick={() => boardFileInputRef.current?.click()}
-                        className="p-1.5 transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent border rounded-[5px] border-primary/40 shadow-sm"
+                        className="p-1.5 w-[30px] h-[30px] flex items-center justify-center transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent border rounded-[5px] border-primary/40 shadow-sm"
                         title="Add Image to Board"
                     >
                         <ImagePlus size={18} />
@@ -564,7 +522,7 @@ export default function Toolbar({
                     <button
                         type="button"
                         onClick={() => pdfFileInputRef.current?.click()}
-                        className="p-1.5 border rounded-[5px] border-primary/40 transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent shadow-sm"
+                        className="p-1.5 w-[30px] h-[30px] flex items-center justify-center border rounded-[5px] border-primary/40 transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent shadow-sm"
                         title="Upload PDF to Board"
                     >
                         <FileUp size={18} />

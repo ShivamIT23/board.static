@@ -1601,7 +1601,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             <div
                 ref={wrapperRef}
                 className={cn(
-                    "w-full flex-1 rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.5)] dark:shadow-[0_0_20px_rgba(255,255,255,0.2)] border border-border transition-all duration-400 bg-zinc-900/50",
+                    "w-full flex-1 rounded-none shadow-[0_0_20px_rgba(0,0,0,0.5)] dark:shadow-[0_0_20px_rgba(255,255,255,0.2)] border border-border transition-all duration-400 bg-zinc-900/50",
                     (role === "student" && isViewLocked) ? "overflow-hidden" : "overflow-auto"
                 )}
                 style={{ backgroundColor: boardColor }}
