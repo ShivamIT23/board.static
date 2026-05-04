@@ -40,6 +40,8 @@ interface BoardTopBarProps {
     onToggleViewLocked?: (enabled: boolean) => void
     drawingEnabled?: boolean
     onPdfUpload?: (file: File) => void
+    onEndSession?: (sid: string) => void
+    isClassEnded?: boolean
 }
 
 const SHAPE_TOOLS = [
@@ -117,6 +119,8 @@ export default function BoardTopBar({
     onToggleViewLocked,
     drawingEnabled,
     onPdfUpload,
+    onEndSession,
+    isClassEnded
 }: BoardTopBarProps) {
 
     const { socket } = useSocket()

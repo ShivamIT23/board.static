@@ -420,10 +420,8 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
             <div className="flex flex-1 overflow-hidden">
                 <div className="flex flex-col flex-1 overflow-hidden">
                     <BoardTopBar
-                        zoom={zoom}
                         tool={tool}
                         setTool={setTool}
-                        onZoomChange={setZoom}
                         isOpen={isChatOpen}
                         duration={duration}
                         userName={userName}

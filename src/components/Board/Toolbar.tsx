@@ -52,7 +52,6 @@ interface ToolbarProps {
     shapeFillColor: string
     setShapeFillColor: (color: string) => void
     onClearCanvas?: () => void
-    onPdfUpload?: (file: File) => void
     isClassEnded?: boolean
 }
 
@@ -67,11 +66,10 @@ export default function Toolbar({
     shapeFillColor,
     setShapeFillColor,
     onClearCanvas,
-    onPdfUpload,
     isClassEnded
 }: ToolbarProps) {
 
-    const { socket } = useSocket()
+    // const { socket } = useSocket()
     const [showColorPicker, setShowColorPicker] = useState(false)
     const [showFillPicker, setShowFillPicker] = useState(false)
     const [showPenDropdown, setShowPenDropdown] = useState(false)
@@ -83,10 +81,6 @@ export default function Toolbar({
     const [eraserDropdownPos, setEraserDropdownPos] = useState<{ top: number; left: number } | null>(null)
 
     const [selectedPen, setSelectedPen] = useState<typeof PEN_TOOLS[number]["id"]>("pen")
-
-
-    const boardFileInputRef = useRef<HTMLInputElement>(null)
-    const pdfFileInputRef = useRef<HTMLInputElement>(null)
 
 
     const brushSizes = [2, 4, 8, 12, 16, 20]
@@ -162,58 +156,6 @@ export default function Toolbar({
         setShowFillPicker(true)
     }, [showFillPicker])
 
-
-    const handleBoardFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file || !socket) return
-
-        if (!file.type.startsWith("image/")) {
-            toast.error("Only image files can be added to the board")
-            if (boardFileInputRef.current) boardFileInputRef.current.value = ""
-            return
-        }
-
-        if (file.size > 5 * 1024 * 1024) {
-            toast.error("Image must be less than 5MB")
-            if (boardFileInputRef.current) boardFileInputRef.current.value = ""
-            return
-        }
-
-        const reader = new FileReader()
-        reader.onloadend = () => {
-            socket.emit("board_file_add", {
-                payload: {
-                    id: crypto.randomUUID(),
-                    url: reader.result as string,
-                    name: file.name,
-                    position: { x: 0.3, y: 0.3 },
-                    scale: 0.25,
-                }
-            })
-        }
-        reader.readAsDataURL(file)
-        if (boardFileInputRef.current) boardFileInputRef.current.value = ""
-    }
-
-    const handlePdfFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file) return
-
-        if (file.type !== "application/pdf") {
-            toast.error("Only PDF files are supported")
-            if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
-            return
-        }
-
-        if (file.size > 25 * 1024 * 1024) {
-            toast.error("PDF must be less than 25MB")
-            if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
-            return
-        }
-
-        onPdfUpload?.(file)
-        if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
-    }
 
     return (
         <nav className="w-12 flex no-scrollbar flex-col items-center bg-sidebar border-r border-border z-30 shrink-0 h-full max-h-screen">
@@ -505,30 +447,6 @@ export default function Toolbar({
                     </div>
                 )}
             </div>
-            {/* Upload Buttons */}
-            {role === "teacher" && (
-                <div className="flex flex-col items-center w-full gap-2 shrink-0 py-2 border-t border-border mt-auto">
-                    <input type="file" ref={boardFileInputRef} onChange={handleBoardFileSelect} className="hidden" accept="image/*" />
-                    <button
-                        type="button"
-                        onClick={() => boardFileInputRef.current?.click()}
-                        className="p-1.5 w-[30px] h-[30px] flex items-center justify-center transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent border rounded-[5px] border-primary/40 shadow-sm"
-                        title="Add Image to Board"
-                    >
-                        <ImagePlus size={18} />
-                    </button>
-
-                    <input type="file" ref={pdfFileInputRef} onChange={handlePdfFileSelect} className="hidden" accept="application/pdf" />
-                    <button
-                        type="button"
-                        onClick={() => pdfFileInputRef.current?.click()}
-                        className="p-1.5 w-[30px] h-[30px] flex items-center justify-center border rounded-[5px] border-primary/40 transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent shadow-sm"
-                        title="Upload PDF to Board"
-                    >
-                        <FileUp size={18} />
-                    </button>
-                </div>
-            )}
         </nav>
     )
 }
