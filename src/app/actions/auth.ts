@@ -1,7 +1,6 @@
 "use server"
 
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { db, classChats } from "@/db";
 import { eq, and, lt, desc, SQL } from "drizzle-orm";
 
@@ -15,10 +14,6 @@ export async function leaveSession(sessionId: string) {
     // Better Auth uses these common cookie names
     cookieStore.delete("better-auth.session_token");
     cookieStore.delete("better-auth.session");
-    
-    // 3. Redirect to the landing page or a specific logout page
-    // Using a 303 or 302 to ensure the browser follows the redirect
-    redirect("/");
 }
 
 export async function getHistoricalChats(sessionId: string, before?: number) {
@@ -61,11 +56,17 @@ export async function endSessionAction(sessionId: string, userId: string) {
     try {
         // 1. Notify Socket Server (Socket server will then notify main backend)
         const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3005";
-        await fetch(`${socketUrl}/api/room/${sessionId}/end`, {
+        const response = await fetch(`${socketUrl}/api/room/${sessionId}/end`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId })
         });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: "Unknown error" }));
+            console.error("Failed to end session:", error);
+            return { status: 'error', message: error.error || "Failed to end session" };
+        }
 
         return { status: 'success' };
     } catch (error) {

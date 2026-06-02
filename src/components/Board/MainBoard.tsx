@@ -1,15 +1,18 @@
 "use client"
 
-import React, { useState, useEffect, useMemo, useCallback } from "react"
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import Toolbar from "./Toolbar"
 import Whiteboard from "./Whiteboard"
 import ChatRoom from "../Chat/ChatRoom"
 import BoardTopBar from "./BoardTopBar"
-import { SocketProvider, useSocket } from "../providers/socket-provider"
-import { RoomUser } from "../Chat/ChatRoom"
+// import YTVideoPlayer from "./YTVideoPlayer" // ── YT VIDEO FEATURE (COMMENTED OUT) ──
+import { SocketProvider } from "../providers/socket-provider"
+import { useSocket } from "@/hooks/use-socket"
+import type { RoomUser } from "@/types/chat"
 import { endSessionAction } from "@/app/actions/auth"
 import { toast } from "sonner"
 import Swal from "sweetalert2"
+import { cn } from "@/lib/utils"
 
 interface MainBoardProps {
     duration: number
@@ -20,17 +23,17 @@ interface MainBoardProps {
     visitorId?: number
     isClassEnded?: boolean
     endedAt?: number
+    durationAdded?: number
+    startTime?: number
 }
 
-
-
-function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, setIsClassEnded, endedAt, setEndedAt }: MainBoardProps & {
+function MainBoardInner({ duration, sessionId, role, userName, userId, isClassEnded, setIsClassEnded, endedAt, setEndedAt, durationAdded, startTime }: MainBoardProps & {
     setIsClassEnded: React.Dispatch<React.SetStateAction<boolean | undefined>>,
     setEndedAt: React.Dispatch<React.SetStateAction<number | undefined>>
 }) {
     // Board State
     const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
-    const [tool, setTool] = useState("pencil")
+    const [tool, setTool] = useState("pen:pen")
     const [color, setColor] = useState("#FFFFFF")
     const [pageBgColors, setPageBgColors] = useState<Record<number, string>>({ 1: "#18181b" })
     const [pageBgImages, setPageBgImages] = useState<Record<number, string[]>>({})
@@ -41,14 +44,29 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
     const [roomUsers, setRoomUsers] = useState<RoomUser[]>([])
     const [isChatOpen, setIsChatOpen] = useState(true)
     const [isViewLocked, setIsViewLocked] = useState(true)
+    const [isFullscreen, setIsFullscreen] = useState(false)
+    const [isFsChatOpen, setIsFsChatOpen] = useState(false)
+    const [unreadCount, setUnreadCount] = useState(0)
+    /* ── YT VIDEO FEATURE (COMMENTED OUT) ──
+    const [youtubeState, setYoutubeState] = useState<{
+        videoId: string;
+        playStatus: "playing" | "paused";
+        currentTime: number;
+        lastUpdated: number;
+    } | null>(null)
+    */
+    const mainContainerRef = useRef<HTMLDivElement>(null)
 
     // Page & Zoom Management
     const [currentPage, setCurrentPage] = useState(1)
     const [totalPages, setTotalPages] = useState(1)
-    const [zoom, setZoom] = useState(100)
 
     // Shape colors
-    const [shapeFillColor, setShapeFillColor] = useState("transparent")
+
+
+    // Text font settings
+    const [fontSize, setFontSize] = useState(24)
+    const [fontFamily, setFontFamily] = useState("Inter, sans-serif")
 
     const { socket } = useSocket()
 
@@ -93,7 +111,10 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
         const handleRoomUsersDrawing = ({ payload }: { payload: { users: Array<{ user_id: string; socket_id: string; drawingEnabled?: boolean }> } }) => {
             if (role === "student") {
                 const me = payload.users.find(u => u.socket_id === socket.id)
-                if (me) setDrawingEnabled(me.drawingEnabled ?? false)
+                if (me) {
+                    const newVal = me.drawingEnabled ?? false
+                    setDrawingEnabled(prev => prev === newVal ? prev : newVal)
+                }
             }
         }
         socket.on("room_users", handleRoomUsersDrawing)
@@ -104,12 +125,26 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
         const handleViewLockedState = ({ payload }: { payload: { isLocked: boolean } }) => {
             console.log("Received view locked state:", payload.isLocked)
             setIsViewLocked(payload.isLocked)
+            
+            if (role === "student") {
+                if (payload.isLocked) {
+                    toast.info("Synced View Enabled", {
+                        description: "You are now following the teacher's screen.",
+                        duration: 5000,
+                    });
+                } else {
+                    toast.success("Free View Enabled", {
+                        description: "You can now scroll independently also.",
+                        duration: 5000,
+                    });
+                }
+            }
         }
         socket.on("view_locked_state", handleViewLockedState)
 
-        /* ─── START OF SESSION ENDED LISTENER (COMMENTABLE) ────
-        const handleSessionEnded = () => {
-            const now = Date.now();
+        /* ─── START OF SESSION ENDED LISTENER (COMMENTABLE) ──── */
+        const handleSessionEnded = ({ endedAt: serverEndedAt }: { endedAt?: number }) => {
+            const now = serverEndedAt || Date.now();
             setEndedAt(now);
             setIsClassEnded(true);
             setDrawingEnabled(true);
@@ -119,7 +154,21 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
             socket.disconnect();
         }
         socket.on("session_ended", handleSessionEnded);
-        ─── END OF SESSION ENDED LISTENER ────────────────────── */
+        /*─── END OF SESSION ENDED LISTENER ────────────────────── */
+
+        /* ── YT VIDEO FEATURE (COMMENTED OUT) ──
+        // YouTube sync handlers
+        const handleYtSync = ({ payload }: { payload: any }) => {
+            console.log("YouTube sync update:", payload)
+            setYoutubeState(payload)
+        }
+        const handleYtClose = () => {
+            console.log("YouTube closed")
+            setYoutubeState(null)
+        }
+        socket.on("yt_sync", handleYtSync)
+        socket.on("yt_close", handleYtClose)
+        */
 
         return () => {
             socket.off("board_color_sync", handleBoardColorSync)
@@ -128,11 +177,15 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
             socket.off("drawing_permission", handleDrawingPermission)
             socket.off("room_users", handleRoomUsersDrawing)
             socket.off("view_locked_state", handleViewLockedState)
-            // socket.off("session_ended", handleSessionEnded)
+            socket.off("session_ended", handleSessionEnded)
+            /* ── YT VIDEO FEATURE (COMMENTED OUT) ──
+            socket.off("yt_sync", handleYtSync)
+            socket.off("yt_close", handleYtClose)
+            */
         }
     }, [socket, role, setIsClassEnded, setEndedAt])
 
-    /* ─── PERSISTENT GRACE PERIOD REDIRECTION (COMMENTABLE) ────────
+    /* ─── PERSISTENT GRACE PERIOD REDIRECTION (COMMENTABLE) ──────── */
     useEffect(() => {
         if (isClassEnded && endedAt) {
             const updateRemaining = () => {
@@ -143,7 +196,7 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
                 setRemainingSeconds(remaining);
 
                 if (remaining <= 0) {
-                    window.location.href = "https://tutorarc.cloud";
+                    window.location.href = "/class-ended";
                 }
             };
 
@@ -152,16 +205,16 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
             return () => clearInterval(interval);
         }
     }, [isClassEnded, endedAt]);
-    ────────────────────────────────────────────────────────────── */
+    /*────────────────────────────────────────────────────────────── */
 
-    /* ─── POST-SESSION ACCESS (COMMENTABLE) ──────────────────────
+    /* ─── POST-SESSION ACCESS (COMMENTABLE) ────────────────────── */
     useEffect(() => {
         if (isClassEnded) {
             setDrawingEnabled(true);
             setIsViewLocked(false);
         }
     }, [isClassEnded]);
-    ────────────────────────────────────────────────────────────── */
+   /* ────────────────────────────────────────────────────────────── */
 
     const pageLabels = useMemo(() => {
         let bCount = 0;
@@ -387,8 +440,8 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
 
     const handleEndSession = async (sid: string) => {
         try {
-            /* ─── START OF END SESSION ACTION CALL (COMMENTABLE) ────
-            const result = await endSessionAction(sid, role === 'teacher' ? `teacher-${sid}` : 'unknown');
+            /* ─── START OF END SESSION ACTION CALL (COMMENTABLE) ────*/
+            const result = await endSessionAction(sid, userId || "unknown");
 
             if (result.status === 'success') {
                 const now = Date.now();
@@ -399,7 +452,7 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
             } else {
                 toast.error("Failed to end session properly via server action.");
             }
-            ─── END OF END SESSION ACTION CALL ────────────────────── */
+            /*─── END OF END SESSION ACTION CALL ────────────────────── */
         } catch (err) {
             console.error("Failed to end session:", err);
             toast.error("An error occurred while ending the session.");
@@ -415,8 +468,49 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
         }
     }
 
+    // ── Fullscreen Toggle ──────────────────────────────────────
+    const toggleFullscreen = useCallback(async () => {
+        try {
+            if (!document.fullscreenElement) {
+                await mainContainerRef.current?.requestFullscreen()
+            } else {
+                await document.exitFullscreen()
+            }
+        } catch (err) {
+            console.error("Fullscreen error:", err)
+        }
+    }, [])
+
+    // Listen for fullscreen change events (e.g. user presses Escape)
+    useEffect(() => {
+        const handleFsChange = () => {
+            const isFull = !!document.fullscreenElement
+            setIsFullscreen(isFull)
+            if (!isFull) setIsFsChatOpen(false)
+        }
+        document.addEventListener("fullscreenchange", handleFsChange)
+        return () => document.removeEventListener("fullscreenchange", handleFsChange)
+    }, [])
+
+    // Track unread messages when fullscreen chat is closed
+    useEffect(() => {
+        if (!socket) return
+        const handleChatForUnread = () => {
+            if (isFullscreen && !isFsChatOpen) {
+                setUnreadCount(prev => prev + 1)
+            }
+        }
+        socket.on("chat", handleChatForUnread)
+        return () => { socket.off("chat", handleChatForUnread) }
+    }, [socket, isFullscreen, isFsChatOpen])
+
+    // Clear unread when fullscreen chat opens
+    useEffect(() => {
+        if (isFsChatOpen) setUnreadCount(0)
+    }, [isFsChatOpen])
+
     return (
-        <div className="flex flex-col w-screen h-screen bg-background text-foreground overflow-hidden font-sans">
+        <div ref={mainContainerRef} className="flex flex-col w-screen h-screen bg-background text-foreground overflow-hidden font-sans">
             <div className="flex flex-1 overflow-hidden">
                 <div className="flex flex-col flex-1 overflow-hidden">
                     <BoardTopBar
@@ -424,6 +518,8 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
                         setTool={setTool}
                         isOpen={isChatOpen}
                         duration={duration}
+                        durationAdded={durationAdded}
+                        startTime={startTime}
                         userName={userName}
                         boardColor={currentBoardColor}
                         setBoardColor={updateBoardBackground}
@@ -435,11 +531,16 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
                         onEndSession={handleEndSession}
                         onPdfUpload={role === "teacher" ? handlePdfUpload : undefined}
                         isClassEnded={isClassEnded}
+                        isFullscreen={isFullscreen}
+                        onToggleFullscreen={toggleFullscreen}
+                        /* ── YT VIDEO FEATURE (COMMENTED OUT) ──
+                        onYoutubeSync={(state) => setYoutubeState(state)}
+                        */
                     />
 
-                    {/* ─── SESSION ENDED COUNTDOWN UI (COMMENTABLE) ────────
-                    {isClassEnded && remainingSeconds !== null && (
-                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-100 flex items-center gap-3 px-6 py-3 bg-zinc-900/90 backdrop-blur-md border border-orange-500/50 rounded-[5px] shadow-2xl shadow-orange-500/20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {/* ─── SESSION ENDED COUNTDOWN UI (COMMENTABLE) ──────── */}
+                    {isClassEnded && remainingSeconds !== null && role === "teacher" && (
+                        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-100 flex items-center gap-3 px-6 py-3 bg-zinc-900/95 backdrop-blur-xl border-2 border-orange-500 rounded-lg shadow-[0_0_50px_rgba(249,115,22,0.3)] animate-in fade-in slide-in-from-bottom-8 duration-700">
                             <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
                             <span className="text-sm font-medium text-zinc-100 whitespace-nowrap">
                                 Session Ended. Closing in
@@ -449,7 +550,8 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
                             </span>
                         </div>
                     )}
-                    ─────────────────────────────────────────────────── */}
+                    {/* ─────────────────────────────────────────────────── */}
+
 
                     <div className="flex-1 overflow-hidden relative flex">
 
@@ -461,8 +563,6 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
                             setColor={setColor}
                             brushSize={brushSize}
                             setBrushSize={setBrushSize}
-                            shapeFillColor={shapeFillColor}
-                            setShapeFillColor={setShapeFillColor}
                             onClearCanvas={role === "teacher" ? () => {
                                 document.dispatchEvent(new CustomEvent("clear-canvas-emit"))
                             } : undefined}
@@ -541,22 +641,117 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
                                 drawingEnabled={drawingEnabled}
                                 currentPage={currentPage}
                                 onToolChange={setTool}
-                                shapeFillColor={shapeFillColor}
                                 shapeBorderColor={color}
                                 textColor={color}
+                                fontSize={fontSize}
+                                setFontSize={setFontSize}
+                                fontFamily={fontFamily}
+                                setFontFamily={setFontFamily}
                             />
+                            {/* ── YT VIDEO FEATURE (COMMENTED OUT) ──
+                            {youtubeState && (
+                                <YTVideoPlayer
+                                    role={role}
+                                    sessionId={sessionId}
+                                    youtubeState={youtubeState}
+                                    onClose={() => setYoutubeState(null)}
+                                />
+                            )}
+                            */}
                         </div>
-                        <ChatRoom
-                            userCount={userCount}
-                            roomUsers={roomUsers}
-                            setRoomUsers={setRoomUsers}
-                            setUserCount={setUserCount}
-                            role={role}
-                            userName={userName}
-                            sessionId={sessionId}
-                            isOpen={isChatOpen}
-                            setIsOpen={setIsChatOpen}
-                        />
+                        {/* Normal sidebar chat (hidden in fullscreen) */}
+                        {!isFullscreen && (
+                            <ChatRoom
+                                userCount={userCount}
+                                roomUsers={roomUsers}
+                                setRoomUsers={setRoomUsers}
+                                setUserCount={setUserCount}
+                                role={role}
+                                userName={userName}
+                                sessionId={sessionId}
+                                isOpen={isChatOpen}
+                                setIsOpen={setIsChatOpen}
+                            />
+                        )}
+
+                        {/* Fullscreen floating chat bubble + panel */}
+                        {isFullscreen && (
+                            <>
+                                {/* Floating Chat Panel */}
+                                {isFsChatOpen && (
+                                    <div className="fixed bottom-20 right-4 z-9999 w-80 sm:w-96 h-[70vh] max-h-[600px] rounded-2xl overflow-hidden shadow-2xl shadow-black/40 border border-border/60 animate-in slide-in-from-bottom-4 fade-in zoom-in-95 duration-300 flex flex-col bg-card backdrop-blur-xl">
+                                        {/* Panel Header */}
+                                        <div className="h-10 flex items-center justify-between px-4 bg-sidebar/90 backdrop-blur-md border-b border-border/50 shrink-0">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Live Chat</span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-bold">{userCount}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => setIsFsChatOpen(false)}
+                                                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+                                                title="Minimize chat"
+                                            >
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <polyline points="4 14 10 14 10 20" />
+                                                    <polyline points="20 10 14 10 14 4" />
+                                                    <line x1="14" y1="10" x2="21" y2="3" />
+                                                    <line x1="3" y1="21" x2="10" y2="14" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        {/* Embedded ChatRoom */}
+                                        <div className="flex-1 min-h-0 flex flex-col">
+                                            <ChatRoom
+                                                userCount={userCount}
+                                                roomUsers={roomUsers}
+                                                setRoomUsers={setRoomUsers}
+                                                setUserCount={setUserCount}
+                                                role={role}
+                                                userName={userName}
+                                                sessionId={sessionId}
+                                                isOpen={true}
+                                                setIsOpen={() => setIsFsChatOpen(false)}
+                                                compact={true}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Floating Chat Bubble */}
+                                <button
+                                    onClick={() => setIsFsChatOpen(prev => !prev)}
+                                    className={cn(
+                                        "fixed bottom-4 right-4 z-9999 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl shadow-black/40 transition-all duration-300 active:scale-90 group",
+                                        isFsChatOpen
+                                            ? "bg-primary/90 text-primary-foreground scale-90 rotate-0"
+                                            : "bg-linear-to-br from-indigo-500 to-violet-600 text-white hover:scale-110 hover:shadow-indigo-500/40"
+                                    )}
+                                    title={isFsChatOpen ? "Close chat" : "Open chat"}
+                                >
+                                    {isFsChatOpen ? (
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                            <line x1="18" y1="6" x2="6" y2="18" />
+                                            <line x1="6" y1="6" x2="18" y2="18" />
+                                        </svg>
+                                    ) : (
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                        </svg>
+                                    )}
+                                    {/* Unread Badge */}
+                                    {!isFsChatOpen && unreadCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold shadow-lg animate-in zoom-in duration-200">
+                                            {unreadCount > 99 ? "99+" : unreadCount}
+                                        </span>
+                                    )}
+                                    {/* Pulse ring when unread */}
+                                    {!isFsChatOpen && unreadCount > 0 && (
+                                        <span className="absolute inset-0 rounded-full bg-indigo-500/30 animate-ping" />
+                                    )}
+                                </button>
+                            </>
+                        )}
                     </div>
 
                 </div>
@@ -566,9 +761,26 @@ function MainBoardInner({ duration, sessionId, role, userName, isClassEnded, set
     )
 }
 
-export default function MainBoard({ duration, sessionId, role, userName, userId, visitorId, isClassEnded: initialIsClassEnded, endedAt: initialEndedAt }: MainBoardProps) {
+export default function MainBoard({ duration, sessionId, role, userName, userId, visitorId, isClassEnded: initialIsClassEnded, endedAt: initialEndedAt, durationAdded, startTime }: MainBoardProps) {
     const [isClassEnded, setIsClassEnded] = useState(initialIsClassEnded)
     const [endedAt, setEndedAt] = useState(initialEndedAt)
+
+    // Clear stale localStorage from previous sessions
+    useEffect(() => {
+        if (typeof window === "undefined") return
+        const keysToRemove: string[] = []
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (!key) continue
+            if (
+                (key.startsWith("board_sync_") || key.startsWith("board_data_")) &&
+                !key.endsWith(sessionId)
+            ) {
+                keysToRemove.push(key)
+            }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k))
+    }, [sessionId])
 
     // Socket server URL
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3005"
@@ -593,6 +805,8 @@ export default function MainBoard({ duration, sessionId, role, userName, userId,
                 setIsClassEnded={setIsClassEnded}
                 endedAt={endedAt}
                 setEndedAt={setEndedAt}
+                durationAdded={durationAdded}
+                startTime={startTime}
             />
         </SocketProvider>
     )

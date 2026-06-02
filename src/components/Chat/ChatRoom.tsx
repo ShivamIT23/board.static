@@ -10,45 +10,9 @@ import { toast } from "sonner"
 import MessageList from "./MessageList"
 import ChatInput from "./ChatInput"
 import UserList from "./UserList"
+import Swal from "sweetalert2"
 
-export interface Attachment {
-    id: string
-    type: "image" | "file"
-    url: string
-    name: string
-    size?: number
-}
-
-export interface ChatMessage {
-    id?: string
-    user: { name: string; isTeacher: boolean }
-    message: string
-    timestamp: number
-    attachments?: Attachment[]
-}
-
-export interface RoomUser {
-    user_id: string
-    username: string
-    socket_id: string
-    isMuted?: boolean
-    mediaState?: { audio: boolean; video: boolean }
-    textEnabled?: boolean
-    attachmentsEnabled?: boolean
-    drawingEnabled?: boolean
-    role?: "teacher" | "student"
-    isTeacher?: boolean
-}
-
-export interface Visitor {
-    id: number;
-    name: string;
-    email: string | null;
-    joinedAt: string;
-    leftAt?: string | null;
-    lastSeenAt?: string | null;
-    isOnline?: boolean;
-}
+import type { Attachment, ChatMessage, RoomUser, Visitor } from "@/types/chat"
 
 interface ChatRoomProps {
     userCount: number
@@ -60,6 +24,7 @@ interface ChatRoomProps {
     sessionId: string
     isOpen: boolean
     setIsOpen: (open: boolean) => void
+    compact?: boolean
 }
 
 export default function ChatRoom({
@@ -71,7 +36,8 @@ export default function ChatRoom({
     userName,
     sessionId,
     isOpen,
-    setIsOpen
+    setIsOpen,
+    compact = false
 }: ChatRoomProps) {
     const { socket } = useSocket()
     const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -86,7 +52,8 @@ export default function ChatRoom({
     const [filePreview, setFilePreview] = useState<string | null>(null)
     const [roomSettings, setRoomSettings] = useState({
         chatEnabled: true,
-        attachmentsEnabled: true
+        attachmentsEnabled: true,
+        isAutoApprove: true
     })
     const [showSettings, setShowSettings] = useState(false)
 
@@ -97,6 +64,8 @@ export default function ChatRoom({
 
     const visitorsRef = useRef<HTMLDivElement>(null)
     const visitorsButtonRef = useRef<HTMLButtonElement>(null)
+    const settingsRef = useRef<HTMLDivElement>(null)
+    const settingsButtonRef = useRef<HTMLButtonElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [showScrollButton, setShowScrollButton] = useState(false)
     const [isAtBottom, setIsAtBottom] = useState(true)
@@ -113,10 +82,32 @@ export default function ChatRoom({
             })
         })
 
+        socket.on("kicked", ({ message }: { message: string }) => {
+            Swal.fire({
+                title: "Kicked Out",
+                text: message,
+                icon: "warning",
+                confirmButtonText: "OK"
+            }).then(() => {
+                window.location.href = "about:blank";
+            });
+        });
+
+        socket.on("banned", ({ message }: { message: string }) => {
+            Swal.fire({
+                title: "Permanently Banned",
+                text: message,
+                icon: "error",
+                confirmButtonText: "OK"
+            }).then(() => {
+                window.location.href = "about:blank";
+            });
+        });
+
         socket.on("chat_state", ({ payload }: { payload: { settings: typeof roomSettings } }) => {
             if (payload.settings) {
-                setRoomSettings(payload.settings)
-                if (!payload.settings.chatEnabled && role === "student") {
+                setRoomSettings(prev => ({ ...prev, ...payload.settings }))
+                if (payload.settings.chatEnabled === false && role === "student") {
                     toast.info("Chat has been disabled by the instructor")
                 }
             }
@@ -190,9 +181,15 @@ export default function ChatRoom({
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
+            // Close visitors if clicking outside
             if (visitorsRef.current && !visitorsRef.current.contains(event.target as Node) &&
                 visitorsButtonRef.current && !visitorsButtonRef.current.contains(event.target as Node)) {
                 setShowVisitors(false)
+            }
+            // Close settings if clicking outside
+            if (settingsRef.current && !settingsRef.current.contains(event.target as Node) &&
+                settingsButtonRef.current && !settingsButtonRef.current.contains(event.target as Node)) {
+                setShowSettings(false)
             }
         }
         document.addEventListener("mousedown", handleClickOutside)
@@ -214,8 +211,12 @@ export default function ChatRoom({
     }
 
     const toggleVisitors = () => {
-        if (!showVisitors && role === "teacher") fetchVisitors()
-        setShowVisitors(!showVisitors)
+        setShowVisitors(prev => {
+            const next = !prev;
+            if (next) setShowSettings(false);
+            if (next && role === "teacher") fetchVisitors();
+            return next;
+        });
     }
 
     // --- Robust Scroll Management ---
@@ -383,6 +384,52 @@ export default function ChatRoom({
         clearSelectedFile()
     }
 
+    // Compact mode: render just the message list + input without wrapper/header
+    if (compact) {
+        return (
+            <div className="flex flex-col h-full">
+                <MessageList
+                    messages={messages}
+                    userName={userName}
+                    scrollRef={scrollRef}
+                    handleScroll={handleScroll}
+                    showScrollButton={showScrollButton}
+                    scrollToBottom={scrollToBottom}
+                    isLoadingMore={isLoadingMore}
+                    canLoadMore={canLoadMore}
+                    resolveAttachmentUrl={resolveAttachmentUrl}
+                    role={role}
+                />
+                {Object.keys(typingUsers).length > 0 && (
+                    <div className="px-4 py-1.5 bg-muted/30 border-t border-border/50">
+                        <p className="text-[10px] text-muted-foreground animate-pulse flex items-center gap-2">
+                            <span className="flex gap-1">
+                                <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" />
+                            </span>
+                            {Object.values(typingUsers).join(", ")} {Object.keys(typingUsers).length > 1 ? "are" : "is"} typing...
+                        </p>
+                    </div>
+                )}
+                <ChatInput
+                    inputMessage={inputMessage}
+                    setInputMessage={setInputMessage}
+                    sendMessage={sendMessage}
+                    fileInputRef={fileInputRef}
+                    handleFileSelect={handleFileSelect}
+                    selectedFile={selectedFile}
+                    filePreview={filePreview}
+                    clearSelectedFile={clearSelectedFile}
+                    role={role}
+                    roomSettings={roomSettings}
+                    roomUser={roomUsers.find(u => u.socket_id === socket?.id)}
+                    socket={socket}
+                />
+            </div>
+        )
+    }
+
     if (!isOpen) {
         return (
             <div className="w-12 bg-card border-l border-border flex flex-col items-center py-4 gap-4 transition-all duration-300">
@@ -429,6 +476,7 @@ export default function ChatRoom({
                                 role={role}
                                 visitors={visitors}
                                 isLoadingVisitors={isLoadingVisitors}
+                                isAutoApprove={roomSettings.isAutoApprove}
                                 toggleUserPermission={toggleUserPermission}
                                 socket={socket}
                             />
@@ -437,8 +485,15 @@ export default function ChatRoom({
 
                     {role === "teacher" && (
                         <button
+                            ref={settingsButtonRef}
                             type="button"
-                            onClick={() => setShowSettings(!showSettings)}
+                            onClick={() => {
+                                setShowSettings(prev => {
+                                    const next = !prev;
+                                    if (next) setShowVisitors(false);
+                                    return next;
+                                });
+                            }}
                             className={cn("p-1.5 text-muted-foreground hover:text-foreground", showSettings && "text-primary bg-primary/10 rounded-md")}
                         >
                             <Settings size={16} />
@@ -454,45 +509,60 @@ export default function ChatRoom({
             </div>
 
             {role === "teacher" && showSettings && (
-                <div className="px-6 py-4 bg-muted/50 border-b border-border space-y-3 animate-in slide-in-from-top-2 duration-200">
-                    <div className="flex items-center justify-between">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-bold text-foreground">Global Chat</span>
-                            <span className="text-[9px] text-muted-foreground">Enable/Disable chat for all</span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => toggleSetting("chat")}
-                            className={cn(
-                                "p-2 rounded-md transition-all",
-                                roomSettings.chatEnabled ? "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"
-                            )}
-                        >
-                            {roomSettings.chatEnabled ? <MessageCircle size={16} /> : <MessageSquareOff size={16} />}
-                        </button>
-                    </div>
+                <div
+                    ref={settingsRef}
+                    className="absolute top-[40px] left-0 right-0 z-50 bg-background/60 backdrop-blur-xl border-b border-border shadow-2xl animate-in slide-in-from-top-2 duration-300"
+                >
+                    <div className="px-2 py-2 space-y-4">
+                        {/* <div className="flex items-center justify-between mb-1">
+                            <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/70">Room Controls</h3>
+                            <div className="h-px flex-1 bg-border/40 ml-3" />
+                        </div> */}
 
-                    <div className="flex items-center justify-between">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-bold text-foreground">File Sharing</span>
-                            <span className="text-[9px] text-muted-foreground">Global file sharing toggle</span>
+                        <div className="flex items-center justify-between p-2 rounded-[2px] bg-muted/30 hover:bg-muted/50 transition-colors group">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="text-[11px] font-bold text-foreground/90 group-hover:text-foreground transition-colors">Global Chat</span>
+                                <span className="text-[9px] text-muted-foreground leading-tight">Enable chat messaging for everyone</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => toggleSetting("chat")}
+                                className={cn(
+                                    "relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300",
+                                    roomSettings.chatEnabled
+                                        ? "bg-emerald-500/15 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.1)] hover:bg-emerald-500/20"
+                                        : "bg-rose-500/15 text-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.1)] hover:bg-rose-500/20"
+                                )}
+                            >
+                                {roomSettings.chatEnabled ? <MessageCircle size={16} /> : <MessageSquareOff size={16} />}
+                            </button>
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => toggleSetting("attachments")}
-                            disabled={!roomSettings.chatEnabled}
-                            className={cn(
-                                "p-2 rounded-md transition-all disabled:opacity-30",
-                                roomSettings.attachmentsEnabled ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20" : "bg-zinc-500/10 text-zinc-500 hover:bg-zinc-500/20"
-                            )}
-                        >
-                            {roomSettings.attachmentsEnabled ? <FileIcon size={16} /> : <FileX size={16} />}
-                        </button>
+
+                        <div className="flex items-center justify-between p-2 rounded-[2px] bg-muted/30 hover:bg-muted/50 transition-colors group">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="text-[11px] font-bold text-foreground/90 group-hover:text-foreground transition-colors">File Sharing</span>
+                                <span className="text-[9px] text-muted-foreground leading-tight">Allow attachments and screenshots</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => toggleSetting("attachments")}
+                                disabled={!roomSettings.chatEnabled}
+                                className={cn(
+                                    "relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 disabled:opacity-30",
+                                    roomSettings.attachmentsEnabled
+                                        ? "bg-indigo-500/15 text-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.1)] hover:bg-indigo-500/20"
+                                        : "bg-zinc-500/15 text-zinc-500 hover:bg-zinc-500/20"
+                                )}
+                            >
+                                {roomSettings.attachmentsEnabled ? <FileIcon size={16} /> : <FileX size={16} />}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
 
             <MessageList
+                role={role}
                 messages={messages}
                 userName={userName}
                 scrollRef={scrollRef}

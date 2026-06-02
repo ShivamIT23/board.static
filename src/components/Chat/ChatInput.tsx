@@ -3,7 +3,7 @@
 import React from "react"
 import { Send, Paperclip, FileText, X, FileX, Lock } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { RoomUser } from "./ChatRoom"
+import { RoomUser } from "@/types/chat"
 import type { Socket } from "socket.io-client"
 
 interface ChatInputProps {

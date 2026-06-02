@@ -4,41 +4,16 @@ import React, { useCallback, useEffect, useRef, useState } from "react"
 import ReactDOM from "react-dom"
 import {
     Highlighter, Pen, Eraser, Trash2, Palette,
-    Square, Circle, Minus, ArrowUpRight, Type, Triangle, Diamond, Star, Ellipse, Pentagon, TriangleRight, RectangleHorizontal, FileUp, ImagePlus
+    Minus, Type
 } from "lucide-react"
+
 import { cn, getContrastColor } from "@/lib/utils"
 import ColorPicker from "./ColorPicker"
 import Swal from "sweetalert2"
 import { toast } from "sonner"
-import { useSocket } from "../providers/socket-provider"
-
-const PEN_TOOLS = [
-    { id: "pen", label: "Pen", icon: Pen },
-    { id: "highlighter", label: "Highlighter", icon: Highlighter },
-] as const
-
-const SHAPE_TOOLS = [
-    { id: "rectangle", label: "Rectangle", icon: RectangleHorizontal },
-    { id: "square", label: "Square", icon: Square },
-    { id: "circle", label: "Circle", icon: Circle },
-    { id: "triangle", label: "Triangle", icon: Triangle },
-    { id: "right-triangle", label: "RightTriangle", icon: TriangleRight },
-    { id: "diamond", label: "Diamond", icon: Diamond },
-    { id: "rhombus", label: "Rhombus", icon: Diamond },
-    { id: "star", label: "Star", icon: Star },
-    { id: "line", label: "Line", icon: Minus },
-    { id: "arrow", label: "Arrow", icon: ArrowUpRight },
-    { id: "ellipse", label: "Ellipse", icon: Ellipse },
-    { id: "pentagon", label: "Pentagon", icon: Pentagon },
-    { id: "parallelogram", label: "Parallelogram", icon: RectangleHorizontal },
-] as const
+import { useSocket } from "@/hooks/use-socket"
 
 
-
-const ERASER_TOOLS = [
-    { id: "eraser", label: "Object Eraser", icon: Eraser },
-    { id: "partial-eraser", label: "Selective Eraser", icon: Eraser },
-] as const
 
 
 interface ToolbarProps {
@@ -49,8 +24,6 @@ interface ToolbarProps {
     setColor: (color: string) => void
     brushSize: number
     setBrushSize: (size: number) => void
-    shapeFillColor: string
-    setShapeFillColor: (color: string) => void
     onClearCanvas?: () => void
     isClassEnded?: boolean
 }
@@ -63,33 +36,20 @@ export default function Toolbar({
     setColor,
     brushSize,
     setBrushSize,
-    shapeFillColor,
-    setShapeFillColor,
     onClearCanvas,
     isClassEnded
 }: ToolbarProps) {
 
     // const { socket } = useSocket()
     const [showColorPicker, setShowColorPicker] = useState(false)
-    const [showFillPicker, setShowFillPicker] = useState(false)
-    const [showPenDropdown, setShowPenDropdown] = useState(false)
-    const [showEraserDropdown, setShowEraserDropdown] = useState(false)
-
     const [colorPickerPos, setColorPickerPos] = useState<{ top: number; left: number } | null>(null)
-    const [fillPickerPos, setFillPickerPos] = useState<{ top: number; left: number } | null>(null)
-    const [penDropdownPos, setPenDropdownPos] = useState<{ top: number; left: number } | null>(null)
-    const [eraserDropdownPos, setEraserDropdownPos] = useState<{ top: number; left: number } | null>(null)
 
-    const [selectedPen, setSelectedPen] = useState<typeof PEN_TOOLS[number]["id"]>("pen")
+
 
 
     const brushSizes = [2, 4, 8, 12, 16, 20]
     const scrollAreaRef = useRef<HTMLDivElement>(null)
     const colorButtonRef = useRef<HTMLButtonElement>(null)
-    const fillButtonRef = useRef<HTMLButtonElement>(null)
-    const eraserButtonRef = useRef<HTMLDivElement>(null)
-
-    const penButtonRef = useRef<HTMLDivElement>(null)
     const [canScrollDown, setCanScrollDown] = useState(false)
     const [canScrollUp, setCanScrollUp] = useState(false)
 
@@ -104,29 +64,7 @@ export default function Toolbar({
         checkScroll()
     }, [checkScroll])
 
-    const isShapeToolCount = (t: string) => SHAPE_TOOLS.some(s => s.id === t)
-    const isShapeTool = isShapeToolCount(tool)
-    const isPenTool = tool.startsWith("pen:")
 
-    const ActivePenIcon = PEN_TOOLS.find(p => p.id === selectedPen)?.icon || Pen
-    const ActiveEraserIcon = ERASER_TOOLS.find(e => e.id === tool || (e.id === "eraser" && tool === "partial-eraser"))?.icon || Eraser
-
-
-
-    const togglePenDropdown = useCallback(() => {
-        if (showPenDropdown) {
-            setShowPenDropdown(false)
-            return
-        }
-        if (penButtonRef.current) {
-            const rect = penButtonRef.current.getBoundingClientRect()
-            setPenDropdownPos({
-                top: rect.top + rect.height / 2 - 20,
-                left: rect.right + 8,
-            })
-        }
-        setShowPenDropdown(true)
-    }, [showPenDropdown])
 
     const toggleColorPicker = useCallback(() => {
         if (showColorPicker) {
@@ -142,19 +80,7 @@ export default function Toolbar({
         setShowColorPicker(true)
     }, [showColorPicker])
 
-    const toggleFillPicker = useCallback(() => {
-        if (showFillPicker) {
-            setShowFillPicker(false)
-            return
-        }
-        if (fillButtonRef.current) {
-            const rect = fillButtonRef.current.getBoundingClientRect()
-            const pickerHeight = 420
-            const top = Math.max(8, Math.min(window.innerHeight - pickerHeight - 8, rect.top - pickerHeight / 2 + rect.height / 2))
-            setFillPickerPos({ top, left: rect.right + 16 })
-        }
-        setShowFillPicker(true)
-    }, [showFillPicker])
+
 
 
     return (
@@ -222,56 +148,45 @@ export default function Toolbar({
                             </div>
                         </div>
 
-                        {/* Pen tools - pen, highlighter */}
-                        <div className="relative group border rounded-[5px] border-primary/40 w-[30px] h-[30px]" ref={penButtonRef}>
-                            <button
-                                type="button"
-                                onClick={() => togglePenDropdown()}
-                                className={cn(
-                                    "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
-                                    isPenTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
-                                )}
-                                title={`Choose pen type (Current: ${selectedPen})`}
-                            >
-                                <ActivePenIcon size={16} />
-                            </button>
-
-                            {showPenDropdown && penDropdownPos && ReactDOM.createPortal(
-                                <>
-                                    <div className="fixed inset-0 z-9998" onClick={() => setShowPenDropdown(false)} />
-                                    <div
-                                        className="fixed z-9999 flex flex-col gap-1 p-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-left-2 duration-200"
-                                        style={{ top: penDropdownPos.top, left: penDropdownPos.left }}
-                                    >
-                                        {PEN_TOOLS.map((p) => {
-                                            const Icon = p.icon
-                                            return (
-                                                <button
-                                                    key={p.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setSelectedPen(p.id)
-                                                        setTool(`pen:${p.id}`)
-                                                        setShowPenDropdown(false)
-                                                    }}
-                                                    className={cn(
-                                                        "p-1.5 rounded-[5px] flex items-center gap-2 transition-all duration-200",
-                                                        (tool === `pen:${p.id}`)
-                                                            ? "bg-primary text-primary-foreground shadow-md"
-                                                            : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                                                    )}
-                                                    title={p.label}
-                                                >
-                                                    <Icon size={16} />
-                                                    <span className="text-[10px] font-medium pr-1">{p.label}</span>
-                                                </button>
-                                            )
-                                        })}
-                                    </div>
-                                </>,
-                                document.body
+                        {/* Pen Tool */}
+                        <button
+                            type="button"
+                            onClick={() => setTool("pen:pen")}
+                            className={cn(
+                                "p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
+                                tool === "pen:pen" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent"
                             )}
-                        </div>
+                            title="Pen"
+                        >
+                            <Pen size={16} />
+                        </button>
+
+                        {/* Highlighter Tool */}
+                        <button
+                            type="button"
+                            onClick={() => setTool("pen:highlighter")}
+                            className={cn(
+                                "p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
+                                tool === "pen:highlighter" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                            )}
+                            title="Highlighter"
+                        >
+                            <Highlighter size={16} />
+                        </button>
+
+                        {/* Line Tool */}
+                        <button
+                            type="button"
+                            onClick={() => setTool("line")}
+                            className={cn(
+                                "p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
+                                tool === "line" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                            )}
+                            title="Line"
+                        >
+                            <Minus size={16} />
+                        </button>
+                        
                         {/* Brush Size */}
                         <div className="flex flex-col w-full gap-2 items-center mb-3">
                             <span className="text-[6px] font-black uppercase tracking-widest text-muted-foreground text-center flex flex-wrap justify-center items-center gap-0.5 p-0.5">Size <span className="text-[8px] font-bold text-muted-foreground">({brushSize})</span></span>
@@ -289,60 +204,35 @@ export default function Toolbar({
                                 ))}
                             </div>
                         </div>
-                        <div className="relative group border rounded-[5px] border-primary/40 w-[30px] h-[30px]" ref={eraserButtonRef}>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (eraserButtonRef.current) {
-                                        const rect = eraserButtonRef.current.getBoundingClientRect()
-                                        setEraserDropdownPos({ top: rect.top, left: rect.right + 10 })
-                                        setShowEraserDropdown(!showEraserDropdown)
-                                    }
-                                }}
-                                className={cn(
-                                    "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
-                                    (tool === "eraser" || tool === "partial-eraser") ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
-                                )}
-                                title="Eraser Tool"
-                            >
-                                <ActiveEraserIcon size={16} />
-                            </button>
-
-                            {showEraserDropdown && eraserDropdownPos && ReactDOM.createPortal(
-                                <>
-                                    <div className="fixed inset-0 z-9998" onClick={() => setShowEraserDropdown(false)} />
-                                    <div
-                                        className="fixed z-9999 flex flex-col gap-1 p-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-left-2 duration-200"
-                                        style={{ top: eraserDropdownPos.top, left: eraserDropdownPos.left }}
-                                    >
-                                        {ERASER_TOOLS.map((e) => {
-                                            const Icon = e.icon
-                                            return (
-                                                <button
-                                                    key={e.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setTool(e.id)
-                                                        setShowEraserDropdown(false)
-                                                    }}
-                                                    className={cn(
-                                                        "p-1.5 rounded-[5px] flex items-center gap-2 transition-all duration-200",
-                                                        tool === e.id
-                                                            ? "bg-primary text-primary-foreground shadow-md"
-                                                            : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                                                    )}
-                                                    title={e.label}
-                                                >
-                                                    <Icon size={16} />
-                                                    <span className="text-[10px] font-medium pr-1">{e.label}</span>
-                                                </button>
-                                            )
-                                        })}
-                                    </div>
-                                </>,
-                                document.body
+                        {/* Object Eraser */}
+                        <button
+                            type="button"
+                            onClick={() => setTool("eraser")}
+                            className={cn(
+                                "p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
+                                tool === "eraser" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent"
                             )}
-                        </div>
+                            title="Object Eraser"
+                        >
+                            <Eraser size={16} />
+                        </button>
+
+                        {/* Selective Eraser */}
+                        <button
+                            type="button"
+                            onClick={() => setTool("partial-eraser")}
+                            className={cn(
+                                "p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
+                                tool === "partial-eraser" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                            )}
+                            title="Selective Eraser"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
+                                <path d="M22 21H7" />
+                                <path d="m5 11 9 9" />
+                            </svg>
+                        </button>
                         <button type="button" onClick={() => setTool("text")} className={cn("p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center", tool === "text" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Text Tool">
                             <Type size={18} />
                         </button>
@@ -356,7 +246,7 @@ export default function Toolbar({
                     </div>
 
                     {/* Clear Canvas - Teacher or Post-Session */}
-                    {(role === "teacher" /* || isClassEnded */) && onClearCanvas && (
+                    {(role === "teacher" || isClassEnded ) && onClearCanvas && (
                         <>
                             <button
                                 type="button"
@@ -380,58 +270,7 @@ export default function Toolbar({
                         </>
                     )}
 
-                    {/* Shape Fill & Border Colors — only when a shape tool is active */}
-                    {(isShapeTool) && (
-                        <div className="flex flex-col gap-2 py-2 border-t border-border w-full items-center mb-2 animate-in slide-in-from-bottom-2 duration-300">
-                            {/* Fill Color */}
-                            <div className="flex flex-col gap-2 items-center">
-                                <span className="text-[7px] font-black uppercase tracking-widest text-muted-foreground text-center">Fill</span>
-                                <div className="grid grid-cols-2 gap-1">
-                                    <button
-                                        onClick={() => setShapeFillColor("transparent")}
-                                        className={cn(
-                                            "w-3.5 h-3.5 rounded-sm border transition-all duration-200",
-                                            shapeFillColor === "transparent" ? "border-white scale-110 z-10 shadow-sm" : "border-transparent hover:scale-110"
-                                        )}
-                                        style={{
-                                            backgroundImage: "linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%)",
-                                            backgroundPosition: "0 0, 2px 2px",
-                                            backgroundSize: "4px 4px",
-                                            backgroundColor: "white"
-                                        }}
-                                        title="No Fill"
-                                    >
-                                        <div className="w-full h-full flex items-center justify-center"><div className="w-px h-[120%] bg-red-500 rotate-45 shadow-sm" /></div>
-                                    </button>
-                                    <button
-                                        ref={fillButtonRef}
-                                        onClick={() => toggleFillPicker()}
-                                        className={cn(
-                                            "w-3.5 h-3.5 rounded-sm border border-border flex items-center justify-center transition-colors shadow-sm",
-                                            shapeFillColor === "transparent" ? "text-muted-foreground bg-accent" : ""
-                                        )}
-                                        style={shapeFillColor !== "transparent" ? {
-                                            backgroundColor: shapeFillColor,
-                                            color: getContrastColor(shapeFillColor)
-                                        } : {}}
-                                    >
-                                        <Palette size={8} />
-                                    </button>
-                                </div>
-                                {showFillPicker && fillPickerPos && ReactDOM.createPortal(
-                                    <>
-                                        <div className="fixed inset-0 z-9998" onClick={() => setShowFillPicker(false)} />
-                                        <div className="fixed z-9999 animate-in fade-in slide-in-from-left-2 duration-200" style={{ top: fillPickerPos.top, left: fillPickerPos.left }}>
-                                            <div className="p-1.5 bg-sidebar border border-border rounded-[5px] shadow-2xl">
-                                                <ColorPicker color={shapeFillColor} onChange={(hex) => setShapeFillColor(hex)} />
-                                            </div>
-                                        </div>
-                                    </>,
-                                    document.body
-                                )}
-                            </div>
-                        </div>
-                    )}
+
 
                 </div>
 

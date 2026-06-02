@@ -9,15 +9,28 @@ import {
     Locate,
     Palette,
     MousePointer2,
-    Square, Circle, Minus, ArrowUpRight, Triangle, Diamond, Star, Ellipse, Pentagon, TriangleRight, RectangleHorizontal,
-    Activity, Calculator, Grid3X3, LayoutGrid
+    Square, Circle, ArrowUpRight, Triangle, Diamond, Star, Ellipse, Pentagon, TriangleRight, RectangleHorizontal,
+    Activity, Calculator, Grid3X3, LayoutGrid,
+    Maximize, Minimize, VideoIcon
 } from "lucide-react"
 import ReactDOM from "react-dom"
+
+const Youtube = ({ size = 18, ...props }: { size?: number } & React.SVGProps<SVGSVGElement>) => (
+    <svg
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        width={size}
+        height={size}
+        {...props}
+    >
+        <path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.11C19.517 3.545 12 3.545 12 3.545s-7.517 0-9.388.507a3.003 3.003 0 0 0-2.11 2.11C0 8.033 0 12 0 12s0 3.967.502 5.837a3.003 3.003 0 0 0 2.11 2.11c1.871.507 9.388.507 9.388.507s7.517 0 9.388-.507a3.003 3.003 0 0 0 2.11-2.11C24 15.967 24 12 24 12s0-3.967-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+);
 import BackgroundPicker from "./BackgroundPicker"
 import { leaveSession } from "@/app/actions/auth"
 import ThemeToggle from "../theme-toggle"
 import { cn, getContrastColor } from "@/lib/utils"
-import { useSocket } from "../providers/socket-provider"
+import { useSocket } from "@/hooks/use-socket"
 import { toast } from "sonner"
 import { SessionTimer } from "./SessionTimer"
 import Swal from "sweetalert2"
@@ -42,6 +55,11 @@ interface BoardTopBarProps {
     onPdfUpload?: (file: File) => void
     onEndSession?: (sid: string) => void
     isClassEnded?: boolean
+    isFullscreen?: boolean
+    onToggleFullscreen?: () => void
+    durationAdded?: number
+    startTime?: number
+    onYoutubeSync?: (state: { videoId: string; playStatus: "playing" | "paused"; currentTime: number; lastUpdated: number }) => void
 }
 
 const SHAPE_TOOLS = [
@@ -53,7 +71,7 @@ const SHAPE_TOOLS = [
     { id: "diamond", label: "Diamond", icon: Diamond },
     { id: "rhombus", label: "Rhombus", icon: Diamond },
     { id: "star", label: "Star", icon: Star },
-    { id: "line", label: "Line", icon: Minus },
+
     { id: "arrow", label: "Arrow", icon: ArrowUpRight },
     { id: "ellipse", label: "Ellipse", icon: Ellipse },
     { id: "pentagon", label: "Pentagon", icon: Pentagon },
@@ -69,8 +87,8 @@ const GRAPH_TOOLS = [
 
 
 const MATH_SYMBOLS = [
-    { id: "pi", label: "π", value: "π" },
     { id: "sigma", label: "Σ", value: "Σ" },
+    { id: "pi", label: "π", value: "π" },
     { id: "infinity", label: "∞", value: "∞" },
     { id: "integral", label: "∫", value: "∫" },
     { id: "sqrt", label: "√", value: "√" },
@@ -102,7 +120,7 @@ const EMOJIS = [
     { id: "cry", label: "Cry", value: "😭" },
 ] as const
 
-type ShapeToolId = typeof SHAPE_TOOLS[number]["id"]
+
 type GraphToolId = typeof GRAPH_TOOLS[number]["id"]
 
 export default function BoardTopBar({
@@ -120,7 +138,12 @@ export default function BoardTopBar({
     drawingEnabled,
     onPdfUpload,
     onEndSession,
-    isClassEnded
+    isClassEnded,
+    isFullscreen,
+    onToggleFullscreen,
+    durationAdded,
+    startTime,
+    onYoutubeSync
 }: BoardTopBarProps) {
 
     const { socket } = useSocket()
@@ -132,27 +155,37 @@ export default function BoardTopBar({
     const [canScrollRight, setCanScrollRight] = useState(false)
     const isMathSymbolTool = tool.startsWith("symbol:")
     const isEmojiTool = tool.startsWith("emoji:")
+    const shapeButtonRef = useRef<HTMLDivElement>(null)
+    const filledShapeButtonRef = useRef<HTMLDivElement>(null)
+    const graphButtonRef = useRef<HTMLDivElement>(null)
     const mathButtonRef = useRef<HTMLDivElement>(null)
     const emojiButtonRef = useRef<HTMLDivElement>(null)
-    const shapeButtonRef = useRef<HTMLDivElement>(null)
-    const graphButtonRef = useRef<HTMLDivElement>(null)
-    const [selectedSymbol, setSelectedSymbol] = useState<string>("π")
-    const [selectedEmoji, setSelectedEmoji] = useState<string>("😊")
-    const [selectedShape, setSelectedShape] = useState<ShapeToolId>("rectangle")
-    const [selectedGraph, setSelectedGraph] = useState<GraphToolId>("graph-axis")
+
+    const [showShapeDropdown, setShowShapeDropdown] = useState(false)
+    const [showFilledShapeDropdown, setShowFilledShapeDropdown] = useState(false)
+    const [showGraphDropdown, setShowGraphDropdown] = useState(false)
     const [showMathDropdown, setShowMathDropdown] = useState(false)
     const [showEmojiDropdown, setShowEmojiDropdown] = useState(false)
-    const [showShapeDropdown, setShowShapeDropdown] = useState(false)
-    const [showGraphDropdown, setShowGraphDropdown] = useState(false)
 
     const [shapeDropdownPos, setShapeDropdownPos] = useState<{ top: number; left: number } | null>(null)
+    const [filledShapeDropdownPos, setFilledShapeDropdownPos] = useState<{ top: number; left: number } | null>(null)
     const [graphDropdownPos, setGraphDropdownPos] = useState<{ top: number; left: number } | null>(null)
     const [mathDropdownPos, setMathDropdownPos] = useState<{ top: number; left: number } | null>(null)
     const [emojiDropdownPos, setEmojiDropdownPos] = useState<{ top: number; left: number } | null>(null)
 
+    const [selectedShape, setSelectedShape] = useState<string>("rectangle")
+    const [selectedFilledShape, setSelectedFilledShape] = useState<string>("rectangle")
+    const [selectedGraph, setSelectedGraph] = useState<string>("graph-axis")
+    const [selectedSymbol, setSelectedSymbol] = useState<string>("Σ")
+    const [selectedEmoji, setSelectedEmoji] = useState<string>("😊")
+
     const ActiveShapeIcon = SHAPE_TOOLS.find(s => s.id === selectedShape)?.icon || Square
+    const ActiveFilledShapeIcon = SHAPE_TOOLS.find(s => s.id === selectedFilledShape)?.icon || Square
     const ActiveGraphIcon = GRAPH_TOOLS.find(g => g.id === selectedGraph)?.icon || Activity
 
+    const isShapeTool = SHAPE_TOOLS.some(s => s.id === tool)
+    const isFilledShapeTool = SHAPE_TOOLS.some(s => `f-${s.id}` === tool)
+    const isGraphTool = (t: string) => GRAPH_TOOLS.some(g => g.id === t) || t.startsWith("large-grid") || t.startsWith("graph-plain") || t.startsWith("graph-labeled")
 
     const boardFileInputRef = useRef<HTMLInputElement>(null)
     const pdfFileInputRef = useRef<HTMLInputElement>(null)
@@ -217,20 +250,38 @@ export default function BoardTopBar({
             setShowShapeDropdown(false)
             return
         }
+        setShowFilledShapeDropdown(false)
+        setShowGraphDropdown(false)
+        setShowMathDropdown(false)
+        setShowEmojiDropdown(false)
         if (shapeButtonRef.current) {
             const rect = shapeButtonRef.current.getBoundingClientRect()
             setShapeDropdownPos({
                 top: rect.bottom + 8,
                 left: rect.left + rect.width / 2,
             })
+            setShowShapeDropdown(true)
         }
-        setShowShapeDropdown(true)
     }, [showShapeDropdown])
 
-    const isShapeToolCount = (t: string) => SHAPE_TOOLS.some(s => s.id === t)
-    const isShapeTool = isShapeToolCount(tool)
-    const isGraphToolCount = (t: string) => GRAPH_TOOLS.some(g => g.id === t) || t.startsWith("large-grid") || t.startsWith("graph-plain") || t.startsWith("graph-labeled")
-    const isGraphTool = isGraphToolCount(tool)
+    const toggleFilledShapeDropdown = useCallback(() => {
+        if (showFilledShapeDropdown) {
+            setShowFilledShapeDropdown(false)
+            return
+        }
+        setShowShapeDropdown(false)
+        setShowGraphDropdown(false)
+        setShowMathDropdown(false)
+        setShowEmojiDropdown(false)
+        if (filledShapeButtonRef.current) {
+            const rect = filledShapeButtonRef.current.getBoundingClientRect()
+            setFilledShapeDropdownPos({
+                top: rect.bottom + 8,
+                left: rect.left + rect.width / 2,
+            })
+            setShowFilledShapeDropdown(true)
+        }
+    }, [showFilledShapeDropdown])
 
     const toggleGraphDropdown = useCallback(() => {
         if (showGraphDropdown) {
@@ -342,6 +393,67 @@ export default function BoardTopBar({
         if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
     }
 
+    const extractYoutubeId = (url: string): string | null => {
+        if (/^[a-zA-Z0-9_-]{11}$/.test(url)) return url;
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[2].length === 11) ? match[2] : null;
+    }
+
+    const handleYoutubeClick = () => {
+        Swal.fire({
+            title: 'Sync YouTube Video',
+            text: 'Enter a YouTube video URL or Video ID:',
+            input: 'text',
+            inputPlaceholder: 'https://www.youtube.com/watch?v=...',
+            showCancelButton: true,
+            confirmButtonText: 'Start Sync',
+            cancelButtonText: 'Cancel',
+            background: '#18181b',
+            color: '#ffffff',
+            confirmButtonColor: '#e11d48',
+            cancelButtonColor: '#3f3f46',
+            inputAttributes: {
+                autocapitalize: 'off',
+                autocomplete: 'off'
+            },
+            preConfirm: (value) => {
+                if (!value) {
+                    Swal.showValidationMessage('Please enter a YouTube link or video ID');
+                    return false;
+                }
+                const videoId = extractYoutubeId(value);
+                if (!videoId) {
+                    Swal.showValidationMessage('Invalid YouTube URL or Video ID');
+                    return false;
+                }
+                return videoId;
+            }
+        }).then((result) => {
+            if (result.isConfirmed && result.value) {
+                const videoId = result.value;
+                if (socket) {
+                    socket.emit("yt_sync", {
+                        roomId: sessionId,
+                        payload: {
+                            videoId,
+                            playStatus: "paused",
+                            currentTime: 0,
+                            lastUpdated: Date.now()
+                        }
+                    });
+                    onYoutubeSync?.({
+                        videoId,
+                        playStatus: "paused",
+                        currentTime: 0,
+                        lastUpdated: Date.now()
+                    });
+                    toast.success("YouTube sync started");
+                }
+            }
+        });
+    };
+
 
     const handleGraphItemClick = async (gId: GraphToolId) => {
         if (gId === "large-grid" || gId === "graph-plain" || gId === "graph-labeled") {
@@ -403,7 +515,7 @@ export default function BoardTopBar({
                         <MousePointer2 size={18} />
                     </button>
 
-                    {/* Shapes — single button with horizontal dropdown */}
+                    {/* Outline Shapes */}
                     <div className="relative group border rounded-[5px] border-primary/40 h-8 w-8" ref={shapeButtonRef}>
                         <button
                             type="button"
@@ -412,7 +524,7 @@ export default function BoardTopBar({
                                 "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
                                 isShapeTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
                             )}
-                            title={`Choose shape (Current: ${selectedShape})`}
+                            title={`Outline Shape (Current: ${selectedShape})`}
                         >
                             <ActiveShapeIcon size={18} />
                         </button>
@@ -441,9 +553,69 @@ export default function BoardTopBar({
                                                         ? "bg-primary text-primary-foreground shadow-md"
                                                         : "text-muted-foreground hover:text-foreground hover:bg-accent"
                                                 )}
-                                                title={shape.label}
+                                                title={`Outline ${shape.label}`}
                                             >
                                                 <Icon size={16} className={`${shape.id == "parallelogram" && "-skew-x-24"}`} />
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </>,
+                            document.body
+                        )}
+                    </div>
+
+                    {/* Filled Shapes */}
+                    <div className="relative group border rounded-[5px] border-primary/40 h-8 w-8" ref={filledShapeButtonRef}>
+                        <button
+                            type="button"
+                            onClick={() => toggleFilledShapeDropdown()}
+                            className={cn(
+                                "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
+                                isFilledShapeTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                            )}
+                            title={`Filled Shape (Current: ${selectedFilledShape})`}
+                        >
+                            <div className="relative">
+                                <ActiveFilledShapeIcon size={18} />
+                                <div className="absolute inset-0 flex items-center justify-center opacity-40">
+                                    <ActiveFilledShapeIcon size={10} fill="currentColor" />
+                                </div>
+                            </div>
+                        </button>
+
+                        {showFilledShapeDropdown && filledShapeDropdownPos && ReactDOM.createPortal(
+                            <>
+                                <div className="fixed inset-0 z-9998" onClick={() => setShowFilledShapeDropdown(false)} />
+                                <div
+                                    className="fixed z-9999 flex flex-col flex-wrap items-center gap-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-top-2 duration-200 h-[73px]"
+                                    style={{ top: filledShapeDropdownPos.top, left: filledShapeDropdownPos.left, transform: "translateX(-50%)" }}
+                                >
+                                    {SHAPE_TOOLS.map((shape) => {
+                                        const Icon = shape.icon
+                                        return (
+                                            <button
+                                                key={`f-${shape.id}`}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedFilledShape(shape.id)
+                                                    setTool(`f-${shape.id}`)
+                                                    setShowFilledShapeDropdown(false)
+                                                }}
+                                                className={cn(
+                                                    "p-1.5 rounded-[5px] transition-all duration-200",
+                                                    tool === `f-${shape.id}`
+                                                        ? "bg-primary text-primary-foreground shadow-md"
+                                                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                                )}
+                                                title={`Filled ${shape.label}`}
+                                            >
+                                                <div className="relative">
+                                                    <Icon size={16} className={`${shape.id == "parallelogram" && "-skew-x-24"}`} />
+                                                    <div className="absolute inset-0 flex items-center justify-center opacity-40">
+                                                        <Icon size={8} fill="currentColor" className={`${shape.id == "parallelogram" && "-skew-x-24"}`} />
+                                                    </div>
+                                                </div>
                                             </button>
                                         )
                                     })}
@@ -460,7 +632,7 @@ export default function BoardTopBar({
                             onClick={() => toggleGraphDropdown()}
                             className={cn(
                                 "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
-                                isGraphTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                                isGraphTool(tool) ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
                             )}
                             title={`Choose graph tool (Current: ${selectedGraph})`}
                         >
@@ -629,6 +801,17 @@ export default function BoardTopBar({
                             >
                                 <FileUp size={18} />
                             </button>
+
+                            {/* ── YT VIDEO FEATURE (COMMENTED OUT) ──
+                            <button
+                                type="button"
+                                onClick={handleYoutubeClick}
+                                className="p-1.5 border rounded-[5px] border-primary/40 transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent shadow-sm hover:border-red-500 hover:text-red-500"
+                                title="Sync YouTube Video"
+                            >
+                                <Youtube size={18} />
+                            </button>
+                            */}
                         </div>
                     )}
 
@@ -690,6 +873,23 @@ export default function BoardTopBar({
                         </div>
                     )}
 
+                    {/* Fullscreen Toggle */}
+                    <div className="flex items-center shrink-0 px-1 h-8">
+                        <button
+                            type="button"
+                            onClick={onToggleFullscreen}
+                            className={cn(
+                                "flex items-center gap-1.5 p-1.5 h-8 rounded-[5px] border transition-all duration-300 shadow-sm",
+                                isFullscreen
+                                    ? "bg-violet-500/10 border-violet-500/30 text-violet-500 hover:bg-violet-500/20"
+                                    : "border-primary/40 text-muted-foreground hover:text-foreground hover:bg-accent"
+                            )}
+                            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen Mode"}
+                        >
+                            {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                        </button>
+                    </div>
+
 
 
                 </nav>
@@ -716,7 +916,7 @@ export default function BoardTopBar({
                         No Canvas Access
                     </div>
                 )}
-                {/* {role === "teacher" && (
+                {role === "teacher" && (
                     <button
                         type="button"
                         onClick={async () => {
@@ -736,29 +936,42 @@ export default function BoardTopBar({
                     >
                         End Class
                     </button>
-                )} */}
-                <button
-                    type="button"
-                    onClick={async () => {
-                        const { isConfirmed } = await Swal.fire({
-                            title: "Leave Session?",
-                            text: "Are you sure you want to leave this session?",
-                            icon: "question",
-                            showCancelButton: true,
-                            confirmButtonColor: "#ef4444",
-                            cancelButtonColor: "#6b7280",
-                            confirmButtonText: "Yes, leave"
-                        })
-                        if (isConfirmed) leaveSession(sessionId)
-                    }}
-                    className="flex items-center justify-center py-1 px-2 h-8 w-fit text-[12px] font-medium bg-red-500 dark:bg-red-500/80 hover:bg-red-600 dark:hover:bg-red-500 text-white rounded-[5px] transition-all duration-300 shadow-lg shadow-red-500/20 active:scale-95 group"
-                    title="Leave Session"
-                >
-                    Leave Class
-                </button>
+                )}
+                {role === "student" && (
+                    <button
+                        type="button"
+                        onClick={async () => {
+                            const { isConfirmed } = await Swal.fire({
+                                title: "Leave Session?",
+                                text: "Are you sure you want to leave this session?",
+                                icon: "question",
+                                showCancelButton: true,
+                                confirmButtonColor: "#ef4444",
+                                cancelButtonColor: "#6b7280",
+                                confirmButtonText: "Yes, leave"
+                            })
+                            if (isConfirmed) {
+                                await leaveSession(sessionId);
+                                window.location.href = "about:blank";
+                            }
+                        }}
+                        className="flex items-center justify-center py-1 px-2 h-8 w-fit text-[12px] font-medium bg-red-500 dark:bg-red-500/80 hover:bg-red-600 dark:hover:bg-red-500 text-white rounded-[5px] transition-all duration-300 shadow-lg shadow-red-500/20 active:scale-95 group"
+                        title="Leave Session"
+                    >
+                        Leave Class
+                    </button>
+                )}
             </div>
             <div className="flex items-center px-1 h-8 border-r border-border/50 bg-sidebar shrink-0 z-40">
-                <SessionTimer initialDuration={duration} role={role} sessionId={sessionId} />
+                <SessionTimer
+                    initialDuration={duration}
+                    durationAdded={durationAdded}
+                    startTime={startTime}
+                    role={role}
+                    sessionId={sessionId}
+                    onEndSession={onEndSession}
+                    isClassEnded={isClassEnded}
+                />
             </div>
             <div className="flex items-center gap-2 px-3 h-8 border-l border-border/50 bg-sidebar shrink-0 z-40 shadow-[-8px_0_12px_rgba(0,0,0,0.05)]">
                 {/* <div className="h-[41px] flex items-center justify-between px-3 sm:px-6 border-b border-border shrink-0"> */}

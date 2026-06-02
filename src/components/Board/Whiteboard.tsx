@@ -2,171 +2,29 @@
 
 import React, { useEffect, useRef, useCallback, useState } from "react"
 import { Canvas, PencilBrush, Path, FabricImage, IText, Line, FabricObject, Rect, Ellipse, Polygon, Group } from "fabric"
+import type { BoardFabricObject, BoardIText, WhiteboardProps, ShapePayload, TextPayload, ImagePayload, StoredBoardObject, StrokePayload, LaserPayload, LiveStroke, FullStrokePayload } from "@/types/board"
 
-export type BoardFabricObject = FabricObject & { id?: string; _synced?: boolean };
-export type BoardIText = IText & { id?: string; _synced?: boolean };
-
-import { useSocket } from "../providers/socket-provider"
+import { useSocket } from "@/hooks/use-socket"
 import { cn } from "@/lib/utils"
+import { PENCIL_CURSOR, ERASER_CURSOR, TEXT_CURSOR } from "@/lib/cursors"
+import { isShapeTool, getTrianglePoints, getRightTrianglePoints, getDiamondPoints, getPentagonPoints, getParallelogramPoints, getStarPoints } from "@/lib/shapes"
+import { ChevronDown } from "lucide-react"
+import ReactDOM from "react-dom"
 
-// ── Custom cursors (High Contrast Native) ──────────────────
+const FONT_SIZES = [12, 16, 20, 24, 32, 40, 48, 64, 80, 96] as const
 
-// Added a black outline behind the white pencil paths
-const pencilCursorSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
-  <g stroke="black" stroke-width="4">
-    <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>
-    <path d="m15 5 4 4"/>
-  </g>
-  <g stroke="white" stroke-width="2">
-    <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>
-    <path d="m15 5 4 4"/>
-  </g>
-</svg>`
-export const PENCIL_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(pencilCursorSvg)}") 2 22, crosshair`
+const FONT_FAMILIES = [
+    { id: "Inter, sans-serif", label: "Inter" },
+    { id: "Arial, sans-serif", label: "Arial" },
+    { id: "Georgia, serif", label: "Georgia" },
+    { id: "'Times New Roman', serif", label: "Times" },
+    { id: "'Courier New', monospace", label: "Courier" },
+    { id: "'Comic Sans MS', cursive", label: "Comic" },
+    { id: "Verdana, sans-serif", label: "Verdana" },
+    { id: "Impact, sans-serif", label: "Impact" },
+] as const
 
-// Added a black outline behind the white eraser circle
-const eraserCursorSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
-  <circle cx="14" cy="14" r="12" fill="none" stroke="black" stroke-width="4" opacity="0.8"/>
-  <circle cx="14" cy="14" r="12" fill="none" stroke="white" stroke-width="2" opacity="0.8"/>
-</svg>`
-export const ERASER_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(eraserCursorSvg)}") 14 14, crosshair`
-export const TEXT_CURSOR = "text"
-
-interface WhiteboardProps {
-    sessionId: string
-    role: "teacher" | "student"
-    tool: string
-    color: string
-    boardColor: string
-    bgImages?: string[]       // NEW: array of data URLs for stacked PDF pages
-    brushSize: number
-    currentPage: number
-    onToolChange?: (tool: string) => void
-    shapeFillColor?: string
-    shapeBorderColor?: string
-    drawingEnabled?: boolean
-    isViewLocked: boolean
-    textColor?: string
-}
-
-interface ShapePayload {
-    id: string;
-    page?: number;
-    shapeType: string;
-    position: { x: number; y: number };
-    widthRatio?: number;
-    heightRatio?: number;
-    fill?: string;
-    stroke?: string;
-    strokeWidthRatio?: number;
-    timestamp?: number;
-}
-
-interface TextPayload {
-    id: string;
-    page?: number;
-    text?: string;
-    color?: string;
-    fontSize?: number;
-    fontSizeRatio?: number;
-    position: { x: number; y: number };
-    timestamp?: number;
-}
-
-interface ImagePayload {
-    id: string;
-    url: string;
-    position: { x: number; y: number };
-    widthRatio?: number;
-    heightRatio?: number;
-    scale?: number;
-    addedBy?: string;
-    page?: number;
-}
-
-interface StoredBoardObject {
-    type: string;
-    payload: FullStrokePayload | TextPayload | ShapePayload | ImagePayload;
-    timestamp: number;
-}
-
-const SHAPE_TOOL_IDS = ["rectangle", "square", "circle", "triangle", "right-triangle", "diamond", "rhombus", "star", "line", "arrow", "ellipse", "pentagon", "parallelogram", "graph-axis", "large-grid", "graph-plain", "graph-labeled"] as const
-function isShapeTool(t: string): boolean {
-    return (SHAPE_TOOL_IDS as readonly string[]).includes(t) || t.startsWith("large-grid:") || t.startsWith("graph-plain:") || t.startsWith("graph-labeled:") || t.startsWith("symbol:") || t.startsWith("emoji:")
-}
-
-// Helper: build shape points for polygon-based shapes
-function getTrianglePoints(w: number, h: number) {
-    return [{ x: w / 2, y: 0 }, { x: w, y: h }, { x: 0, y: h }]
-}
-function getRightTrianglePoints(w: number, h: number) {
-    return [{ x: 0, y: 0 }, { x: w, y: h }, { x: 0, y: h }]
-}
-function getDiamondPoints(w: number, h: number) {
-    return [{ x: w / 2, y: 0 }, { x: w, y: h / 2 }, { x: w / 2, y: h }, { x: 0, y: h / 2 }]
-}
-function getPentagonPoints(w: number, h: number) {
-    const cx = w / 2, cy = h / 2
-    const r = Math.min(w, h) / 2
-    const pts = []
-    for (let i = 0; i < 5; i++) {
-        const angle = (Math.PI / 2) * -1 + (Math.PI * 2 / 5) * i
-        pts.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) })
-    }
-    return pts
-}
-function getParallelogramPoints(w: number, h: number) {
-    const offset = w * 0.25
-    return [{ x: offset, y: 0 }, { x: w, y: 0 }, { x: w - offset, y: h }, { x: 0, y: h }]
-}
-function getStarPoints(w: number, h: number) {
-    const cx = w / 2, cy = h / 2
-    const outerR = Math.min(w, h) / 2, innerR = outerR * 0.4
-    const pts: { x: number; y: number }[] = []
-    for (let i = 0; i < 10; i++) {
-        const angle = (Math.PI / 2) * -1 + (Math.PI / 5) * i
-        const r = i % 2 === 0 ? outerR : innerR
-        pts.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) })
-    }
-    return pts
-}
-
-interface StrokePayload {
-    id: string
-    type: "start" | "draw" | "end"
-    point: { x: number; y: number }
-    color?: string
-    width?: number
-    page?: number
-    strokeLineCap?: CanvasLineCap
-}
-
-interface LaserPayload {
-    point: { x: number; y: number }
-    prevPoint?: { x: number; y: number } | null
-}
-
-interface LiveStroke {
-    points: Array<{ x: number; y: number }>
-    color: string
-    width: number
-}
-
-interface FullStrokePayload {
-    id: string;
-    points: { x: number; y: number }[];
-    color: string;
-    width: number;
-    page?: number;
-    timestamp?: number;
-    strokeLineCap?: CanvasLineCap;
-    // Saved position after user moved it
-    movedPosition?: { x: number; y: number };
-    movedWidthRatio?: number;
-    movedHeightRatio?: number;
-}
-
-function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushSize, isViewLocked, currentPage, drawingEnabled, shapeFillColor, shapeBorderColor, textColor, onToolChange }: WhiteboardProps) {
+function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushSize, isViewLocked, currentPage, drawingEnabled, shapeBorderColor, textColor, fontSize, setFontSize, fontFamily, setFontFamily, onToolChange }: WhiteboardProps) {
     const { socket } = useSocket()
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const wrapperRef = useRef<HTMLDivElement>(null)
@@ -178,10 +36,10 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
     const pagesDataRef = useRef<Record<number, Record<string, unknown>[]>>({})
     const liveStrokesRef = useRef<Record<string, LiveStroke>>({})
-    
+
     // Track active text editing for UI overlay
     const [editingTextPos, setEditingTextPos] = useState<{ x: number, y: number } | null>(null)
-    const activeTextObjRef = useRef<IText | null>(null)
+    const activeTextObjRef = useRef<BoardIText | null>(null)
     const liveFabricObjsRef = useRef<Record<string, Path>>({})
     const boardFileObjsRef = useRef<Record<string, FabricImage>>({})
     const textObjsRef = useRef<Record<string, IText>>({})
@@ -191,16 +49,84 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     const boardHistoryRef = useRef<StoredBoardObject[]>([]);
     const lastSyncTimeRef = useRef<number>(0);
 
+    const [showFontSizeDropdown, setShowFontSizeDropdown] = useState(false)
+    const [showFontFamilyDropdown, setShowFontFamilyDropdown] = useState(false)
+    const fontSizeButtonRef = useRef<HTMLButtonElement>(null)
+    const fontFamilyButtonRef = useRef<HTMLButtonElement>(null)
+    const overlayRef = useRef<HTMLDivElement>(null)
+    // Flag: user is clicking a font control — safety net for editing:exited
+    const isSelectingFontRef = useRef(false)
+    // Local font state during editing — decoupled from parent to avoid re-renders
+    const [editingFontSize, setEditingFontSize] = useState(fontSize || 24)
+    const [editingFontFamily, setEditingFontFamily] = useState(fontFamily || "Inter, sans-serif")
+
+    const localStrokePointsRef = useRef<{ x: number; y: number }[]>([])
+    const liveStrokesNormRef = useRef<Record<string, { x: number; y: number }[]>>({})
+
     const saveToLocalStorage = useCallback((newObj?: StoredBoardObject) => {
         if (newObj) {
             boardHistoryRef.current.push(newObj);
             if (newObj.timestamp > lastSyncTimeRef.current) {
                 lastSyncTimeRef.current = newObj.timestamp;
-                localStorage.setItem(`board_sync_${sessionId}`, newObj.timestamp.toString());
             }
         }
         localStorage.setItem(`board_data_${sessionId}`, JSON.stringify(boardHistoryRef.current));
     }, [sessionId]);
+
+    // ── DB Persistence: Load board state from DB on mount ──
+    // (Saving is handled by socket-provider's sync.service.ts every 30s)
+    useEffect(() => {
+        // 1. First load from localStorage to populate immediately
+        const cached = localStorage.getItem(`board_data_${sessionId}`);
+        if (cached) {
+            try {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed)) {
+                    boardHistoryRef.current = parsed;
+                    if (parsed.length > 0) {
+                        lastSyncTimeRef.current = Math.max(...parsed.map(o => o.timestamp || 0));
+                    }
+                    console.log(`[Board] Loaded ${parsed.length} objects from localStorage`);
+                }
+            } catch (e) {
+                console.error("Error parsing localStorage cache:", e);
+            }
+        }
+
+        // 2. Fetch latest from DB to sync/hydrate
+        (async () => {
+            try {
+                const res = await fetch(`/api/board-state?sessionId=${sessionId}`);
+                const data = await res.json();
+                if (data.status === "success" && data.boardState) {
+                    const allObjects: StoredBoardObject[] = [];
+                    for (const pageObjects of Object.values(data.boardState)) {
+                        if (Array.isArray(pageObjects)) allObjects.push(...pageObjects);
+                    }
+                    if (allObjects.length > 0) {
+                        // Merge by id (or timestamp) to avoid duplicates
+                        const objMap = new Map<string, StoredBoardObject>();
+                        boardHistoryRef.current.forEach(obj => {
+                            const id = (obj.payload as { id?: string }).id || String(obj.timestamp);
+                            objMap.set(id, obj);
+                        });
+                        allObjects.forEach(obj => {
+                            const id = (obj.payload as { id?: string }).id || String(obj.timestamp);
+                            const existing = objMap.get(id);
+                            if (!existing || (obj.timestamp || 0) >= (existing.timestamp || 0)) {
+                                objMap.set(id, obj);
+                            }
+                        });
+                        boardHistoryRef.current = Array.from(objMap.values());
+                        lastSyncTimeRef.current = Math.max(...boardHistoryRef.current.map(o => o.timestamp || 0));
+                        localStorage.setItem(`board_data_${sessionId}`, JSON.stringify(boardHistoryRef.current));
+                        console.log(`[Board] Synced/Merged with DB: total ${boardHistoryRef.current.length} objects`);
+                    }
+                }
+            } catch (e) { console.error("Board state load error:", e); }
+        })();
+    }, [sessionId]);
+
     // Safer unique ID generation (fallback for non-secure contexts/older browsers)
     const generateId = useCallback(() => {
         if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -211,89 +137,44 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
     const toolRef = useRef(tool)
     const onToolChangeRef = useRef(onToolChange)
-    const activeTextRef = useRef<IText | null>(null)
 
-    // Load from localStorage on mount
-    useEffect(() => {
-        const saved = localStorage.getItem(`board_data_${sessionId}`);
-        if (saved) {
-            try {
-                boardHistoryRef.current = JSON.parse(saved);
-                const sync = localStorage.getItem(`board_sync_${sessionId}`);
-                if (sync) lastSyncTimeRef.current = parseInt(sync);
-            } catch (e) {
-                console.error("Failed to parse board history", e);
-            }
-        }
-    }, [sessionId]);
     const bgImagesRef = useRef(bgImages)
     const setBgImagesOnCanvasRef = useRef<(canvas: Canvas, imageUrls: string[]) => Promise<void>>(() => Promise.resolve())
     const drawingEnabledRef = useRef(drawingEnabled)
-    const lastLaserPointRef = useRef<{ x: number, y: number } | null>(null)
-    const isLaserActiveRef = useRef(false)
+    const lastLaserPointRef = useRef<{ x: number, y: number } | null>(null);
+    const isLaserActiveRef = useRef<boolean>(false);
 
-    // Shape drawing state
     const shapeStartRef = useRef<{ x: number; y: number } | null>(null)
     const shapePreviewRef = useRef<FabricObject | null>(null)
-    const shapeFillRef = useRef(shapeFillColor)
+
     const shapeBorderRef = useRef(shapeBorderColor)
     const brushSizeRef = useRef(brushSize)
     const colorRef = useRef(color)
     const textColorRef = useRef(textColor || "#FFFFFF")
-
-    useEffect(() => {
-        currentPageRef.current = currentPage
-    }, [currentPage])
+    const fontSizeRef = useRef(fontSize || 24)
+    const fontFamilyRef = useRef(fontFamily || "Inter, sans-serif")
 
     useEffect(() => {
         toolRef.current = tool
-    }, [tool])
-
-    useEffect(() => {
         brushSizeRef.current = brushSize
-    }, [brushSize])
-
-    useEffect(() => {
         colorRef.current = color
-    }, [color])
-
-    useEffect(() => {
         textColorRef.current = textColor || "#FFFFFF"
-    }, [textColor])
-
-    useEffect(() => {
+        fontSizeRef.current = fontSize || 24
+        fontFamilyRef.current = fontFamily || "Inter, sans-serif"
         onToolChangeRef.current = onToolChange
-    }, [onToolChange])
+    }, [tool, brushSize, color, textColor, fontSize, fontFamily, onToolChange])
 
     useEffect(() => {
         bgImagesRef.current = bgImages
     }, [bgImages])
-
-
 
     useEffect(() => {
         drawingEnabledRef.current = drawingEnabled
     }, [drawingEnabled])
 
     useEffect(() => {
-        shapeFillRef.current = shapeFillColor
-    }, [shapeFillColor])
-
-    useEffect(() => {
         shapeBorderRef.current = shapeBorderColor
     }, [shapeBorderColor])
-
-    useEffect(() => {
-        brushSizeRef.current = brushSize
-    }, [brushSize])
-
-    useEffect(() => {
-        colorRef.current = color
-    }, [color])
-
-    useEffect(() => {
-        textColorRef.current = textColor || "#FFFFFF"
-    }, [textColor])
 
 
     // Utility: Width-based normalization
@@ -306,6 +187,123 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         x: nx * cw,
         y: ny * cw,
     }), [])
+
+    // ── Native capture-phase mousedown for ALL font controls ──────────
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            const target = e.target as HTMLElement
+            const matched = target?.closest?.('[data-font-control]')
+            if (matched) {
+                console.log('%c[1⃣ CAPTURE mousedown] ✅ Hit data-font-control — calling preventDefault()', 'color: lime; font-weight: bold', {
+                    tag: target.tagName,
+                    text: target.textContent?.slice(0, 20),
+                    isEditing: activeTextObjRef.current?.isEditing,
+                })
+                e.preventDefault()
+                isSelectingFontRef.current = true
+            } else {
+                console.log('[1⃣ CAPTURE mousedown] ❌ No data-font-control found', {
+                    tag: target?.tagName,
+                    cls: target?.className?.toString?.()?.slice(0, 50),
+                })
+            }
+        }
+        document.addEventListener('mousedown', handler, { capture: true })
+        return () => document.removeEventListener('mousedown', handler, { capture: true })
+    }, [])
+
+    // ── Direct font application helper ────────────────────────────────
+    // Applies font changes DIRECTLY to the active text object. Updates local
+    // state only (not parent). Parent state is synced on Done button click.
+    const applyFontToActiveText = useCallback((newFontSize?: number, newFontFamily?: string) => {
+        const canvas = fabricRef.current
+        const textObj = activeTextObjRef.current
+        if (!canvas || !textObj) return false
+
+        // Save cursor position
+        const cursorPos = textObj.selectionStart ?? (textObj.text?.length || 0)
+
+        let changed = false
+        if (newFontSize !== undefined && textObj.fontSize !== newFontSize) {
+            textObj.set({ fontSize: newFontSize })
+            changed = true
+        }
+        if (newFontFamily !== undefined && textObj.fontFamily !== newFontFamily) {
+            textObj.set({ fontFamily: newFontFamily })
+            changed = true
+        }
+        if (!changed) return false
+
+        // Recalculate text dimensions with new font
+        textObj.initDimensions()
+        textObj.setCoords()
+
+        // Restore cursor position
+        textObj.selectionStart = cursorPos
+        textObj.selectionEnd = cursorPos
+        const ta = (textObj as unknown as { hiddenTextarea?: HTMLTextAreaElement }).hiddenTextarea
+        if (ta) {
+            ta.selectionStart = cursorPos
+            ta.selectionEnd = cursorPos
+        }
+        canvas.requestRenderAll()
+
+        // Update overlay position (text may have changed size)
+        const bound = textObj.getBoundingRect()
+        const canvasEl = canvas.getElement()
+        const rect = canvasEl.getBoundingClientRect()
+        setEditingTextPos({
+            x: rect.left + bound.left + (bound.width / 2),
+            y: rect.top + bound.top
+        })
+
+        // Update local display state (no parent re-render!)
+        if (newFontSize !== undefined) setEditingFontSize(newFontSize)
+        if (newFontFamily !== undefined) setEditingFontFamily(newFontFamily)
+
+        // Sync to peers
+        const id = textObj.id
+        if (id) {
+            const effectiveFontSize = textObj.fontSize * (textObj.scaleX || 1)
+            socket?.emit("text_update", {
+                roomId: sessionId,
+                payload: {
+                    id,
+                    text: textObj.text,
+                    color: textObj.fill,
+                    fontSizeRatio: effectiveFontSize / canvas.width,
+                    fontFamily: textObj.fontFamily,
+                    position: toNorm(textObj.left, textObj.top, canvas.width),
+                    page: currentPageRef.current,
+                }
+            })
+        }
+        return true
+    }, [sessionId, socket, toNorm])
+
+    // Update active text object when font settings change via props
+    // (Only for non-editing text objects, e.g. selecting an existing text)
+    useEffect(() => {
+        const canvas = fabricRef.current
+        if (!canvas) return
+        const textObj = activeTextObjRef.current
+        if (!textObj) return
+        if (textObj.isEditing || isSelectingFontRef.current) return
+        let changed = false
+        if (fontSize && textObj.fontSize !== fontSize) {
+            textObj.set({ fontSize })
+            changed = true
+        }
+        if (fontFamily && textObj.fontFamily !== fontFamily) {
+            textObj.set({ fontFamily })
+            changed = true
+        }
+        if (changed) {
+            textObj.initDimensions()
+            textObj.setCoords()
+            canvas.requestRenderAll()
+        }
+    }, [fontSize, fontFamily])
 
     const buildPathStr = useCallback((pts: Array<{ x: number; y: number }>) => {
         if (pts.length === 0) return "M 0 0"
@@ -417,7 +415,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             width: initialWidth,
             height: initialHeight,
             backgroundColor: boardColor,
-            isDrawingMode: true,
+            isDrawingMode: role === "teacher" || drawingEnabledRef.current,
         })
 
         fabricRef.current = canvas
@@ -438,44 +436,85 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             const top = data.position.y * cw
             const w = (data.widthRatio || 0) * cw
             const h = (data.heightRatio || 0) * cw
-            const fill = data.fill || "transparent"
             const stroke = data.stroke || "#FFFFFF"
+            const fill = data.fill || (data.shapeType.startsWith("f-") ? stroke : "transparent")
             const strokeWidth = (data.strokeWidthRatio || 0.003) * cw
-            const common = { left, top, fill, stroke, strokeWidth, originX: "left" as const, originY: "top" as const, selectable: true, evented: true }
+            const common = {
+                left, top, fill, stroke, strokeWidth,
+                originX: "left" as const, originY: "top" as const,
+                selectable: true,
+                evented: true,
+                strokeLineCap: "round" as const,
+                strokeLineJoin: "round" as const
+            }
 
             switch (data.shapeType as string) {
                 case "rectangle":
                 case "square":
+                case "f-rectangle":
+                case "f-square":
                     return new Rect({ ...common, width: w, height: h })
                 case "circle":
                 case "ellipse":
+                case "f-circle":
+                case "f-ellipse":
                     return new Ellipse({ ...common, rx: w / 2, ry: h / 2 })
                 case "triangle":
+                case "f-triangle":
                     return new Polygon(getTrianglePoints(w, h), { ...common, left, top })
                 case "right-triangle":
+                case "f-right-triangle":
                     return new Polygon(getRightTrianglePoints(w, h), { ...common, left, top })
                 case "diamond":
                 case "rhombus":
+                case "f-diamond":
+                case "f-rhombus":
                     return new Polygon(getDiamondPoints(w, h), { ...common, left, top })
                 case "pentagon":
+                case "f-pentagon":
                     return new Polygon(getPentagonPoints(w, h), { ...common, left, top })
                 case "parallelogram":
+                case "f-parallelogram":
                     return new Polygon(getParallelogramPoints(w, h), { ...common, left, top })
                 case "star":
+                case "f-star":
                     return new Polygon(getStarPoints(w, h), { ...common, left, top })
                 case "graph-axis": {
-                    const d = `M 0 ${h / 2} L ${w} ${h / 2} M ${w / 2} 0 L ${w / 2} ${h}`
-                    return new Path(d, { ...common, fill: "transparent" })
+                    const arrowSize = Math.max(12, strokeWidth * 0.3)
+                    const axisExt = arrowSize + 5
+                    const midX = w / 2
+                    const midY = h / 2
+                    // Extended axes
+                    let d = `M ${-axisExt} ${midY} L ${w + axisExt} ${midY} M ${midX} ${-axisExt} L ${midX} ${h + axisExt} `
+                    // Filled arrowheads at extensions
+                    d += `M ${-axisExt} ${midY} L ${-axisExt + arrowSize} ${midY - arrowSize / 3} L ${-axisExt + arrowSize} ${midY + arrowSize / 3} Z `
+                    d += `M ${w + axisExt} ${midY} L ${w + axisExt - arrowSize} ${midY - arrowSize / 3} L ${w + axisExt - arrowSize} ${midY + arrowSize / 3} Z `
+                    d += `M ${midX} ${-axisExt} L ${midX - arrowSize / 3} ${-axisExt + arrowSize} L ${midX + arrowSize / 3} ${-axisExt + arrowSize} Z `
+                    d += `M ${midX} ${h + axisExt} L ${midX - arrowSize / 3} ${h + axisExt - arrowSize} L ${midX + arrowSize / 3} ${h + axisExt - arrowSize} Z `
+                    return new Path(d, { ...common, fill: stroke })
                 }
-                case "line":
-                    return new Line([0, 0, w, h], { ...common, fill: undefined })
+                case "line": {
+                    // Use Path instead of Line to avoid Fabric.js bounding-box issues with negative coords
+                    const dirX = (data as ShapePayload & { dragDirX?: number }).dragDirX ?? 1
+                    const dirY = (data as ShapePayload & { dragDirY?: number }).dragDirY ?? 1
+                    const x1 = dirX >= 0 ? 0 : w
+                    const y1 = dirY >= 0 ? 0 : h
+                    const x2 = dirX >= 0 ? w : 0
+                    const y2 = dirY >= 0 ? h : 0
+                    return new Path(`M ${x1} ${y1} L ${x2} ${y2}`, { ...common, fill: "transparent" })
+                }
                 case "arrow": {
-                    // Arrow = line with arrowhead via Path
+                    // Arrow = line with filled arrowhead for sharp tip
                     const angle = Math.atan2(h, w)
-                    const headLen = Math.min(20, Math.max(8, strokeWidth * 4))
+                    const headLen = Math.max(12, strokeWidth * 0.3)
                     const x2 = w, y2 = h
-                    const d = `M 0 0 L ${x2} ${y2} M ${x2 - headLen * Math.cos(angle - Math.PI / 6)} ${y2 - headLen * Math.sin(angle - Math.PI / 6)} L ${x2} ${y2} L ${x2 - headLen * Math.cos(angle + Math.PI / 6)} ${y2 - headLen * Math.sin(angle + Math.PI / 6)}`
-                    return new Path(d, { ...common, fill: "transparent" })
+                    const xTip1 = x2 - headLen * Math.cos(angle - Math.PI / 8)
+                    const yTip1 = y2 - headLen * Math.sin(angle - Math.PI / 8)
+                    const xTip2 = x2 - headLen * Math.cos(angle + Math.PI / 8)
+                    const yTip2 = y2 - headLen * Math.sin(angle + Math.PI / 8)
+
+                    const d = `M 0 0 L ${x2} ${y2} M ${x2} ${y2} L ${xTip1} ${yTip1} L ${xTip2} ${yTip2} Z`
+                    return new Path(d, { ...common, fill: stroke })
                 }
                 default:
                     if (data.shapeType.startsWith("graph-plain") || data.shapeType.startsWith("graph-labeled")) {
@@ -495,14 +534,16 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                         }
                         const gridPath = new Path(gridD, { ...common, stroke: "#888888", strokeWidth: 1, opacity: 0.3, fill: "transparent", left: 0, top: 0 })
 
-                        const arrowSize = Math.max(4, Math.min(w, h) / 40)
-                        let axesD = `M 0 ${midY} L ${w} ${midY} M ${midX} 0 L ${midX} ${h} `
-                        axesD += `M 0 ${midY} L ${arrowSize} ${midY - arrowSize / 2} M 0 ${midY} L ${arrowSize} ${midY + arrowSize / 2} `
-                        axesD += `M ${w} ${midY} L ${w - arrowSize} ${midY - arrowSize / 2} M ${w} ${midY} L ${w - arrowSize} ${midY + arrowSize / 2} `
-                        axesD += `M ${midX} 0 L ${midX - arrowSize / 2} ${arrowSize} M ${midX} 0 L ${midX + arrowSize / 2} ${arrowSize} `
-                        axesD += `M ${midX} ${h} L ${midX - arrowSize / 2} ${h - arrowSize} M ${midX} ${h} L ${midX + arrowSize / 2} ${h - arrowSize} `
+                        const arrowSize = Math.max(12, strokeWidth * 0.3)
+                        const axisExt = arrowSize + 5
+                        let axesD = `M ${-axisExt} ${midY} L ${w + axisExt} ${midY} M ${midX} ${-axisExt} L ${midX} ${h + axisExt} `
+                        // Filled arrowheads at extensions (outside grid area)
+                        axesD += `M ${-axisExt} ${midY} L ${-axisExt + arrowSize} ${midY - arrowSize / 3} L ${-axisExt + arrowSize} ${midY + arrowSize / 3} Z `
+                        axesD += `M ${w + axisExt} ${midY} L ${w + axisExt - arrowSize} ${midY - arrowSize / 3} L ${w + axisExt - arrowSize} ${midY + arrowSize / 3} Z `
+                        axesD += `M ${midX} ${-axisExt} L ${midX - arrowSize / 3} ${-axisExt + arrowSize} L ${midX + arrowSize / 3} ${-axisExt + arrowSize} Z `
+                        axesD += `M ${midX} ${h + axisExt} L ${midX - arrowSize / 3} ${h + axisExt - arrowSize} L ${midX + arrowSize / 3} ${h + axisExt - arrowSize} Z `
 
-                        const axesPath = new Path(axesD, { ...common, left: 0, top: 0, fill: "transparent" })
+                        const axesPath = new Path(axesD, { ...common, left: 0, top: 0, fill: stroke })
 
                         const objs: FabricObject[] = [gridPath, axesPath]
 
@@ -511,15 +552,16 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                             const textCommon = { fontSize, fill: stroke, fontFamily: "Inter, sans-serif", originX: "center" as const, originY: "center" as const, selectable: false, evented: false }
 
                             const step = range > 15 ? 2 : 1
+                            const labelOffset = Math.max(fontSize * 1.2, strokeWidth / 2 + 4)
                             for (let i = -range + 1; i <= range - 1; i++) {
                                 if (i === 0) continue
                                 if (i % step !== 0) continue
-                                objs.push(new IText(i.toString(), { ...textCommon, left: midX + i * stepX, top: midY + fontSize }))
-                                objs.push(new IText((-i).toString(), { ...textCommon, left: midX - fontSize, top: midY + i * stepY }))
+                                objs.push(new IText(i.toString(), { ...textCommon, left: midX + i * stepX, top: midY + labelOffset }))
+                                objs.push(new IText((-i).toString(), { ...textCommon, left: midX - labelOffset, top: midY + i * stepY }))
                             }
 
-                            objs.push(new IText("x", { ...textCommon, fontSize: fontSize * 1.5, fontStyle: "italic", fontWeight: "bold", left: w - fontSize, top: midY + fontSize }))
-                            objs.push(new IText("y", { ...textCommon, fontSize: fontSize * 1.5, fontStyle: "italic", fontWeight: "bold", left: midX + fontSize, top: fontSize }))
+                            objs.push(new IText("x", { ...textCommon, fontSize: fontSize * 1.5, fontStyle: "italic", fontWeight: "bold", left: w + axisExt + fontSize, top: midY }))
+                            objs.push(new IText("y", { ...textCommon, fontSize: fontSize * 1.5, fontStyle: "italic", fontWeight: "bold", left: midX, top: -axisExt - fontSize }))
 
                             const qDist = w / 4
                             const qDistY = h / 4
@@ -567,10 +609,19 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             if (toolRef.current === "text") {
                 if (role === "student" && (!drawingEnabledRef.current)) return
 
-                // If there's already an active text being edited, finalize it first
-                if (activeTextRef.current) {
-                    activeTextRef.current.exitEditing()
-                    activeTextRef.current = null
+                // If there's already an active text being edited, finalize it and switch to select tool
+                // (one-shot behavior: clicking elsewhere dismisses the text and its font toolbar)
+                if (activeTextObjRef.current) {
+                    console.log('%c[CANVAS mouse:down] Text tool clicked canvas — exitEditing existing text & switching to select', 'color: red; font-weight: bold', {
+                        isSelectingFont: isSelectingFontRef.current,
+                    })
+                    activeTextObjRef.current.exitEditing()
+                    activeTextObjRef.current = null
+                    setEditingTextPos(null)
+                    setShowFontSizeDropdown(false)
+                    setShowFontFamilyDropdown(false)
+                    if (onToolChangeRef.current) onToolChangeRef.current("select")
+                    return
                 }
 
                 // Fabric.js v7 requires selection=true for IText editing cursor to render
@@ -579,24 +630,14 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
                 const pt = canvas.getScenePoint(opt.e)
                 const id = generateId()
-                // fontSize proportional to canvas width, minimum 12px
-                // const baseSize = Math.max(12, Math.round(canvas.width * 0.025))
-                
-                // /* ── START OF BRUSH-DEPENDENT TEXT SIZE (COMMENTABLE) ──── */
-                // // Adjust text size based on brush size (default is 4, so we scale relative to that)
-                // const proportionalFontSize = baseSize * (brushSizeRef.current / 4)
-                // /* ── END OF BRUSH-DEPENDENT TEXT SIZE ──────────────────── */
-                // // const proportionalFontSize = baseSize
 
-                // console.log(`[TEXT] Creating text at (${pt.x}, ${pt.y}). canvas.width=${canvas.width}, fontSize=${proportionalFontSize}, brushSize=${brushSizeRef.current}`)
-                const proportionalFontSize = Math.max(12, Math.round(canvas.width * 0.025))
-                console.log(`[TEXT] Creating text at (${pt.x}, ${pt.y}). canvas.width=${canvas.width}, fontSize=${proportionalFontSize}`)
+                console.log(`[TEXT] Creating text at (${pt.x}, ${pt.y}). fontSize=${fontSizeRef.current}, fontFamily=${fontFamilyRef.current}`)
                 const textObj = new IText("", {
                     left: pt.x,
                     top: pt.y,
-                    fontSize: proportionalFontSize,
+                    fontSize: fontSizeRef.current,
                     fill: textColorRef.current,
-                    fontFamily: "Inter, sans-serif",
+                    fontFamily: fontFamilyRef.current,
                     selectable: true,
                     editable: true,
                     cursorColor: textColorRef.current,
@@ -611,17 +652,24 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 textObj.enterEditing()
 
                 activeTextObjRef.current = textObj
-                
-                const updateDoneButtonPos = () => {
-                    if (!textObj || !fabricRef.current) return
-                    const bound = textObj.getBoundingRect()
-                    // Transform canvas coords to viewport coords
+                // Initialize local font state for the overlay display
+                setEditingFontSize(textObj.fontSize || 24)
+                setEditingFontFamily(textObj.fontFamily || "Inter, sans-serif")
+
+                const updateOverlayPos = (obj: BoardIText) => {
+                    if (!fabricRef.current) return
+                    const bound = obj.getBoundingRect()
                     const canvasEl = fabricRef.current.getElement()
                     const rect = canvasEl.getBoundingClientRect()
                     setEditingTextPos({
-                        x: rect.left + bound.left + bound.width,
-                        y: rect.top + bound.top + bound.height
+                        x: rect.left + bound.left + (bound.width / 2),
+                        y: rect.top + bound.top
                     })
+                }
+
+                const updateDoneButtonPos = () => {
+                    if (!textObj || !fabricRef.current) return
+                    updateOverlayPos(textObj)
                 }
 
                 updateDoneButtonPos()
@@ -631,42 +679,82 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
                 // Fabric.js uses a hidden textarea for keyboard input — must be explicitly focused
                 const textarea = (textObj as unknown as { hiddenTextarea?: HTMLTextAreaElement }).hiddenTextarea
-                if (textarea) textarea.focus()
-                activeTextRef.current = textObj
+                if (textarea) {
+                    textarea.focus()
+                    // DEBUG: Monitor when the hidden textarea loses focus
+                    const blurHandler = () => {
+                        console.log('%c[2⃣ TEXTAREA blur]', 'color: yellow; font-weight: bold', {
+                            isSelectingFont: isSelectingFontRef.current,
+                            activeElement: document.activeElement?.tagName,
+                            activeElementId: (document.activeElement as HTMLElement)?.id,
+                            activeElementCls: (document.activeElement as HTMLElement)?.className?.toString?.()?.slice(0, 50),
+                        })
+                    }
+                    textarea.addEventListener('blur', blurHandler)
+                    // Clean up blur handler when text obj is removed
+                    textObj.on('editing:exited', () => {
+                        textarea.removeEventListener('blur', blurHandler)
+                    })
+                }
                 canvas.requestRenderAll()
 
                 // Emit to peers when editing finishes
                 textObj.on("editing:exited", () => {
+                    console.log('%c[3⃣ editing:exited]', 'color: #ff6b6b; font-weight: bold', {
+                        isSelectingFont: isSelectingFontRef.current,
+                        textContent: textObj.text?.slice(0, 20),
+                        isEditing: textObj.isEditing,
+                    })
+                    // If user was clicking a font control, Fabric exited editing
+                    // internally but we want to stay in editing mode.
+                    if (isSelectingFontRef.current) {
+                        console.log('%c[3⃣ editing:exited] ♻️ Re-entering editing (font control click)', 'color: lime; font-weight: bold')
+                        setTimeout(() => {
+                            if (!textObj || !fabricRef.current) return
+                            fabricRef.current.setActiveObject(textObj)
+                            textObj.enterEditing()
+                            // Place cursor at end of existing text
+                            textObj.setSelectionStart(textObj.text?.length || 0)
+                            textObj.setSelectionEnd(textObj.text?.length || 0)
+                            const ta = (textObj as unknown as { hiddenTextarea?: HTMLTextAreaElement }).hiddenTextarea
+                            if (ta) ta.focus()
+                            // Recalculate text dimensions after font change
+                            textObj.initDimensions()
+                            textObj.setCoords()
+                            fabricRef.current.requestRenderAll()
+                            // Reset the flag AFTER re-entering
+                            isSelectingFontRef.current = false
+                            console.log('%c[3⃣ editing:exited] ✅ Re-entered editing successfully', 'color: lime', { isEditing: textObj.isEditing })
+                        }, 0)
+                        return
+                    }
                     setEditingTextPos(null)
                     activeTextObjRef.current = null
                     textObj.off("changed", updateDoneButtonPos)
                     textObj.off("moving", updateDoneButtonPos)
                     textObj.off("scaling", updateDoneButtonPos)
 
-                    activeTextRef.current = null
                     if (!textObj.text?.trim()) {
                         canvas.remove(textObj)
                         delete textObjsRef.current[id]
                         canvas.requestRenderAll()
                         return
                     }
-                    // Compute effective visual fontSize (Fabric uses scaleX/scaleY when you drag container handles)
+                    // Compute effective visual fontSize
                     const effectiveFontSize = textObj.fontSize * (textObj.scaleX || 1)
                     const payload = {
                         id,
                         text: textObj.text,
                         color: textObj.fill,
                         fontSizeRatio: effectiveFontSize / canvas.width,
+                        fontFamily: textObj.fontFamily,
                         position: toNorm(textObj.left, textObj.top, canvas.width),
                         page: currentPageRef.current,
                     }
-                    // First time → text_add, subsequent edits → text_update
                     if (textObj._synced) {
-                        console.log(`[TEXT] Emitting text_update (re-edit):`, payload)
                         socket?.emit("text_update", { roomId: sessionId, payload })
                     } else {
                         textObj._synced = true
-                        console.log(`[TEXT] Emitting text_add:`, payload)
                         socket?.emit("text_add", { roomId: sessionId, payload })
                     }
                 })
@@ -679,9 +767,9 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 if (target && target.id) {
                     const id = target.id;
                     canvas.remove(target);
-                if (socket) {
-                    socket.emit("object_remove", { roomId: sessionId, payload: { id } });
-                }
+                    if (socket) {
+                        socket.emit("object_remove", { roomId: sessionId, payload: { id } });
+                    }
                     boardHistoryRef.current = boardHistoryRef.current.filter(obj => (obj.payload as { id: string }).id !== id);
                     saveToLocalStorage();
                     canvas.requestRenderAll();
@@ -712,6 +800,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             if (!canvas.isDrawingMode || (role === "student" && (!drawingEnabledRef.current))) return
             localStrokeIdRef.current = generateId()
             const pt = canvas.getScenePoint(opt.e)
+            localStrokePointsRef.current = [toNorm(pt.x, pt.y, canvas.width)]
 
             // Re-configure brush based on current tool if it's a pen tool
             if (toolRef.current.startsWith("pen:")) {
@@ -769,6 +858,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     h = h >= 0 ? size : -size
                 }
 
+                // For line tool: use standard bounding-box position (same as other shapes)
                 let left = w >= 0 ? start.x : start.x + w
                 let top = h >= 0 ? start.y : start.y + h
 
@@ -785,24 +875,36 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 const absW = Math.abs(w)
                 const absH = Math.abs(h)
 
-                // Remove previous preview
-                if (shapePreviewRef.current) {
-                    canvas.remove(shapePreviewRef.current)
-                }
+                // Remove ALL previous preview objects (robust cleanup)
+                canvas.getObjects().forEach(obj => {
+                    if ((obj as FabricObject & { _isPreview?: boolean })._isPreview) canvas.remove(obj)
+                })
+                shapePreviewRef.current = null
 
-                const previewData = {
+                const shapeType = toolRef.current
+                const isFilled = shapeType.startsWith("f-")
+                const stroke = colorRef.current
+                const fill = isFilled ? stroke : "transparent"
+
+                const previewData: ShapePayload & { dragDirX?: number; dragDirY?: number } = {
                     id: "preview",
-                    shapeType: toolRef.current,
+                    shapeType,
                     position: toNorm(left, top, canvas.width),
                     widthRatio: absW / canvas.width,
                     heightRatio: absH / canvas.width,
-                    fill: shapeFillRef.current,
-                    stroke: shapeBorderRef.current,
+                    fill,
+                    stroke,
                     strokeWidthRatio: brushSizeRef.current / canvas.width,
+                }
+                // Pass drag direction for line tool so Path knows start/end corners
+                if (shapeType === "line") {
+                    previewData.dragDirX = w >= 0 ? 1 : -1
+                    previewData.dragDirY = h >= 0 ? 1 : -1
                 }
 
                 const preview = createShapeFromPayload(previewData)
                 if (preview) {
+                    ; (preview as FabricObject & { _isPreview?: boolean })._isPreview = true
                     preview.set({ selectable: false, evented: false, opacity: 0.6 })
                     shapePreviewRef.current = preview
                     canvas.add(preview)
@@ -831,12 +933,14 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
             if (!localStrokeIdRef.current) return
             const pt = canvas.getScenePoint(opt.e)
+            const normPt = toNorm(pt.x, pt.y, canvas.width)
+            localStrokePointsRef.current.push(normPt)
             socket?.emit("stroke_draw", {
                 roomId: sessionId,
                 payload: {
                     id: localStrokeIdRef.current,
                     type: "draw",
-                    point: toNorm(pt.x, pt.y, canvas.width),
+                    point: normPt,
                     page: currentPageRef.current,
                 },
             })
@@ -860,11 +964,11 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 const start = shapeStartRef.current
                 shapeStartRef.current = null
 
-                // Remove preview
-                if (shapePreviewRef.current) {
-                    canvas.remove(shapePreviewRef.current)
-                    shapePreviewRef.current = null
-                }
+                // Remove ALL preview objects (robust cleanup)
+                canvas.getObjects().forEach(obj => {
+                    if ((obj as FabricObject & { _isPreview?: boolean })._isPreview) canvas.remove(obj)
+                })
+                shapePreviewRef.current = null
 
                 let w = pt.x - start.x
                 let h = pt.y - start.y
@@ -884,17 +988,26 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 const absH = Math.abs(h)
                 const id = generateId()
 
-                const shapePayload = {
+                const shapeType = toolRef.current
+                const isFilled = shapeType.startsWith("f-")
+                const stroke = colorRef.current
+                const fill = isFilled ? stroke : "transparent"
+
+                const shapePayload: ShapePayload & { dragDirX?: number; dragDirY?: number } = {
                     id,
-                    shapeType: toolRef.current,
+                    shapeType,
                     position: toNorm(left, top, canvas.width),
                     widthRatio: absW / canvas.width,
                     heightRatio: absH / canvas.width,
-                    fill: shapeFillRef.current,
-                    stroke: shapeBorderRef.current,
+                    fill,
+                    stroke,
                     strokeWidthRatio: brushSizeRef.current / canvas.width,
                     page: currentPageRef.current,
                     timestamp: Date.now(),
+                }
+                if (shapeType === "line") {
+                    shapePayload.dragDirX = w >= 0 ? 1 : -1
+                    shapePayload.dragDirY = h >= 0 ? 1 : -1
                 }
 
                 const shape = createShapeFromPayload(shapePayload)
@@ -905,7 +1018,11 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     canvas.requestRenderAll()
 
                     socket?.emit("shape_add", { roomId: sessionId, payload: shapePayload })
-                    if (onToolChangeRef.current) onToolChangeRef.current("select")
+                    saveToLocalStorage({
+                        type: "shape",
+                        payload: shapePayload,
+                        timestamp: shapePayload.timestamp || Date.now(),
+                    })
                 }
                 return
             }
@@ -920,6 +1037,21 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     page: currentPageRef.current,
                 },
             })
+
+            const fullStroke = {
+                id: localStrokeIdRef.current,
+                type: "full" as const,
+                points: localStrokePointsRef.current,
+                color: canvas.freeDrawingBrush?.color || "#fff",
+                width: (canvas.freeDrawingBrush?.width || brushSize) / canvas.width,
+                page: currentPageRef.current,
+            }
+            saveToLocalStorage({
+                type: "stroke",
+                payload: fullStroke,
+                timestamp: Date.now(),
+            })
+
             localStrokeIdRef.current = null
         })
 
@@ -928,6 +1060,70 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 (opt.path as BoardFabricObject).id = localStrokeIdRef.current
                 // Local user's own stroke — always selectable so they can move it
                 opt.path.set({ selectable: true, evented: true })
+            }
+        })
+
+        // ── Show font overlay when a text object is selected ──────
+        const handleTextSelection = (obj: FabricObject | null) => {
+            if (!obj || (obj.type !== "i-text" && obj.type !== "text")) {
+                if (!isSelectingFontRef.current) {
+                    setEditingTextPos(null)
+                    if (activeTextObjRef.current && !activeTextObjRef.current.isEditing) {
+                        activeTextObjRef.current = null
+                    }
+                }
+                return
+            }
+            const textObj = obj as BoardIText
+            if (!fabricRef.current) return
+
+            // Don't show font controls for emoji/symbol objects (they live in shapeObjsRef, not textObjsRef)
+            const objId = (obj as BoardFabricObject).id
+            if (objId && shapeObjsRef.current[objId]) return
+
+            const bound = textObj.getBoundingRect()
+            const canvasEl = fabricRef.current.getElement()
+            const rect = canvasEl.getBoundingClientRect()
+            activeTextObjRef.current = textObj
+            // Initialize local font state for the overlay
+            setEditingFontSize(textObj.fontSize || 24)
+            setEditingFontFamily(textObj.fontFamily || "Inter, sans-serif")
+            setEditingTextPos({
+                x: rect.left + bound.left + (bound.width / 2),
+                y: rect.top + bound.top
+            })
+            // If the text is already editing, no additional guard needed
+            // (the native capture-phase listener on overlayRef handles it)
+        }
+        canvas.on("selection:created", (opt) => handleTextSelection(opt.selected?.[0] ?? null))
+        canvas.on("selection:updated", (opt) => handleTextSelection(opt.selected?.[0] ?? null))
+        canvas.on("selection:cleared", () => {
+            console.log('[5⃣ selection:cleared]', {
+                isSelectingFont: isSelectingFontRef.current,
+                hasActiveText: !!activeTextObjRef.current,
+            })
+            if (!isSelectingFontRef.current) {
+                setEditingTextPos(null)
+                activeTextObjRef.current = null
+            }
+            // Always reset the flag — by the time selection:cleared fires on the canvas,
+            // any font control interaction is already complete. This prevents the flag
+            // from staying stale and blocking future cleanup.
+            isSelectingFontRef.current = false
+        })
+
+        // Update floating toolbar position when text is dragged
+        canvas.on("object:moving", (opt) => {
+            const obj = opt.target as BoardIText
+            if (!obj || !activeTextObjRef.current) return
+            if ((obj as BoardFabricObject).id === (activeTextObjRef.current as BoardFabricObject).id) {
+                const bound = obj.getBoundingRect()
+                const canvasEl = canvas.getElement()
+                const rect = canvasEl.getBoundingClientRect()
+                setEditingTextPos({
+                    x: rect.left + bound.left + (bound.width / 2),
+                    y: rect.top + bound.top
+                })
             }
         })
 
@@ -941,50 +1137,78 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
             // Shape modified (moved, resized) — includes symbols & emojis stored in shapeObjsRef
             if (shapeObjsRef.current[id]) {
+                const shapePayload = {
+                    id,
+                    position: toNorm(obj.left, obj.top, canvas.width),
+                    widthRatio: obj.getScaledWidth() / canvas.width,
+                    heightRatio: obj.getScaledHeight() / canvas.width,
+                    page: currentPageRef.current,
+                }
                 socket?.emit("shape_update", {
                     roomId: sessionId,
-                    payload: {
-                        id,
-                        position: toNorm(obj.left, obj.top, canvas.width),
-                        widthRatio: obj.getScaledWidth() / canvas.width,
-                        heightRatio: obj.getScaledHeight() / canvas.width,
-                        page: currentPageRef.current,
-                    }
+                    payload: shapePayload
                 })
+                boardHistoryRef.current = boardHistoryRef.current.map(item => {
+                    if (item.type === "shape" && (item.payload as { id: string }).id === id) {
+                        return { ...item, payload: { ...item.payload, ...shapePayload } } as StoredBoardObject
+                    }
+                    return item
+                })
+                saveToLocalStorage()
                 return
             }
 
             // Text object modified (moved, resized, edited)
             if (textObjsRef.current[id]) {
                 const textObj = obj as unknown as BoardIText
+                // Skip if we're in the middle of a font change —
+                // the font-update useEffect already emits text_update
+                if (isSelectingFontRef.current) return
                 const effectiveFontSize = textObj.fontSize * (textObj.scaleX || 1)
                 console.log(`[TEXT] object:modified id=${id}, effectiveFontSize=${effectiveFontSize}`)
+                const textPayload = {
+                    id,
+                    text: textObj.text,
+                    color: (textObj.fill as string) || undefined,
+                    fontSizeRatio: effectiveFontSize / canvas.width,
+                    fontFamily: textObj.fontFamily,
+                    position: toNorm(obj.left, obj.top, canvas.width),
+                    page: currentPageRef.current,
+                }
                 socket?.emit("text_update", {
                     roomId: sessionId,
-                    payload: {
-                        id,
-                        text: textObj.text,
-                        color: textObj.fill,
-                        fontSizeRatio: effectiveFontSize / canvas.width,
-                        position: toNorm(obj.left, obj.top, canvas.width),
-                        page: currentPageRef.current,
-                    }
+                    payload: textPayload
                 })
+                boardHistoryRef.current = boardHistoryRef.current.map(item => {
+                    if (item.type === "text" && (item.payload as { id: string }).id === id) {
+                        return { ...item, payload: { ...item.payload, ...textPayload } } as StoredBoardObject
+                    }
+                    return item
+                })
+                saveToLocalStorage()
                 return
             }
 
             // Stroke (Path) modified (moved, resized)
             if (obj instanceof Path) {
+                const strokePayload = {
+                    id,
+                    position: toNorm(obj.left, obj.top, canvas.width),
+                    widthRatio: obj.getScaledWidth() / canvas.width,
+                    heightRatio: obj.getScaledHeight() / canvas.width,
+                    page: currentPageRef.current,
+                }
                 socket?.emit("stroke_update", {
                     roomId: sessionId,
-                    payload: {
-                        id,
-                        position: toNorm(obj.left, obj.top, canvas.width),
-                        widthRatio: obj.getScaledWidth() / canvas.width,
-                        heightRatio: obj.getScaledHeight() / canvas.width,
-                        page: currentPageRef.current,
-                    }
+                    payload: strokePayload
                 })
+                boardHistoryRef.current = boardHistoryRef.current.map(item => {
+                    if (item.type === "stroke" && (item.payload as { id: string }).id === id) {
+                        return { ...item, payload: { ...item.payload, ...strokePayload } } as StoredBoardObject
+                    }
+                    return item
+                })
+                saveToLocalStorage()
                 return
             }
 
@@ -1015,6 +1239,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
             if (type === "start") {
                 liveStrokesRef.current[id] = { points: [local], color: sColor || "#fff", width: localWidth }
+                liveStrokesNormRef.current[id] = [point]
                 const p = new Path(`M ${local.x} ${local.y} L ${local.x} ${local.y}`, {
                     fill: "transparent", stroke: sColor, strokeWidth: localWidth,
                     strokeLineCap: payload.strokeLineCap || "round",
@@ -1026,6 +1251,9 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             } else if (type === "draw" && liveStrokesRef.current[id]) {
                 const data = liveStrokesRef.current[id]
                 data.points.push(local)
+                if (liveStrokesNormRef.current[id]) {
+                    liveStrokesNormRef.current[id].push(point)
+                }
                 const existingPath = liveFabricObjsRef.current[id]
                 if (existingPath) {
                     const currentIndex = canvas.getObjects().indexOf(existingPath)
@@ -1048,6 +1276,23 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 if (liveFabricObjsRef.current[id]) {
                     liveFabricObjsRef.current[id].set({ selectable: role === "teacher", objectCaching: true })
                 }
+                const normPoints = liveStrokesNormRef.current[id]
+                if (normPoints) {
+                    const fullStroke = {
+                        id,
+                        type: "full" as const,
+                        points: normPoints,
+                        color: sColor || liveStrokesRef.current[id]?.color || "#fff",
+                        width: sWidth || (liveStrokesRef.current[id]?.width || brushSize) / canvas.width,
+                        page: sPage ?? currentPageRef.current,
+                    }
+                    saveToLocalStorage({
+                        type: "stroke",
+                        payload: fullStroke,
+                        timestamp: Date.now(),
+                    })
+                    delete liveStrokesNormRef.current[id]
+                }
                 delete liveStrokesRef.current[id]
                 delete liveFabricObjsRef.current[id]
             }
@@ -1056,6 +1301,14 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
         const handleStrokeAdd = ({ payload }: { payload: FullStrokePayload }) => {
             if (payload.page !== undefined && payload.page !== currentPageRef.current) return
+
+            if (payload.id && !boardHistoryRef.current.some(obj => (obj.payload as { id: string }).id === payload.id)) {
+                saveToLocalStorage({
+                    type: "stroke",
+                    payload,
+                    timestamp: payload.timestamp || Date.now(),
+                })
+            }
 
             if (canvas.getObjects().some((o) => (o as BoardFabricObject).id === payload.id)) return
 
@@ -1161,6 +1414,15 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 handleTextUpdate({ payload })
                 return
             }
+
+            if (!boardHistoryRef.current.some(obj => (obj.payload as { id: string }).id === payload.id)) {
+                saveToLocalStorage({
+                    type: "text",
+                    payload,
+                    timestamp: payload.timestamp || Date.now(),
+                })
+            }
+
             const pos = fromNorm(payload.position.x, payload.position.y, canvas.width)
             // Reconstruct fontSize from normalized ratio
             const fontSize = payload.fontSizeRatio
@@ -1174,7 +1436,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 scaleX: 1,
                 scaleY: 1,
                 fill: payload.color || "#fff",
-                fontFamily: "Inter, sans-serif",
+                fontFamily: payload.fontFamily || "Inter, sans-serif",
                 selectable: role === "teacher",
                 editable: role === "teacher",
                 hasControls: true,
@@ -1182,13 +1444,13 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             }) as unknown as BoardIText
             textObj.id = payload.id
             textObjsRef.current[payload.id] = textObj
-            
+
             // For teachers, ensure the 'done' button is visible
             if (role === "teacher") {
-                textObj.setControlsVisibility({ 
-                    bl: false, br: false, tl: false, tr: false, 
+                textObj.setControlsVisibility({
+                    bl: false, br: false, tl: false, tr: false,
                     mb: false, ml: false, mr: false, mt: false, mtr: false,
-                    done: true 
+                    done: true
                 });
             }
 
@@ -1199,6 +1461,15 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         // ── Text Update (from peers — content/position/size change) ──
         const handleTextUpdate = ({ payload }: { payload: TextPayload }) => {
             if (payload.page !== undefined && payload.page !== currentPageRef.current) return
+            // Skip updates for the text we're currently editing locally —
+            // our own emit gets echoed back by the server and would disrupt
+            // Fabric's editing state (cursor, focus, hiddenTextarea).
+            // Also skip during font selection — isEditing is temporarily false
+            // between editing:exited and the setTimeout re-entry.
+            const activeId = (activeTextObjRef.current as BoardFabricObject)?.id
+            if (activeId && activeId === payload.id && (activeTextObjRef.current?.isEditing || isSelectingFontRef.current)) {
+                return
+            }
             const existing = textObjsRef.current[payload.id]
             if (existing) {
                 // Update text content and position
@@ -1216,8 +1487,19 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                         scaleY: 1,
                     })
                 }
+                if (payload.fontFamily) {
+                    existing.set({ fontFamily: payload.fontFamily })
+                }
                 existing.setCoords()
                 canvas.requestRenderAll()
+
+                boardHistoryRef.current = boardHistoryRef.current.map(item => {
+                    if (item.type === "text" && (item.payload as { id: string }).id === payload.id) {
+                        return { ...item, payload: { ...item.payload, ...payload } } as StoredBoardObject
+                    }
+                    return item
+                })
+                saveToLocalStorage()
             } else {
                 // Object not found locally — treat as new text
                 handleTextAdd({ payload })
@@ -1273,8 +1555,8 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 console.log("[SHAPE] Shape added to canvas:", payload.id, payload.shapeType)
 
                 // Persist to history
-                if (payload.timestamp && !boardHistoryRef.current.some(obj => obj.payload.id === payload.id)) {
-                    saveToLocalStorage({ type: "shape", payload, timestamp: payload.timestamp });
+                if (!boardHistoryRef.current.some(obj => (obj.payload as { id: string }).id === payload.id)) {
+                    saveToLocalStorage({ type: "shape", payload, timestamp: payload.timestamp || Date.now() });
                 }
             } else {
                 console.warn("[SHAPE] Failed to create shape from payload:", payload)
@@ -1298,6 +1580,14 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             }
             obj.setCoords()
             canvas.requestRenderAll()
+
+            boardHistoryRef.current = boardHistoryRef.current.map(item => {
+                if (item.type === "shape" && (item.payload as { id: string }).id === payload.id) {
+                    return { ...item, payload: { ...item.payload, ...payload } } as StoredBoardObject
+                }
+                return item
+            })
+            saveToLocalStorage()
         }
 
         // ── Stroke Update (from peers — position/size change) ─────
@@ -1319,6 +1609,14 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             }
             obj.setCoords()
             canvas.requestRenderAll()
+
+            boardHistoryRef.current = boardHistoryRef.current.map(item => {
+                if (item.type === "stroke" && (item.payload as { id: string }).id === payload.id) {
+                    return { ...item, payload: { ...item.payload, ...payload } } as StoredBoardObject
+                }
+                return item
+            })
+            saveToLocalStorage()
         }
 
         if (socket) {
@@ -1348,6 +1646,8 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 if (shapeObjsRef.current[payload.id]) delete shapeObjsRef.current[payload.id];
                 canvas.renderAll();
             }
+            boardHistoryRef.current = boardHistoryRef.current.filter(item => (item.payload as { id: string }).id !== payload.id);
+            saveToLocalStorage();
         }
         if (socket) {
             socket.on("object_remove", handleObjectRemove);
@@ -1526,6 +1826,19 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
     useEffect(() => {
         const canvas = fabricRef.current; if (!canvas) return
+
+        // Clean up active text editing when switching away from text/select tools
+        // This ensures the floating font toolbar disappears when the user picks a different tool
+        if (tool !== "text" && tool !== "select" && activeTextObjRef.current) {
+            if (activeTextObjRef.current.isEditing) {
+                activeTextObjRef.current.exitEditing()
+            }
+            activeTextObjRef.current = null
+            setEditingTextPos(null)
+            setShowFontSizeDropdown(false)
+            setShowFontFamilyDropdown(false)
+        }
+
         const canDraw = role === "teacher" || (drawingEnabled ?? false);
         const isPenTool = tool.startsWith("pen:")
         // Selective eraser uses drawing mode with background color
@@ -1553,16 +1866,18 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 }
             }
         }
-        canvas.defaultCursor = activeTextRef.current ? TEXT_CURSOR : (tool === "laser" ? "crosshair" : tool === "text" ? TEXT_CURSOR : "default")
-        // Disable selection when using drawing/laser tools
-        // Text and laser tools need pointer events (getScenePoint) so skipTargetFind must be false for them
-        // IMPORTANT: If there's an active text being edited, keep selection=true so the cursor stays alive
-        if (activeTextRef.current) {
+        const isShapeCursor = isShapeTool(tool) || tool === "line" || tool === "arrow"
+        canvas.defaultCursor = activeTextObjRef.current ? TEXT_CURSOR : (tool === "laser" || isShapeCursor ? "crosshair" : tool === "text" ? TEXT_CURSOR : "default")
+        // Only the arrow/select tool can select and move objects on the canvas.
+        // All other tools should pass through objects (like laser does).
+        // Exception: eraser needs target-find to identify clicked objects for deletion.
+        // Exception: text tool needs target-find to select existing text for re-editing.
+        if (activeTextObjRef.current) {
             canvas.selection = true
             canvas.skipTargetFind = false
         } else {
-            canvas.selection = (tool === "select" || tool === "text")
-            canvas.skipTargetFind = (isPenTool || tool === "partial-eraser" || tool === "laser") && tool !== "eraser"
+            canvas.selection = tool === "select"
+            canvas.skipTargetFind = tool !== "select" && tool !== "eraser" && tool !== "text"
         }
         // canvasReady ensures this effect re-runs after the canvas is initialized
         // (which happens asynchronously when socket connects)
@@ -1596,6 +1911,53 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         return () => wrapper.removeEventListener("scroll", handleScroll)
     }, [role, sessionId, socket, drawingEnabled])
 
+    // ── Keyboard Shortcuts: Delete/Backspace to remove objects ──
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Check permissions
+            if (role === "student" && !drawingEnabled) return
+
+            // Check if user is typing in an input or textarea
+            const activeEl = document.activeElement
+            if (activeEl?.tagName === "INPUT" || activeEl?.tagName === "TEXTAREA" || (activeEl as HTMLElement)?.isContentEditable) {
+                return
+            }
+
+            // Check if we are currently editing a Fabric text object
+            if (activeTextObjRef.current) return
+
+            if (e.key === "Delete" || e.key === "Backspace") {
+                const canvas = fabricRef.current
+                if (!canvas) return
+
+                const activeObjects = canvas.getActiveObjects()
+                if (activeObjects.length > 0) {
+                    e.preventDefault()
+                    activeObjects.forEach((obj) => {
+                        const id = (obj as BoardFabricObject).id
+                        canvas.remove(obj)
+                        if (id) {
+                            socket?.emit("object_remove", { roomId: sessionId, payload: { id } })
+                            boardHistoryRef.current = boardHistoryRef.current.filter(
+                                (item) => (item.payload as { id: string }).id !== id
+                            )
+                            if (boardFileObjsRef.current[id]) delete boardFileObjsRef.current[id]
+                            if (textObjsRef.current[id]) delete textObjsRef.current[id]
+                            if (shapeObjsRef.current[id]) delete shapeObjsRef.current[id]
+                        }
+                    })
+                    canvas.discardActiveObject()
+                    saveToLocalStorage()
+                    canvas.requestRenderAll()
+                }
+            }
+        }
+
+        window.addEventListener("keydown", handleKeyDown)
+        return () => window.removeEventListener("keydown", handleKeyDown)
+    }, [sessionId, socket, role, drawingEnabled, saveToLocalStorage])
+
+
     return (
         <div className="flex-1 min-h-0 bg-background relative flex flex-col p-3">
             <div
@@ -1609,30 +1971,162 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 <canvas ref={canvasRef} />
             </div>
 
-            {/* Done Button Overlay for Text Tool */}
+            {/* Text Tool Floating Controls — shown when editing or selecting a text object */}
             {editingTextPos && (
-                <div 
-                    className="fixed z-9999 pointer-events-auto animate-in fade-in zoom-in duration-200"
-                    style={{ 
-                        left: editingTextPos.x + 10, 
-                        top: editingTextPos.y + 10 
-                    }}
+                <div
+                    ref={overlayRef}
+                    data-font-control
+                    className="fixed z-9999 pointer-events-auto flex flex-col items-center -translate-x-1/2"
+                    style={{ left: editingTextPos.x, top: editingTextPos.y - 48 }}
                 >
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            if (activeTextObjRef.current) {
-                                activeTextObjRef.current.exitEditing()
+                    <div className="flex items-center gap-1 px-1.5 py-1 bg-zinc-900/95 backdrop-blur-md border border-white/15 rounded-md shadow-2xl shadow-black/60">
+
+                        {/* Font Size */}
+                        <div className="relative">
+                            <button
+                                ref={fontSizeButtonRef}
+                                type="button"
+                                data-font-control
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    setShowFontSizeDropdown(v => !v)
+                                    setShowFontFamilyDropdown(false)
+                                }}
+                                className={cn(
+                                    "h-6 px-1.5 min-w-[30px] border rounded border-white/20 text-[11px] font-bold flex items-center justify-center transition-colors",
+                                    showFontSizeDropdown ? "bg-indigo-600 text-white" : "bg-white/10 text-white hover:bg-white/20"
+                                )}
+                                title={`Font Size: ${editingFontSize}`}
+                            >
+                                {editingFontSize}
+                            </button>
+
+                            {showFontSizeDropdown && ReactDOM.createPortal(
+                                <div data-font-control>
+                                    <div className="fixed inset-0 z-9998" data-font-control onClick={() => setShowFontSizeDropdown(false)} />
+                                    <div
+                                        className="fixed z-9999 flex flex-col gap-px p-1 bg-zinc-900 border border-white/20 rounded shadow-2xl max-h-[180px] overflow-y-auto no-scrollbar"
+                                        style={{
+                                            top: (fontSizeButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
+                                            left: fontSizeButtonRef.current?.getBoundingClientRect().left ?? 0
+                                        }}
+                                    >
+                                        {FONT_SIZES.map((size) => (
+                                            <button
+                                                key={size}
+                                                type="button"
+                                                data-font-control
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    applyFontToActiveText(size, undefined)
+                                                    setShowFontSizeDropdown(false)
+                                                }}
+                                                className={cn(
+                                                    "px-2.5 py-1 rounded-sm text-[10px] font-medium text-left whitespace-nowrap transition-colors",
+                                                    editingFontSize === size ? "bg-indigo-600 text-white" : "text-zinc-300 hover:text-white hover:bg-white/10"
+                                                )}
+                                            >
+                                                {size}px
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>,
+                                document.body
+                            )}
+                        </div>
+
+                        {/* Divider */}
+                        <div className="w-px h-4 bg-white/15" />
+
+                        {/* Font Family */}
+                        <div className="relative">
+                            <button
+                                ref={fontFamilyButtonRef}
+                                type="button"
+                                data-font-control
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    setShowFontFamilyDropdown(v => !v)
+                                    setShowFontSizeDropdown(false)
+                                }}
+                                className={cn(
+                                    "h-6 px-1.5 min-w-[56px] border rounded border-white/20 text-[11px] font-medium flex items-center gap-1 transition-colors",
+                                    showFontFamilyDropdown ? "bg-indigo-600 text-white" : "bg-white/10 text-white hover:bg-white/20"
+                                )}
+                                title={`Font: ${FONT_FAMILIES.find(f => f.id === editingFontFamily)?.label ?? "Inter"}`}
+                            >
+                                <span className="truncate max-w-[44px]" style={{ fontFamily: editingFontFamily }}>
+                                    {FONT_FAMILIES.find(f => f.id === editingFontFamily)?.label ?? "Inter"}
+                                </span>
+                                <ChevronDown size={10} className="opacity-50 shrink-0" />
+                            </button>
+
+                            {showFontFamilyDropdown && ReactDOM.createPortal(
+                                <div data-font-control>
+                                    <div className="fixed inset-0 z-9998" data-font-control onClick={() => setShowFontFamilyDropdown(false)} />
+                                    <div
+                                        className="fixed z-9999 flex flex-col gap-px p-1 bg-zinc-900 border border-white/20 rounded shadow-2xl"
+                                        style={{
+                                            top: (fontFamilyButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
+                                            left: fontFamilyButtonRef.current?.getBoundingClientRect().left ?? 0
+                                        }}
+                                    >
+                                        {FONT_FAMILIES.map((f) => (
+                                            <button
+                                                key={f.id}
+                                                type="button"
+                                                data-font-control
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    applyFontToActiveText(undefined, f.id)
+                                                    setShowFontFamilyDropdown(false)
+                                                }}
+                                                className={cn(
+                                                    "px-2.5 py-1 rounded-sm text-[10px] font-medium text-left whitespace-nowrap transition-colors",
+                                                    editingFontFamily === f.id ? "bg-indigo-600 text-white" : "text-zinc-300 hover:text-white hover:bg-white/10"
+                                                )}
+                                                style={{ fontFamily: f.id }}
+                                            >
+                                                {f.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>,
+                                document.body
+                            )}
+                        </div>
+
+                        {/* Divider */}
+                        <div className="w-px h-4 bg-white/15" />
+
+                        {/* Done \u2014 the ONLY button that closes the text input */}
+                        {/* NO data-font-control here so the native listener does NOT prevent default */}
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                isSelectingFontRef.current = false
+                                setShowFontSizeDropdown(false)
+                                setShowFontFamilyDropdown(false)
+                                setEditingTextPos(null)
+                                const obj = activeTextObjRef.current
+                                if (obj) {
+                                    obj.exitEditing()
+                                    activeTextObjRef.current = null
+                                }
+                                // Sync final font values to parent state
+                                setFontSize?.(editingFontSize)
+                                setFontFamily?.(editingFontFamily)
                                 if (onToolChangeRef.current) onToolChangeRef.current("select")
-                            }
-                        }}
-                        className="flex items-center justify-center w-10 h-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-lg transition-all active:scale-90 group border-2 border-white/20"
-                        title="Finish typing"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                    </button>
+                            }}
+                            className="w-6 h-6 flex items-center justify-center bg-emerald-600 hover:bg-emerald-500 text-white rounded transition-colors active:scale-90"
+                            title="Done typing"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

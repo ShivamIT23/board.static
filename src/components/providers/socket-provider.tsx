@@ -1,27 +1,12 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { toast } from "sonner";
+import type { RoomUser } from "@/types/chat";
+import { SocketContext } from "@/hooks/use-socket";
 
-interface SocketContextType {
-  socket: Socket | null;
-  isConnected: boolean;
-}
-
-interface RoomUser {
-  socket_id: string;
-  username: string;
-  role?: string;
-  [key: string]: unknown;
-}
-
-const SocketContext = createContext<SocketContextType>({
-  socket: null,
-  isConnected: false,
-});
-
-export const useSocket = () => useContext(SocketContext);
+export { useSocket } from "@/hooks/use-socket";
 
 export const SocketProvider = ({
   children,

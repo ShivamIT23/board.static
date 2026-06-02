@@ -200,6 +200,7 @@ export const classes = mysqlTable('tb_classes', {
   
   startTime: datetime('start_time', { mode: 'date' }),
   duration: int('duration').default(60), // in minutes
+  durationAdded: int('duration_added').default(60), // original/total session duration in minutes
 
   adminId: int('admin_id').default(0),
 
@@ -211,8 +212,12 @@ export const classes = mysqlTable('tb_classes', {
   studentToken: varchar('student_token', { length: 255 }),
 
   teacherPresent: tinyint('teacher_present').default(0),
-  // isClassEnded: tinyint('is_class_ended').default(0),
-  // endedAt: timestamp('ended_at'),
+  isClassEnded: tinyint('is_class_ended').default(0),
+  endedAt: timestamp('ended_at'),
+  recordingUrl: varchar('recording_url', { length: 500 }),
+  recordingSizeInMB: varchar('recording_size_in_mb', { length: 125 }),
+  isAutoApprove: tinyint('is_auto_approve').default(1),
+  maxStudents: int('max_students').default(10),
 });
 
 export const notifications = mysqlTable('tb_notifications', {
@@ -270,6 +275,8 @@ export const supportChats = mysqlTable('tb_support_chats', {
 export const classVisitors = mysqlTable('tb_class_visitors', {
   id: int('id').primaryKey().autoincrement(),
   classId: int('class_id').notNull(),
+  teacherId: varchar('teacher_id', { length: 255 }), // Added for teacher-level ban
+  studentId: varchar('student_id', { length: 255 }), // Unique ID stored in student cookie
   name: varchar('name', { length: 255 }).notNull(),
   email: varchar('email', { length: 255 }),
   ipAddress: varchar('ip_address', { length: 45 }),
@@ -278,12 +285,16 @@ export const classVisitors = mysqlTable('tb_class_visitors', {
   leftAt: timestamp('left_at'),
   lastSeenAt: timestamp('last_seen_at').defaultNow().onUpdateNow(),
   isActive: tinyint('is_active').default(1),
+  isBanned: tinyint('is_banned').default(0),
+  isKicked: tinyint('is_kicked').default(0),
+  approvalStatus: mysqlEnum('approval_status', ['pending', 'approved', 'rejected']).default('approved'),
 });
 
 export const classChats = mysqlTable('tb_class_chats', {
   id: int('id').primaryKey().autoincrement(),
   sessionId: varchar('session_id', { length: 255 }).notNull(),
   userName: varchar('user_name', { length: 255 }).notNull(),
+  visitorId: int('visitor_id'), // Link to visitor who sent the message
   isTeacher: tinyint('is_teacher').default(0),
   message: text('message').notNull(),
   attachments: text('attachments'),
@@ -292,7 +303,7 @@ export const classChats = mysqlTable('tb_class_chats', {
 
 export const classBoardStates = mysqlTable('tb_class_board_states', {
   id: int('id').primaryKey().autoincrement(),
-  sessionId: varchar('session_id', { length: 255 }).notNull(),
+  sessionId: varchar('session_id', { length: 255 }).notNull().references(() => classes.sessionId, { onDelete: 'cascade' }),
   page: int('page').default(0).notNull(),
   data: text('data').notNull(), // JSON string of board objects for this page
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
@@ -300,7 +311,7 @@ export const classBoardStates = mysqlTable('tb_class_board_states', {
 
 export const classBoardFiles = mysqlTable('tb_class_board_files', {
   id: int('id').primaryKey().autoincrement(),
-  sessionId: varchar('session_id', { length: 255 }).notNull(),
+  sessionId: varchar('session_id', { length: 255 }).notNull().references(() => classes.sessionId, { onDelete: 'cascade' }),
   fileId: varchar('file_id', { length: 255 }).notNull(), // id of the file/image on canvas
   url: text('url').notNull(),
   name: varchar('name', { length: 255 }),
@@ -342,5 +353,43 @@ export const classBoardFilesRelations = relations(classBoardFiles, ({ one }) => 
   class: one(classes, {
     fields: [classBoardFiles.sessionId],
     references: [classes.sessionId],
+  }),
+}));
+
+// 1. Track API usage on a monthly basis
+export const apiUsage = mysqlTable('tb_api_usage', {
+  id: int('id').primaryKey().autoincrement(),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => users.id),
+  billingMonth: varchar('billing_month', { length: 7 }).notNull(), // Format: 'YYYY-MM' (e.g., '2026-05')
+  requestCount: int('request_count').default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+});
+
+// 2. Track purchased "Add-on" API credits (when users buy more)
+export const apiCredits = mysqlTable('tb_api_credits', {
+  id: int('id').primaryKey().autoincrement(),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => users.id),
+  transactionId: int('transaction_id').references(() => payments.id), // Link to payment
+  purchasedCredits: int('purchased_credits').notNull(),
+  remainingCredits: int('remaining_credits').notNull(),
+  status: mysqlEnum("status", ["active", "depleted", "expired"]).default('active'),
+  expiresAt: timestamp('expires_at'), // Optional: if purchased credits expire
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+});
+
+// Optional: Relations for Drizzle Queries
+export const apiUsageRelations = relations(apiUsage, ({ one }) => ({
+  user: one(users, {
+    fields: [apiUsage.userId],
+    references: [users.id],
+  }),
+}));
+
+export const apiCreditsRelations = relations(apiCredits, ({ one }) => ({
+  user: one(users, {
+    fields: [apiCredits.userId],
+    references: [users.id],
   }),
 }));

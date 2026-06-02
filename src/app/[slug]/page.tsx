@@ -4,7 +4,56 @@ import { notFound } from "next/navigation";
 import MainBoard from "@/components/Board/MainBoard";
 import StudentGate from "@/components/Board/StudentGate";
 import { cookies } from "next/headers";
-// import { redirect } from "next/navigation";
+import { redirect } from "next/navigation";
+import { Metadata } from "next";
+
+export async function generateMetadata({
+    params,
+}: {
+    params: Promise<{ slug: string }>,
+}): Promise<Metadata> {
+    const { slug } = await params;
+    if (!slug) return {};
+
+    try {
+        const session = await db.query.classes.findFirst({
+            where: like(classes.teacherLink, `%/${slug}`)
+        }) || await db.query.classes.findFirst({
+            where: like(classes.studentLink, `%/${slug}`)
+        });
+
+        if (!session) {
+            return {
+                title: "Live Board - TutorArc",
+                description: "Join your live advanced digital board classroom session on TutorArc."
+            };
+        }
+
+        const titleText = session.name;
+        const descText = session.description || "Join this live advanced interactive digital board session.";
+
+        return {
+            title: titleText,
+            description: descText,
+            openGraph: {
+                title: titleText,
+                description: descText,
+                type: "website"
+            },
+            twitter: {
+                card: "summary_large_image",
+                title: titleText,
+                description: descText
+            }
+        };
+    } catch (error) {
+        console.error("Error generating metadata:", error);
+        return {
+            title: "Live Board - TutorArc",
+            description: "Join your live advanced digital board classroom session on TutorArc."
+        };
+    }
+}
 
 export default async function LiveSlugPage({
     params,
@@ -21,25 +70,40 @@ export default async function LiveSlugPage({
     });
 
     if (teacherSession) {
-        /* ─── START OF END SESSION REDIRECT LOGIC (COMMENTABLE) ────
+        // Mark session as started if teacher joins first time, or if it is an upcoming future class
+        const startTimeParsed = teacherSession.startTime ? new Date(teacherSession.startTime) : null;
+        const isUpcoming = startTimeParsed && startTimeParsed.getTime() > new Date().getTime();
+
+        if (teacherSession.status === 'scheduled' || isUpcoming) {
+            await db.update(classes).set({ 
+                status: 'started',
+                startTime: new Date()
+            }).where(eq(classes.id, teacherSession.id));
+            teacherSession.status = 'started';
+            teacherSession.startTime = new Date();
+        }
+
+        /* ─── START OF END SESSION REDIRECT LOGIC (COMMENTABLE) ──── */
         if (teacherSession.isClassEnded === 1) {
             const endedAt = teacherSession.endedAt ? new Date(teacherSession.endedAt).getTime() : 0;
             const now = new Date().getTime(); 
             if (now - endedAt > 10 * 60 * 1000) {
-                return redirect("https://tutorarc.cloud");
+                return redirect("/class-ended");
             }
         }
-        ─── END OF END SESSION REDIRECT LOGIC ────────────────────── */
+        /*─── END OF END SESSION REDIRECT LOGIC ────────────────────── */
         return (
             <div className="flex flex-col h-screen overflow-hidden">
                 <MainBoard 
                     duration={teacherSession.duration || 10} 
+                    durationAdded={teacherSession.durationAdded || 60}
+                    startTime={teacherSession.startTime ? new Date(teacherSession.startTime).getTime() : undefined}
                     sessionId={teacherSession.sessionId} 
                     role="teacher" 
                     userName="Teacher"
                     userId={`teacher-${teacherSession.teacherId}`}
-                    // isClassEnded={teacherSession.isClassEnded === 1}
-                    // endedAt={teacherSession.endedAt ? new Date(teacherSession.endedAt).getTime() : undefined}
+                    isClassEnded={teacherSession.isClassEnded === 1}
+                    endedAt={teacherSession.endedAt ? new Date(teacherSession.endedAt).getTime() : undefined}
                 />
             </div>
         );
@@ -51,15 +115,15 @@ export default async function LiveSlugPage({
     });
 
     if (studentSession) {
-        /* ─── START OF END SESSION REDIRECT LOGIC (COMMENTABLE) ────
+        /* ─── START OF END SESSION REDIRECT LOGIC (COMMENTABLE) ──── */
         if (studentSession.isClassEnded === 1) {
             const endedAt = studentSession.endedAt ? new Date(studentSession.endedAt).getTime() : 0;
             const now = new Date().getTime(); 
             if (now - endedAt > 10 * 60 * 1000) {
-                return redirect("https://tutorarc.cloud");
+                return redirect("/class-ended");
             }
         }
-        ─── END OF END SESSION REDIRECT LOGIC ────────────────────── */
+        /*─── END OF END SESSION REDIRECT LOGIC ────────────────────── */
         const cookieStore = await cookies();
         const authCookie = cookieStore.get(`board_auth_${studentSession.sessionId}`);
         let authData = authCookie ? JSON.parse(authCookie.value) : null;
@@ -69,15 +133,22 @@ export default async function LiveSlugPage({
             const visitorExists = await db.query.classVisitors.findFirst({
                 where: eq(classVisitors.id, authData.visitorId)
             });
-            if (!visitorExists) authData = null;
+            if (!visitorExists) {
+                authData = null;
+            } else {
+                // Ensure approvalStatus is synced with the latest database status
+                authData.approvalStatus = visitorExists.approvalStatus;
+            }
         }
 
-        if (!authData) {
+        if (!authData || authData.approvalStatus !== 'approved') {
             return (
                 <StudentGate
                     sessionId={studentSession.sessionId}
                     isRestricted={studentSession.isRestricted === 1}
                     className={studentSession.name}
+                    isWaitingApproval={authData?.approvalStatus === 'pending'}
+                    authData={authData}
                 />
             );
         }
@@ -86,13 +157,15 @@ export default async function LiveSlugPage({
             <div className="flex flex-col h-screen overflow-hidden">
                 <MainBoard
                     duration={studentSession.duration || 10}
+                    durationAdded={studentSession.durationAdded || 60}
+                    startTime={studentSession.startTime ? new Date(studentSession.startTime).getTime() : undefined}
                     sessionId={studentSession.sessionId}
                     role="student"
                     userName={authData.name}
                     userId={studentSession.isRestricted ? authData.email : authData.name}
                     visitorId={authData.visitorId}
-                    // isClassEnded={studentSession.isClassEnded === 1}
-                    // endedAt={studentSession.endedAt ? new Date(studentSession.endedAt).getTime() : undefined}
+                    isClassEnded={studentSession.isClassEnded === 1}
+                    endedAt={studentSession.endedAt ? new Date(studentSession.endedAt).getTime() : undefined}
                 />
             </div>
         );

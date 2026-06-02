@@ -3,7 +3,7 @@
 import React from "react"
 import { MessageCircle, Download, FileText, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { ChatMessage } from "./ChatRoom"
+import { ChatMessage } from "@/types/chat"
 
 interface MessageListProps {
     messages: ChatMessage[]
@@ -15,6 +15,7 @@ interface MessageListProps {
     isLoadingMore: boolean
     canLoadMore: boolean
     resolveAttachmentUrl: (url: string) => string
+    role: "teacher" | "student"
 }
 
 export default function MessageList({
@@ -27,6 +28,7 @@ export default function MessageList({
     isLoadingMore,
     canLoadMore,
     resolveAttachmentUrl,
+    role
 }: MessageListProps) {
     return (
         <div
@@ -90,7 +92,7 @@ export default function MessageList({
                                                 ? "text-amber-500"
                                                 : "text-emerald-600 dark:text-emerald-400"
                                     )}>
-                                        {msg.user.name}{isSelf ? " (You)" : msg.user.isTeacher ? " (Instructor)" : ""} says :
+                                        {msg.user.name}{role === "teacher" && !msg.user.isTeacher && msg.user.visitorId ? `_${msg.user.visitorId}` : ""}{isSelf ? " (You)" : msg.user.isTeacher ? " (Instructor)" : ""} says :
                                     </span>
                                     <span className="text-[10px] text-muted-foreground font-semibold shrink-0 ml-4">{timeStr}</span>
                                 </div>
