@@ -21,9 +21,10 @@ const PRESET_COLORS = [
 interface ColorPickerProps {
     color: string
     onChange: (hex: string) => void
+    onSelect?: () => void
 }
 
-export default function ColorPicker({ color, onChange }: ColorPickerProps) {
+export default function ColorPicker({ color, onChange, onSelect }: ColorPickerProps) {
     const { h: initH, s: initS, v: initV } = hexToHsv(color || "#ffffff")
 
     // Track previous prop to manually derive state changes
@@ -201,6 +202,7 @@ export default function ColorPicker({ color, onChange }: ColorPickerProps) {
                                 setVal(v)
                                 setHexInput(c)
                                 onChange(c)
+                                onSelect?.()
                             }}
                         >
                             {isActive && <Check size={10} style={{ color: contrastColor }} strokeWidth={4} />}

@@ -34,6 +34,7 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, isClassEn
     // Board State
     const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
     const [tool, setTool] = useState("pen:pen")
+    const [imageStampData, setImageStampData] = useState<string | null>(null)
     const [color, setColor] = useState("#FFFFFF")
     const [pageBgColors, setPageBgColors] = useState<Record<number, string>>({ 1: "#18181b" })
     const [pageBgImages, setPageBgImages] = useState<Record<number, string[]>>({})
@@ -72,7 +73,12 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, isClassEn
 
     // Derived current color
     const currentBoardColor = pageBgColors[currentPage] || "#18181b"
-    const currentBgImages = pageBgImages[currentPage] || []
+    const currentBgImages = pageBgImages[currentPage]
+
+    // Clear image stamp data when switching away from image-stamp tool
+    useEffect(() => {
+        if (tool !== "image-stamp") setImageStampData(null)
+    }, [tool])
 
     useEffect(() => {
         if (!socket) return
@@ -533,6 +539,7 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, isClassEn
                         isClassEnded={isClassEnded}
                         isFullscreen={isFullscreen}
                         onToggleFullscreen={toggleFullscreen}
+                        onImageStamp={(dataUrl) => setImageStampData(dataUrl)}
                         /* ── YT VIDEO FEATURE (COMMENTED OUT) ──
                         onYoutubeSync={(state) => setYoutubeState(state)}
                         */
@@ -647,6 +654,7 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, isClassEn
                                 setFontSize={setFontSize}
                                 fontFamily={fontFamily}
                                 setFontFamily={setFontFamily}
+                                imageStampData={imageStampData ?? undefined}
                             />
                             {/* ── YT VIDEO FEATURE (COMMENTED OUT) ──
                             {youtubeState && (

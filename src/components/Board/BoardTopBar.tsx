@@ -60,6 +60,7 @@ interface BoardTopBarProps {
     durationAdded?: number
     startTime?: number
     onYoutubeSync?: (state: { videoId: string; playStatus: "playing" | "paused"; currentTime: number; lastUpdated: number }) => void
+    onImageStamp?: (dataUrl: string) => void
 }
 
 const SHAPE_TOOLS = [
@@ -143,7 +144,8 @@ export default function BoardTopBar({
     onToggleFullscreen,
     durationAdded,
     startTime,
-    onYoutubeSync
+    onYoutubeSync,
+    onImageStamp
 }: BoardTopBarProps) {
 
     const { socket } = useSocket()
@@ -343,7 +345,7 @@ export default function BoardTopBar({
 
     const handleBoardFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
-        if (!file || !socket) return
+        if (!file) return
 
         if (!file.type.startsWith("image/")) {
             toast.error("Only image files can be added to the board")
@@ -359,15 +361,22 @@ export default function BoardTopBar({
 
         const reader = new FileReader()
         reader.onloadend = () => {
-            socket.emit("board_file_add", {
-                payload: {
-                    id: crypto.randomUUID(),
-                    url: reader.result as string,
-                    name: file.name,
-                    position: { x: 0.3, y: 0.3 },
-                    scale: 0.25,
-                }
-            })
+            const dataUrl = reader.result as string
+            if (onImageStamp) {
+                onImageStamp(dataUrl)
+                setTool("image-stamp")
+            } else if (socket) {
+                // Fallback: place immediately if onImageStamp not provided
+                socket.emit("board_file_add", {
+                    payload: {
+                        id: crypto.randomUUID(),
+                        url: dataUrl,
+                        name: file.name,
+                        position: { x: 0.3, y: 0.3 },
+                        scale: 0.25,
+                    }
+                })
+            }
         }
         reader.readAsDataURL(file)
         if (boardFileInputRef.current) boardFileInputRef.current.value = ""
@@ -785,9 +794,14 @@ export default function BoardTopBar({
                             <input type="file" ref={boardFileInputRef} onChange={handleBoardFileSelect} className="hidden" accept="image/*" />
                             <button
                                 type="button"
-                                onClick={() => boardFileInputRef.current?.click()}
-                                className="p-1.5 transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent border rounded-[5px] border-primary/40 shadow-sm"
-                                title="Add Image to Board"
+                                onClick={() => tool === "image-stamp" ? setTool("pen:pen") : boardFileInputRef.current?.click()}
+                                className={cn(
+                                    "p-1.5 transition-all duration-300 border rounded-[5px] border-primary/40 shadow-sm",
+                                    tool === "image-stamp"
+                                        ? "bg-primary text-primary-foreground shadow-lg"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                )}
+                                title={tool === "image-stamp" ? "Exit Image Stamp" : "Add Image to Board"}
                             >
                                 <ImagePlus size={18} />
                             </button>

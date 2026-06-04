@@ -138,7 +138,7 @@ export default function Toolbar({
                                                 style={{ top: colorPickerPos.top, left: colorPickerPos.left }}
                                             >
                                                 <div className="p-1.5 bg-sidebar border border-border rounded-[5px] shadow-2xl">
-                                                    <ColorPicker color={color} onChange={(hex) => setColor(hex)} />
+                                                    <ColorPicker color={color} onChange={(hex) => setColor(hex)} onSelect={() => setShowColorPicker(false)} />
                                                 </div>
                                             </div>
                                         </>,

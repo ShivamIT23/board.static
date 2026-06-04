@@ -23,6 +23,7 @@ export interface WhiteboardProps {
     setFontSize?: (size: number) => void
     fontFamily?: string
     setFontFamily?: (family: string) => void
+    imageStampData?: string   // data URL of image for stamp tool
 }
 
 export interface ShapePayload {

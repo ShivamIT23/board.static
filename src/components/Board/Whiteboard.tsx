@@ -24,11 +24,12 @@ const FONT_FAMILIES = [
     { id: "Impact, sans-serif", label: "Impact" },
 ] as const
 
-function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushSize, isViewLocked, currentPage, drawingEnabled, shapeBorderColor, textColor, fontSize, setFontSize, fontFamily, setFontFamily, onToolChange }: WhiteboardProps) {
+function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushSize, isViewLocked, currentPage, drawingEnabled, shapeBorderColor, textColor, fontSize, setFontSize, fontFamily, setFontFamily, onToolChange, imageStampData }: WhiteboardProps) {
     const { socket } = useSocket()
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const wrapperRef = useRef<HTMLDivElement>(null)
     const fabricRef = useRef<Canvas | null>(null)
+    const lastScaledWidthRef = useRef<number>(800)
     const [canvasReady, setCanvasReady] = useState(false)
 
     const localStrokeIdRef = useRef<string | null>(null)
@@ -143,6 +144,8 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     const drawingEnabledRef = useRef(drawingEnabled)
     const lastLaserPointRef = useRef<{ x: number, y: number } | null>(null);
     const isLaserActiveRef = useRef<boolean>(false);
+    const imageStampDataRef = useRef<string | undefined>(imageStampData);
+    const localAddedImageIdsRef = useRef<Set<string>>(new Set());
 
     const shapeStartRef = useRef<{ x: number; y: number } | null>(null)
     const shapePreviewRef = useRef<FabricObject | null>(null)
@@ -162,7 +165,8 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         fontSizeRef.current = fontSize || 24
         fontFamilyRef.current = fontFamily || "Inter, sans-serif"
         onToolChangeRef.current = onToolChange
-    }, [tool, brushSize, color, textColor, fontSize, fontFamily, onToolChange])
+        imageStampDataRef.current = imageStampData
+    }, [tool, brushSize, color, textColor, fontSize, fontFamily, onToolChange, imageStampData])
 
     useEffect(() => {
         bgImagesRef.current = bgImages
@@ -175,6 +179,8 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
     useEffect(() => {
         shapeBorderRef.current = shapeBorderColor
     }, [shapeBorderColor])
+
+
 
 
     // Utility: Width-based normalization
@@ -372,6 +378,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         const targetHeight = containerWidth * 3
         const finalHeight = Math.max(targetHeight, totalHeight)
         canvas.setDimensions({ width: containerWidth, height: finalHeight })
+        lastScaledWidthRef.current = containerWidth
 
         // Fabric doesn't support multiple background images natively.
         // We'll create a single large "background" by rendering all images to an offscreen canvas
@@ -419,6 +426,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         })
 
         fabricRef.current = canvas
+        lastScaledWidthRef.current = initialWidth
         setCanvasReady(true)
         canvas.freeDrawingBrush = new PencilBrush(canvas)
         if (canvas.freeDrawingBrush) {
@@ -588,13 +596,16 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                         const val = data.shapeType.split(":")[1]
                         const fontSize = Math.max(12, h)
                         const isEmoji = data.shapeType.startsWith("emoji:")
+                        // Matrix [ ] and determinant | | should be as thin as possible
+                        const isThinSymbol = val === "[ ]" || val === "| |"
                         return new IText(val, {
                             ...common,
                             fontSize,
                             fill: isEmoji ? "black" : stroke,
-                            fontFamily: "Inter, sans-serif",
-                            stroke: isEmoji ? undefined : stroke,
-                            strokeWidth: isEmoji ? 0 : strokeWidth * 0.1,
+                            fontFamily: isThinSymbol ? "'Courier New', monospace" : "Inter, sans-serif",
+                            fontWeight: isThinSymbol ? 100 : "normal",
+                            stroke: isEmoji ? undefined : (isThinSymbol ? undefined : stroke),
+                            strokeWidth: isEmoji ? 0 : (isThinSymbol ? 0 : strokeWidth * 0.1),
                             originX: "left",
                             originY: "top"
                         })
@@ -761,6 +772,14 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 return
             }
 
+            // Image Stamp: record start point for drag-to-size (like shapes)
+            if (toolRef.current === "image-stamp" && imageStampDataRef.current) {
+                if (role === "student" && (!drawingEnabledRef.current)) return
+                const pt = canvas.getScenePoint(opt.e)
+                shapeStartRef.current = { x: pt.x, y: pt.y }
+                return
+            }
+
             // Object Eraser: Delete clicked object
             if (toolRef.current === "eraser") {
                 const target = opt.target as BoardFabricObject
@@ -845,6 +864,42 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         })
 
         canvas.on("mouse:move", (opt) => {
+            // Image Stamp preview while dragging
+            if (shapeStartRef.current && toolRef.current === "image-stamp") {
+                const pt = canvas.getScenePoint(opt.e)
+                const start = shapeStartRef.current
+                const w = pt.x - start.x
+                const h = pt.y - start.y
+                const left = w >= 0 ? start.x : start.x + w
+                const top = h >= 0 ? start.y : start.y + h
+                const absW = Math.abs(w)
+                const absH = Math.abs(h)
+
+                // Remove previous preview
+                canvas.getObjects().forEach(obj => {
+                    if ((obj as FabricObject & { _isPreview?: boolean })._isPreview) canvas.remove(obj)
+                })
+                shapePreviewRef.current = null
+
+                if (absW > 5 || absH > 5) {
+                    const preview = new Rect({
+                        left, top, width: absW, height: absH,
+                        fill: "transparent",
+                        stroke: "#4488ff",
+                        strokeWidth: 2,
+                        strokeDashArray: [6, 4],
+                        selectable: false,
+                        evented: false,
+                        opacity: 0.7,
+                    });
+                    (preview as FabricObject & { _isPreview?: boolean })._isPreview = true
+                    shapePreviewRef.current = preview
+                    canvas.add(preview)
+                    canvas.requestRenderAll()
+                }
+                return
+            }
+
             // Shape preview while dragging
             if (shapeStartRef.current && isShapeTool(toolRef.current)) {
                 const pt = canvas.getScenePoint(opt.e)
@@ -958,6 +1013,52 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         canvas.on("mouse:up", (opt) => {
             lastLaserPointRef.current = null
             isLaserActiveRef.current = false
+
+            // Finalize image stamp
+            if (shapeStartRef.current && toolRef.current === "image-stamp" && imageStampDataRef.current) {
+                const pt = canvas.getScenePoint(opt.e)
+                const start = shapeStartRef.current
+                shapeStartRef.current = null
+
+                // Remove preview
+                canvas.getObjects().forEach(obj => {
+                    if ((obj as FabricObject & { _isPreview?: boolean })._isPreview) canvas.remove(obj)
+                })
+                shapePreviewRef.current = null
+                canvas.requestRenderAll()
+
+                const w = pt.x - start.x
+                const h = pt.y - start.y
+                const absW = Math.abs(w)
+                const absH = Math.abs(h)
+
+                // Skip tiny clicks (less than 10px) — require a real drag
+                if (absW < 10 && absH < 10) return
+
+                const left = w >= 0 ? start.x : start.x + w
+                const top = h >= 0 ? start.y : start.y + h
+                const id = generateId()
+
+                const payload: ImagePayload = {
+                    id,
+                    url: imageStampDataRef.current,
+                    position: toNorm(left, top, canvas.width),
+                    widthRatio: absW / canvas.width,
+                    heightRatio: absH / canvas.width,
+                }
+                // Add locally for instant feedback
+                localAddedImageIdsRef.current.add(id)
+                addImageToCanvas(payload)
+                // Emit to peers (server broadcasts to everyone; duplicate check in listener)
+                socket?.emit("board_file_add", { payload })
+                saveToLocalStorage({
+                    type: "image",
+                    payload,
+                    timestamp: Date.now(),
+                })
+                return
+            }
+
             // Finalize shape
             if (shapeStartRef.current && isShapeTool(toolRef.current)) {
                 const pt = canvas.getScenePoint(opt.e)
@@ -969,6 +1070,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     if ((obj as FabricObject & { _isPreview?: boolean })._isPreview) canvas.remove(obj)
                 })
                 shapePreviewRef.current = null
+                canvas.requestRenderAll()
 
                 let w = pt.x - start.x
                 let h = pt.y - start.y
@@ -1372,6 +1474,8 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 const fImg = new FabricImage(img, {
                     left: data.position.x * canvas.width,
                     top: data.position.y * canvas.width,
+                    originX: "left",
+                    originY: "top",
                     scaleX: sx,
                     scaleY: sy,
                     selectable: role === "teacher",
@@ -1536,7 +1640,12 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
             socket.on("clear_canvas", handleClearCanvas)
             socket.on("board_color_sync", onBoardColorSync)
             socket.on("view_sync", onViewSync)
-            socket.on("board_file_add", ({ payload }: { payload: ImagePayload }) => addImageToCanvas(payload))
+            socket.on("board_file_add", ({ payload }: { payload: ImagePayload }) => {
+                // Skip if already added locally (e.g. by stamp tool)
+                if (localAddedImageIdsRef.current.has(payload.id)) return
+                if (boardFileObjsRef.current[payload.id]) return
+                addImageToCanvas(payload)
+            })
         }
 
         // ── Shape Add (from peers) ────────────────────────────────
@@ -1700,14 +1809,23 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         document.addEventListener("delete-page-local", handleDeleteLocal)
 
         const resizeObserver = new ResizeObserver(() => {
-            if (!wrapperRef.current || !fabricRef.current) return
+            if (!wrapperRef.current || !fabricRef.current) {
+                console.log("[ResizeObserver] Missing ref:", { wrapper: !!wrapperRef.current, fabric: !!fabricRef.current })
+                return
+            }
             const containerWidth = wrapperRef.current.clientWidth
             const canvas = fabricRef.current
+            const oldWidth = lastScaledWidthRef.current
 
-            const oldWidth = canvas.width
-            if (Math.abs(containerWidth - oldWidth) < 1) return // Skip trivial resizes
+            console.log("[ResizeObserver] Executing:", { containerWidth, oldWidth, oldHeight: canvas.height })
+
+            if (Math.abs(containerWidth - oldWidth) < 1) {
+                console.log("[ResizeObserver] Skipping trivial resize")
+                return
+            }
 
             const scaleFactor = containerWidth / oldWidth
+            console.log("[ResizeObserver] Scaling factor calculated:", scaleFactor)
 
             // Rescale all existing objects proportionally
             canvas.getObjects().forEach(obj => {
@@ -1730,6 +1848,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 canvas.setDimensions({ width: containerWidth, height: containerWidth * 3 })
             }
 
+            lastScaledWidthRef.current = containerWidth
             canvas.requestRenderAll()
         })
         resizeObserver.observe(wrapperRef.current)
@@ -1866,7 +1985,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 }
             }
         }
-        const isShapeCursor = isShapeTool(tool) || tool === "line" || tool === "arrow"
+        const isShapeCursor = isShapeTool(tool) || tool === "line" || tool === "arrow" || tool === "image-stamp"
         canvas.defaultCursor = activeTextObjRef.current ? TEXT_CURSOR : (tool === "laser" || isShapeCursor ? "crosshair" : tool === "text" ? TEXT_CURSOR : "default")
         // Only the arrow/select tool can select and move objects on the canvas.
         // All other tools should pass through objects (like laser does).
@@ -1959,12 +2078,12 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
 
 
     return (
-        <div className="flex-1 min-h-0 bg-background relative flex flex-col p-3">
+        <div className="flex-1 min-w-0 min-h-0 bg-background relative flex flex-col p-3">
             <div
                 ref={wrapperRef}
                 className={cn(
-                    "w-full flex-1 rounded-none shadow-[0_0_20px_rgba(0,0,0,0.5)] dark:shadow-[0_0_20px_rgba(255,255,255,0.2)] border border-border transition-all duration-400 bg-zinc-900/50",
-                    (role === "student" && isViewLocked) ? "overflow-hidden" : "overflow-auto"
+                    "w-full flex-1 min-w-0 rounded-none shadow-[0_0_20px_rgba(0,0,0,0.5)] dark:shadow-[0_0_20px_rgba(255,255,255,0.2)] border border-border transition-all duration-400 bg-zinc-900/50",
+                    (role === "student" && isViewLocked) ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden"
                 )}
                 style={{ backgroundColor: boardColor }}
             >
