@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react"
-import { MessageCircle, Minimize2, User2, Settings, MessageSquareOff, File as FileIcon, FileX } from "lucide-react"
+import { MessageCircle, Minimize2, User2, Settings, MessageSquareOff, File as FileIcon, FileX, BarChart2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSocket } from "../providers/socket-provider"
 import { getHistoricalChats } from "@/app/actions/auth"
@@ -25,6 +25,11 @@ interface ChatRoomProps {
     isOpen: boolean
     setIsOpen: (open: boolean) => void
     compact?: boolean
+    onOpenPoll?: () => void
+    hasActivePoll?: boolean
+    onOpenQuiz?: () => void
+    hasActiveQuiz?: boolean
+    hasQuiz?: boolean
 }
 
 export default function ChatRoom({
@@ -37,11 +42,16 @@ export default function ChatRoom({
     sessionId,
     isOpen,
     setIsOpen,
-    compact = false
+    compact = false,
+    onOpenPoll,
+    hasActivePoll,
+    onOpenQuiz,
+    hasActiveQuiz
 }: ChatRoomProps) {
     const { socket } = useSocket()
     const [messages, setMessages] = useState<ChatMessage[]>([])
     const [inputMessage, setInputMessage] = useState("")
+    const [recipient, setRecipient] = useState<"everyone" | "teacher">("everyone")
     const [showVisitors, setShowVisitors] = useState(false)
     const [visitors, setVisitors] = useState<Visitor[]>([])
     const [isLoadingVisitors, setIsLoadingVisitors] = useState(false)
@@ -377,6 +387,7 @@ export default function ChatRoom({
             roomId: sessionId,
             payload: {
                 message: inputMessage,
+                recipient,
                 attachments: attachments.length > 0 ? attachments : undefined
             }
         })
@@ -415,6 +426,8 @@ export default function ChatRoom({
                 <ChatInput
                     inputMessage={inputMessage}
                     setInputMessage={setInputMessage}
+                    recipient={recipient}
+                    setRecipient={setRecipient}
                     sendMessage={sendMessage}
                     fileInputRef={fileInputRef}
                     handleFileSelect={handleFileSelect}
@@ -465,6 +478,60 @@ export default function ChatRoom({
                     >
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />{userCount}<User2 size={16} />
                     </button>
+
+                    {role === "teacher" && onOpenPoll && (
+                        <button
+                            type="button"
+                            onClick={onOpenPoll}
+                            className={cn(
+                                "p-1.5 flex items-center gap-1 text-xs font-bold rounded-md transition-colors",
+                                hasActivePoll
+                                    ? "bg-emerald-500/20 text-emerald-500 animate-pulse"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            )}
+                            title="Classroom Polls"
+                        >
+                            <BarChart2 size={16} />
+                            <span className="text-[10px] font-extrabold uppercase">Polls</span>
+                        </button>
+                    )}
+
+                    {role === "teacher" && onOpenQuiz && (
+                        <button
+                            type="button"
+                            onClick={onOpenQuiz}
+                            className={cn(
+                                "p-1.5 flex items-center gap-1 text-xs font-bold rounded-md transition-colors",
+                                hasActiveQuiz
+                                    ? "bg-indigo-500/20 text-indigo-450 dark:text-indigo-400 animate-pulse border border-indigo-500/30"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            )}
+                            title="Classroom Quiz"
+                        >
+                            <span className="relative flex h-2 w-2 mr-0.5">
+                                {hasActiveQuiz && (
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                )}
+                                <span className={cn("relative inline-flex rounded-full h-2 w-2", hasActiveQuiz ? "bg-indigo-500" : "bg-muted-foreground/60")}></span>
+                            </span>
+                            <span className="text-[10px] font-extrabold uppercase">Quiz</span>
+                        </button>
+                    )}
+
+                    {role === "student" && hasActiveQuiz && onOpenQuiz && (
+                        <button
+                            type="button"
+                            onClick={onOpenQuiz}
+                            className="p-1.5 flex items-center gap-1 text-xs font-bold rounded-md bg-indigo-500/25 text-indigo-650 dark:text-indigo-300 animate-pulse border border-indigo-500/30 transition-all hover:scale-105"
+                            title="Take Live Quiz"
+                        >
+                            <span className="relative flex h-2 w-2 mr-0.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                            </span>
+                            <span className="text-[10px] font-extrabold uppercase animate-pulse">Quiz Live!</span>
+                        </button>
+                    )}
 
                     {showVisitors && (
                         <div
@@ -591,6 +658,8 @@ export default function ChatRoom({
             <ChatInput
                 inputMessage={inputMessage}
                 setInputMessage={setInputMessage}
+                recipient={recipient}
+                setRecipient={setRecipient}
                 sendMessage={sendMessage}
                 fileInputRef={fileInputRef}
                 handleFileSelect={handleFileSelect}

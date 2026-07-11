@@ -9,6 +9,8 @@ import type { Socket } from "socket.io-client"
 interface ChatInputProps {
     inputMessage: string
     setInputMessage: (val: string) => void
+    recipient: "everyone" | "teacher"
+    setRecipient: (val: "everyone" | "teacher") => void
     sendMessage: (e: React.FormEvent) => void
     fileInputRef: React.RefObject<HTMLInputElement | null>
     handleFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
@@ -24,6 +26,8 @@ interface ChatInputProps {
 export default function ChatInput({
     inputMessage,
     setInputMessage,
+    recipient,
+    setRecipient,
     sendMessage,
     fileInputRef,
     handleFileSelect,
@@ -40,6 +44,39 @@ export default function ChatInput({
 
     return (
         <form onSubmit={sendMessage} className="bg-card border-t border-border flex flex-col">
+            {/* Target Recipient Selector Bar (Students only) */}
+            {role === "student" && (
+                <div className="px-3 py-1.5 bg-muted/40 border-b border-border/50 flex items-center justify-between text-[11px] font-medium">
+                    <span className="text-muted-foreground font-bold">Send to:</span>
+                    <div className="flex items-center gap-1 bg-background p-0.5 rounded-lg border border-border">
+                        <button
+                            type="button"
+                            onClick={() => setRecipient("everyone")}
+                            className={cn(
+                                "px-2.5 py-0.5 rounded-md font-extrabold text-[10px] transition-all",
+                                recipient === "everyone"
+                                    ? "bg-primary text-primary-foreground shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground"
+                            )}
+                        >
+                            Everyone
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setRecipient("teacher")}
+                            className={cn(
+                                "px-2.5 py-0.5 rounded-md font-extrabold text-[10px] transition-all flex items-center gap-1",
+                                recipient === "teacher"
+                                    ? "bg-amber-500 text-white shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground"
+                            )}
+                        >
+                            <Lock size={10} /> Teacher Only
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {selectedFile && (
                 <div className="px-4 py-2 bg-muted/50 border-b border-border flex items-center gap-3 animate-in slide-in-from-bottom-2 duration-300">
                     <div className="w-10 h-10 rounded bg-background border border-border flex items-center justify-center overflow-hidden shrink-0">
@@ -102,7 +139,7 @@ export default function ChatInput({
                             disabled={role === "student" && roomUser?.textEnabled === false}
                             placeholder={
                                 (role === "student" && roomUser?.textEnabled === false) ? "Chat is disabled" :
-                                    selectedFile ? "Add a caption..." : "Send a message..."
+                                    selectedFile ? "Add a caption..." : recipient === "teacher" ? "Message to teacher only..." : "Send a message..."
                             }
                             className="flex-1 h-10 px-1 bg-transparent text-sm font-medium outline-none text-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed"
                         />
@@ -115,7 +152,10 @@ export default function ChatInput({
                             (role === "student" && roomUser?.textEnabled === false && !selectedFile) ||
                             (isAttachmentDisabledForStudent && selectedFile)
                         )}
-                        className="w-14 h-full flex items-center justify-center bg-[#6366F1] text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                        className={cn(
+                            "w-14 h-full flex items-center justify-center text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md",
+                            recipient === "teacher" ? "bg-amber-500 hover:bg-amber-600" : "bg-[#6366F1]"
+                        )}
                     >
                         <Send size={18} />
                     </button>

@@ -8,7 +8,9 @@ import BoardTopBar from "./BoardTopBar"
 // import YTVideoPlayer from "./YTVideoPlayer" // ── YT VIDEO FEATURE (COMMENTED OUT) ──
 import { SocketProvider } from "../providers/socket-provider"
 import { useSocket } from "@/hooks/use-socket"
-import type { RoomUser } from "@/types/chat"
+import type { RoomUser, Poll, QuizState } from "@/types/chat"
+import PollModal from "./PollModal"
+import QuizModal from "./QuizModal"
 import { endSessionAction } from "@/app/actions/auth"
 import { toast } from "sonner"
 import Swal from "sweetalert2"
@@ -25,9 +27,11 @@ interface MainBoardProps {
     endedAt?: number
     durationAdded?: number
     startTime?: number
+    hasQuiz?: boolean
+    classId?: number
 }
 
-function MainBoardInner({ duration, sessionId, role, userName, userId, isClassEnded, setIsClassEnded, endedAt, setEndedAt, durationAdded, startTime }: MainBoardProps & {
+function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId, isClassEnded, setIsClassEnded, endedAt, setEndedAt, durationAdded, startTime, hasQuiz, classId }: MainBoardProps & {
     setIsClassEnded: React.Dispatch<React.SetStateAction<boolean | undefined>>,
     setEndedAt: React.Dispatch<React.SetStateAction<number | undefined>>
 }) {
@@ -48,6 +52,11 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, isClassEn
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [isFsChatOpen, setIsFsChatOpen] = useState(false)
     const [unreadCount, setUnreadCount] = useState(0)
+    const [poll, setPoll] = useState<Poll | null>(null)
+    const [pollsHistory, setPollsHistory] = useState<Poll[]>([])
+    const [isPollOpen, setIsPollOpen] = useState(false)
+    const [currentQuiz, setCurrentQuiz] = useState<QuizState | null>(null)
+    const [isQuizOpen, setIsQuizOpen] = useState(false)
     /* ── YT VIDEO FEATURE (COMMENTED OUT) ──
     const [youtubeState, setYoutubeState] = useState<{
         videoId: string;
@@ -148,6 +157,45 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, isClassEn
         }
         socket.on("view_locked_state", handleViewLockedState)
 
+        const handlePollUpdate = ({ payload, pollsHistory: history }: { payload: Poll | null, pollsHistory?: Poll[] }) => {
+            console.log("Received poll update:", payload, history)
+            setPoll(payload)
+            if (history) setPollsHistory(history)
+            if (payload && payload.isActive) {
+                const voterId = visitorId ? String(visitorId) : userId
+                if (role === "student" && voterId) {
+                    const hasVoted = payload.options.some(opt => opt.votes.includes(voterId))
+                    if (hasVoted) {
+                        setIsPollOpen(false)
+                    } else {
+                        setIsPollOpen(true)
+                    }
+                } else {
+                    setIsPollOpen(true)
+                }
+            }
+        }
+        socket.on("poll_update", handlePollUpdate)
+
+        const handleQuizUpdate = ({ payload }: { payload: QuizState | null }) => {
+            console.log("Received quiz update:", payload)
+            setCurrentQuiz(payload)
+            if (payload && payload.isActive) {
+                const voterId = visitorId ? String(visitorId) : userId
+                if (role === "student" && voterId) {
+                    const hasSubmitted = payload.submittedUsers.includes(voterId)
+                    if (!hasSubmitted) {
+                        // Only force-open for students who haven't submitted yet
+                        setIsQuizOpen(true)
+                    }
+                    // If already submitted, keep modal in its current state so student can view results
+                } else {
+                    setIsQuizOpen(true)
+                }
+            }
+        }
+        socket.on("quiz_update", handleQuizUpdate)
+
         /* ─── START OF SESSION ENDED LISTENER (COMMENTABLE) ──── */
         const handleSessionEnded = ({ endedAt: serverEndedAt }: { endedAt?: number }) => {
             const now = serverEndedAt || Date.now();
@@ -183,13 +231,15 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, isClassEn
             socket.off("drawing_permission", handleDrawingPermission)
             socket.off("room_users", handleRoomUsersDrawing)
             socket.off("view_locked_state", handleViewLockedState)
+            socket.off("poll_update", handlePollUpdate)
+            socket.off("quiz_update", handleQuizUpdate)
             socket.off("session_ended", handleSessionEnded)
             /* ── YT VIDEO FEATURE (COMMENTED OUT) ──
             socket.off("yt_sync", handleYtSync)
             socket.off("yt_close", handleYtClose)
             */
         }
-    }, [socket, role, setIsClassEnded, setEndedAt])
+    }, [socket, role, userId, visitorId, setIsClassEnded, setEndedAt])
 
     /* ─── PERSISTENT GRACE PERIOD REDIRECTION (COMMENTABLE) ──────── */
     useEffect(() => {
@@ -546,7 +596,7 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, isClassEn
                     />
 
                     {/* ─── SESSION ENDED COUNTDOWN UI (COMMENTABLE) ──────── */}
-                    {isClassEnded && remainingSeconds !== null && role === "teacher" && (
+                    {isClassEnded && remainingSeconds !== null && (
                         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-100 flex items-center gap-3 px-6 py-3 bg-zinc-900/95 backdrop-blur-xl border-2 border-orange-500 rounded-lg shadow-[0_0_50px_rgba(249,115,22,0.3)] animate-in fade-in slide-in-from-bottom-8 duration-700">
                             <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
                             <span className="text-sm font-medium text-zinc-100 whitespace-nowrap">
@@ -679,6 +729,11 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, isClassEn
                                 sessionId={sessionId}
                                 isOpen={isChatOpen}
                                 setIsOpen={setIsChatOpen}
+                                onOpenPoll={() => setIsPollOpen(true)}
+                                hasActivePoll={!!(poll && poll.isActive)}
+                                onOpenQuiz={() => setIsQuizOpen(true)}
+                                hasActiveQuiz={!!(currentQuiz && currentQuiz.isActive)}
+                                hasQuiz={!!hasQuiz}
                             />
                         )}
 
@@ -721,6 +776,11 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, isClassEn
                                                 isOpen={true}
                                                 setIsOpen={() => setIsFsChatOpen(false)}
                                                 compact={true}
+                                                onOpenPoll={() => setIsPollOpen(true)}
+                                                hasActivePoll={!!(poll && poll.isActive)}
+                                                onOpenQuiz={() => setIsQuizOpen(true)}
+                                                hasActiveQuiz={!!(currentQuiz && currentQuiz.isActive)}
+                                                hasQuiz={!!hasQuiz}
                                             />
                                         </div>
                                     </div>
@@ -765,11 +825,34 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, isClassEn
                 </div>
 
             </div>
+            
+            <PollModal
+                isOpen={isPollOpen}
+                onClose={() => setIsPollOpen(false)}
+                role={role}
+                poll={poll}
+                pollsHistory={pollsHistory}
+                socket={socket}
+                sessionId={sessionId}
+                userId={visitorId ? String(visitorId) : userId}
+            />
+
+            <QuizModal
+                isOpen={isQuizOpen}
+                onClose={() => setIsQuizOpen(false)}
+                role={role}
+                currentQuiz={currentQuiz}
+                socket={socket}
+                sessionId={sessionId}
+                userId={visitorId ? String(visitorId) : userId}
+                classId={classId}
+                userName={userName}
+            />
         </div>
     )
 }
 
-export default function MainBoard({ duration, sessionId, role, userName, userId, visitorId, isClassEnded: initialIsClassEnded, endedAt: initialEndedAt, durationAdded, startTime }: MainBoardProps) {
+export default function MainBoard({ duration, sessionId, role, userName, userId, visitorId, isClassEnded: initialIsClassEnded, endedAt: initialEndedAt, durationAdded, startTime, hasQuiz, classId }: MainBoardProps) {
     const [isClassEnded, setIsClassEnded] = useState(initialIsClassEnded)
     const [endedAt, setEndedAt] = useState(initialEndedAt)
 
@@ -815,6 +898,8 @@ export default function MainBoard({ duration, sessionId, role, userName, userId,
                 setEndedAt={setEndedAt}
                 durationAdded={durationAdded}
                 startTime={startTime}
+                hasQuiz={hasQuiz}
+                classId={classId}
             />
         </SocketProvider>
     )

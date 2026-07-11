@@ -960,7 +960,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 const preview = createShapeFromPayload(previewData)
                 if (preview) {
                     ; (preview as FabricObject & { _isPreview?: boolean })._isPreview = true
-                    preview.set({ selectable: false, evented: false, opacity: 0.6 })
+                    preview.set({ selectable: false, evented: false, opacity: 1.0 })
                     shapePreviewRef.current = preview
                     canvas.add(preview)
                     canvas.requestRenderAll()

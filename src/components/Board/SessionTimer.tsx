@@ -14,6 +14,14 @@ export const SessionTimer = React.memo(({ initialDuration, durationAdded, startT
         return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
 
+    const [currentDurationAdded, setCurrentDurationAdded] = useState(() => durationAdded || initialDuration || 60);
+
+    useEffect(() => {
+        if (durationAdded) {
+            setCurrentDurationAdded(durationAdded);
+        }
+    }, [durationAdded]);
+
     const [timeLeft, setTimeLeft] = useState(() => {
         if (!startTime) return initialDuration;
         const now = Date.now();
@@ -25,21 +33,20 @@ export const SessionTimer = React.memo(({ initialDuration, durationAdded, startT
 
     useEffect(() => { timeLeftRef.current = timeLeft }, [timeLeft])
 
-    // Countdown timer - authoritative based on startTime
+    // Countdown timer - authoritative based on startTime and currentDurationAdded
     useEffect(() => {
         if (isClassEnded) return; // Don't run timer when class is ended
         const timer = setInterval(() => {
             if (startTime) {
                 const now = Date.now();
                 const elapsedMinutes = (now - startTime) / 60000;
-                const total = durationAdded || initialDuration;
-                setTimeLeft(Math.max(0, total - elapsedMinutes));
+                setTimeLeft(Math.max(0, currentDurationAdded - elapsedMinutes));
             } else {
                 setTimeLeft((prev) => (prev <= 0 ? 0 : prev - 1 / 60));
             }
         }, 1000);
         return () => clearInterval(timer);
-    }, [startTime, durationAdded, initialDuration, isClassEnded]);
+    }, [startTime, currentDurationAdded, isClassEnded]);
 
     // Teacher: sync duration to DB every 60 seconds
     // Student: poll duration from DB every 60 seconds
@@ -61,7 +68,11 @@ export const SessionTimer = React.memo(({ initialDuration, durationAdded, startT
                 try {
                     const res = await fetch(`/api/session/duration?sessionId=${sessionId}`);
                     const data = await res.json();
-                    if (data.duration !== undefined) setTimeLeft(data.duration);
+                    if (data.durationAdded !== undefined) {
+                        setCurrentDurationAdded(data.durationAdded);
+                    } else if (data.duration !== undefined) {
+                        setTimeLeft(data.duration);
+                    }
                 } catch (error) { console.error("Fetch error:", error); }
             }, 60000);
             return () => clearInterval(syncTimer);
@@ -73,6 +84,7 @@ export const SessionTimer = React.memo(({ initialDuration, durationAdded, startT
         if (!socket) return;
         const handleDurationExtended = ({ payload }: { payload: { addedMinutes: number } }) => {
             const { addedMinutes } = payload;
+            setCurrentDurationAdded(prev => prev + addedMinutes);
             setTimeLeft(prev => prev + addedMinutes);
             hasAutoPromptedRef.current = false; // Reset so it can prompt again if needed
             if (role === "student") {

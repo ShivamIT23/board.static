@@ -32,13 +32,20 @@ export async function getHistoricalChats(sessionId: string, before?: number) {
         });
 
         // Return in ascending order for the UI (oldest to newest)
-        const formatted = results.map(c => ({
-            id: c.id.toString(),
-            user: { name: c.userName, isTeacher: c.isTeacher === 1 },
-            message: c.message,
-            attachments: c.attachments ? JSON.parse(c.attachments) : undefined,
-            timestamp: new Date(c.timestamp).getTime()
-        })).reverse();
+        const formatted = results.map(c => {
+            const parsedAttachments = c.attachments ? JSON.parse(c.attachments) : undefined;
+            const quizShareAttachment = Array.isArray(parsedAttachments)
+                ? parsedAttachments.find((a: { type?: string }) => a?.type === "quizShare")
+                : null;
+            return {
+                id: c.id.toString(),
+                user: { name: c.userName, isTeacher: c.isTeacher === 1 },
+                message: c.message,
+                attachments: quizShareAttachment ? undefined : parsedAttachments,
+                quizShare: quizShareAttachment ? quizShareAttachment.quizShare : undefined,
+                timestamp: new Date(c.timestamp).getTime()
+            };
+        }).reverse();
 
         return { status: 'success', data: formatted };
     } catch (error) {

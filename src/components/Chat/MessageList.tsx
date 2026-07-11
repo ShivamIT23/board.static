@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { MessageCircle, Download, FileText, ChevronDown } from "lucide-react"
+import { MessageCircle, Download, FileText, ChevronDown, Lock, BarChart2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ChatMessage } from "@/types/chat"
 
@@ -84,16 +84,23 @@ export default function MessageList({
                                             ? "bg-amber-500/10"
                                             : "bg-emerald-500/10"
                                 )}>
-                                    <span className={cn(
-                                        "text-[12px] font-extrabold tracking-wide",
-                                        isSelf
-                                            ? "text-primary"
-                                            : msg.user.isTeacher
-                                                ? "text-amber-500"
-                                                : "text-emerald-600 dark:text-emerald-400"
-                                    )}>
-                                        {msg.user.name}{role === "teacher" && !msg.user.isTeacher && msg.user.visitorId ? `_${msg.user.visitorId}` : ""}{isSelf ? " (You)" : msg.user.isTeacher ? " (Instructor)" : ""} says :
-                                    </span>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <span className={cn(
+                                            "text-[12px] font-extrabold tracking-wide truncate",
+                                            isSelf
+                                                ? "text-primary"
+                                                : msg.user.isTeacher
+                                                    ? "text-amber-500"
+                                                    : "text-emerald-600 dark:text-emerald-400"
+                                        )}>
+                                            {msg.user.name}{role === "teacher" && !msg.user.isTeacher && msg.user.visitorId ? `_${msg.user.visitorId}` : ""}{isSelf ? " (You)" : msg.user.isTeacher ? " (Instructor)" : ""} says :
+                                        </span>
+                                        {msg.recipient === "teacher" && (
+                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
+                                                <Lock size={9} /> Private to Teacher
+                                            </span>
+                                        )}
+                                    </div>
                                     <span className="text-[10px] text-muted-foreground font-semibold shrink-0 ml-4">{timeStr}</span>
                                 </div>
                                 <div className={cn(
@@ -101,6 +108,66 @@ export default function MessageList({
                                     isSelf ? "text-right" : "text-left"
                                 )}>
                                     {msg.message && <p>{msg.message}</p>}
+
+                                    {/* Compact Poll Results in Chat */}
+                                    {msg.pollResults && (
+                                        <div className="mt-2.5 p-3 rounded-xl bg-muted/40 border border-border/70 space-y-2 text-left">
+                                            <div className="flex items-center justify-between gap-2 border-b border-border/50 pb-1.5">
+                                                <span className="text-[11px] font-extrabold text-foreground flex items-center gap-1.5">
+                                                    <BarChart2 size={13} className="text-emerald-500 shrink-0" />
+                                                    {msg.pollResults.question}
+                                                </span>
+                                                <span className="text-[9px] font-bold text-muted-foreground shrink-0">{msg.pollResults.totalVotes} votes</span>
+                                            </div>
+                                            <div className="space-y-1.5 pt-1">
+                                                {msg.pollResults.options.map((opt, oIdx) => {
+                                                    const total = msg.pollResults!.totalVotes
+                                                    const pct = total > 0 ? Math.round((opt.votesCount / total) * 100) : 0
+                                                    return (
+                                                        <div key={oIdx} className="space-y-0.5">
+                                                            <div className="flex justify-between text-[10px] font-semibold text-foreground">
+                                                                <span className="truncate pr-2">{opt.text}</span>
+                                                                <span className="shrink-0 text-muted-foreground">{opt.votesCount} ({pct}%)</span>
+                                                            </div>
+                                                            <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                                                                <div className="h-full bg-emerald-500 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Compact Quiz in Chat */}
+                                    {msg.quizShare && (
+                                        <div className="mt-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-2 text-left max-w-sm">
+                                            <div className="flex items-center justify-between gap-2 border-b border-amber-500/20 pb-1.5">
+                                                <span className="text-[11px] font-extrabold text-foreground flex items-center gap-1.5">
+                                                    <FileText size={13} className="text-amber-500 shrink-0" />
+                                                    {msg.quizShare.quizTitle}
+                                                </span>
+                                                <span className="text-[9px] font-bold text-amber-500 uppercase tracking-wider shrink-0 bg-amber-500/10 px-1.5 py-0.5 rounded">Quiz</span>
+                                            </div>
+                                            <div className="pt-1">
+                                                {role === "student" ? (
+                                                    <a
+                                                        href={`/quiz/take/${msg.quizShare.shareToken}?name=${encodeURIComponent(userName)}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 active:scale-98 rounded-lg transition-all shadow-sm"
+                                                    >
+                                                        Take Quiz
+                                                    </a>
+                                                ) : (
+                                                    <div className="text-[11px] text-muted-foreground font-semibold flex flex-col gap-1">
+                                                        <span>Link shared with students.</span>
+                                                        <span className="text-[9px] text-amber-500">Open the Quiz modal from the toolbar to view real-time results.</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                     
                                     {msg.attachments && msg.attachments.length > 0 && (
                                         <div className={`space-y-2 mt-2 w-fit ${isSelf ? "ml-auto" : "mr-auto"}`}>

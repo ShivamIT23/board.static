@@ -11,21 +11,21 @@ import {
     MousePointer2,
     Square, Circle, ArrowUpRight, Triangle, Diamond, Star, Ellipse, Pentagon, TriangleRight, RectangleHorizontal,
     Activity, Calculator, Grid3X3, LayoutGrid,
-    Maximize, Minimize, VideoIcon
+    Maximize, Minimize
 } from "lucide-react"
 import ReactDOM from "react-dom"
 
-const Youtube = ({ size = 18, ...props }: { size?: number } & React.SVGProps<SVGSVGElement>) => (
-    <svg
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        width={size}
-        height={size}
-        {...props}
-    >
-        <path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.11C19.517 3.545 12 3.545 12 3.545s-7.517 0-9.388.507a3.003 3.003 0 0 0-2.11 2.11C0 8.033 0 12 0 12s0 3.967.502 5.837a3.003 3.003 0 0 0 2.11 2.11c1.871.507 9.388.507 9.388.507s7.517 0 9.388-.507a3.003 3.003 0 0 0 2.11-2.11C24 15.967 24 12 24 12s0-3.967-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-    </svg>
-);
+// const Youtube = ({ size = 18, ...props }: { size?: number } & React.SVGProps<SVGSVGElement>) => (
+//     <svg
+//         viewBox="0 0 24 24"
+//         fill="currentColor"
+//         width={size}
+//         height={size}
+//         {...props}
+//     >
+//         <path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.11C19.517 3.545 12 3.545 12 3.545s-7.517 0-9.388.507a3.003 3.003 0 0 0-2.11 2.11C0 8.033 0 12 0 12s0 3.967.502 5.837a3.003 3.003 0 0 0 2.11 2.11c1.871.507 9.388.507 9.388.507s7.517 0 9.388-.507a3.003 3.003 0 0 0 2.11-2.11C24 15.967 24 12 24 12s0-3.967-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+//     </svg>
+// );
 import BackgroundPicker from "./BackgroundPicker"
 import { leaveSession } from "@/app/actions/auth"
 import ThemeToggle from "../theme-toggle"
@@ -144,7 +144,7 @@ export default function BoardTopBar({
     onToggleFullscreen,
     durationAdded,
     startTime,
-    onYoutubeSync,
+    // onYoutubeSync,
     onImageStamp
 }: BoardTopBarProps) {
 
@@ -402,66 +402,66 @@ export default function BoardTopBar({
         if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
     }
 
-    const extractYoutubeId = (url: string): string | null => {
-        if (/^[a-zA-Z0-9_-]{11}$/.test(url)) return url;
-        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-        const match = url.match(regExp);
-        return (match && match[2].length === 11) ? match[2] : null;
-    }
+    // const extractYoutubeId = (url: string): string | null => {
+    //     if (/^[a-zA-Z0-9_-]{11}$/.test(url)) return url;
+    //     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    //     const match = url.match(regExp);
+    //     return (match && match[2].length === 11) ? match[2] : null;
+    // }
 
-    const handleYoutubeClick = () => {
-        Swal.fire({
-            title: 'Sync YouTube Video',
-            text: 'Enter a YouTube video URL or Video ID:',
-            input: 'text',
-            inputPlaceholder: 'https://www.youtube.com/watch?v=...',
-            showCancelButton: true,
-            confirmButtonText: 'Start Sync',
-            cancelButtonText: 'Cancel',
-            background: '#18181b',
-            color: '#ffffff',
-            confirmButtonColor: '#e11d48',
-            cancelButtonColor: '#3f3f46',
-            inputAttributes: {
-                autocapitalize: 'off',
-                autocomplete: 'off'
-            },
-            preConfirm: (value) => {
-                if (!value) {
-                    Swal.showValidationMessage('Please enter a YouTube link or video ID');
-                    return false;
-                }
-                const videoId = extractYoutubeId(value);
-                if (!videoId) {
-                    Swal.showValidationMessage('Invalid YouTube URL or Video ID');
-                    return false;
-                }
-                return videoId;
-            }
-        }).then((result) => {
-            if (result.isConfirmed && result.value) {
-                const videoId = result.value;
-                if (socket) {
-                    socket.emit("yt_sync", {
-                        roomId: sessionId,
-                        payload: {
-                            videoId,
-                            playStatus: "paused",
-                            currentTime: 0,
-                            lastUpdated: Date.now()
-                        }
-                    });
-                    onYoutubeSync?.({
-                        videoId,
-                        playStatus: "paused",
-                        currentTime: 0,
-                        lastUpdated: Date.now()
-                    });
-                    toast.success("YouTube sync started");
-                }
-            }
-        });
-    };
+    // const handleYoutubeClick = () => {
+    //     Swal.fire({
+    //         title: 'Sync YouTube Video',
+    //         text: 'Enter a YouTube video URL or Video ID:',
+    //         input: 'text',
+    //         inputPlaceholder: 'https://www.youtube.com/watch?v=...',
+    //         showCancelButton: true,
+    //         confirmButtonText: 'Start Sync',
+    //         cancelButtonText: 'Cancel',
+    //         background: '#18181b',
+    //         color: '#ffffff',
+    //         confirmButtonColor: '#e11d48',
+    //         cancelButtonColor: '#3f3f46',
+    //         inputAttributes: {
+    //             autocapitalize: 'off',
+    //             autocomplete: 'off'
+    //         },
+    //         preConfirm: (value) => {
+    //             if (!value) {
+    //                 Swal.showValidationMessage('Please enter a YouTube link or video ID');
+    //                 return false;
+    //             }
+    //             const videoId = extractYoutubeId(value);
+    //             if (!videoId) {
+    //                 Swal.showValidationMessage('Invalid YouTube URL or Video ID');
+    //                 return false;
+    //             }
+    //             return videoId;
+    //         }
+    //     }).then((result) => {
+    //         if (result.isConfirmed && result.value) {
+    //             const videoId = result.value;
+    //             if (socket) {
+    //                 socket.emit("yt_sync", {
+    //                     roomId: sessionId,
+    //                     payload: {
+    //                         videoId,
+    //                         playStatus: "paused",
+    //                         currentTime: 0,
+    //                         lastUpdated: Date.now()
+    //                     }
+    //                 });
+    //                 onYoutubeSync?.({
+    //                     videoId,
+    //                     playStatus: "paused",
+    //                     currentTime: 0,
+    //                     lastUpdated: Date.now()
+    //                 });
+    //                 toast.success("YouTube sync started");
+    //             }
+    //         }
+    //     });
+    // };
 
 
     const handleGraphItemClick = async (gId: GraphToolId) => {
@@ -525,7 +525,7 @@ export default function BoardTopBar({
                     </button>
 
                     {/* Outline Shapes */}
-                    <div className="relative group border rounded-[5px] border-primary/40 h-8 w-8" ref={shapeButtonRef}>
+                    <div className="relative group border rounded-[5px] p-0.5 border-primary/40 h-8 w-9" ref={shapeButtonRef}>
                         <button
                             type="button"
                             onClick={() => toggleShapeDropdown()}
@@ -542,7 +542,7 @@ export default function BoardTopBar({
                             <>
                                 <div className="fixed inset-0 z-9998" onClick={() => setShowShapeDropdown(false)} />
                                 <div
-                                    className="fixed z-9999 flex flex-col flex-wrap items-center gap-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-top-2 duration-200 h-[73px]"
+                                    className="fixed z-9999 grid grid-cols-4 gap-1 p-1.5 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-[150px]"
                                     style={{ top: shapeDropdownPos.top, left: shapeDropdownPos.left, transform: "translateX(-50%)" }}
                                 >
                                     {SHAPE_TOOLS.map((shape) => {
@@ -575,7 +575,7 @@ export default function BoardTopBar({
                     </div>
 
                     {/* Filled Shapes */}
-                    <div className="relative group border rounded-[5px] border-primary/40 h-8 w-8" ref={filledShapeButtonRef}>
+                    <div className="relative group border rounded-[5px] p-0.5 border-primary/40 h-8 w-9" ref={filledShapeButtonRef}>
                         <button
                             type="button"
                             onClick={() => toggleFilledShapeDropdown()}
@@ -597,7 +597,7 @@ export default function BoardTopBar({
                             <>
                                 <div className="fixed inset-0 z-9998" onClick={() => setShowFilledShapeDropdown(false)} />
                                 <div
-                                    className="fixed z-9999 flex flex-col flex-wrap items-center gap-1 bg-sidebar border border-border rounded-[3px] shadow-xl animate-in fade-in slide-in-from-top-2 duration-200 h-[73px]"
+                                    className="fixed z-9999 grid grid-cols-4 gap-1 p-1.5 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-[150px]"
                                     style={{ top: filledShapeDropdownPos.top, left: filledShapeDropdownPos.left, transform: "translateX(-50%)" }}
                                 >
                                     {SHAPE_TOOLS.map((shape) => {
@@ -635,7 +635,7 @@ export default function BoardTopBar({
                     </div>
 
                     {/* Graph Tools — Simplified Section */}
-                    <div className="relative group border rounded-[5px] border-primary/40 h-8 w-8" ref={graphButtonRef}>
+                    <div className="relative group border rounded-[5px] border-primary/40 h-8 w-9 p-0.5" ref={graphButtonRef}>
                         <button
                             type="button"
                             onClick={() => toggleGraphDropdown()}
@@ -681,7 +681,7 @@ export default function BoardTopBar({
                         )}
                     </div>
                     {/* Math Symbols — Simplified Section */}
-                    <div className="relative group border rounded-[5px] border-primary/40 h-8 w-8" ref={mathButtonRef}>
+                    <div className="relative group border rounded-[5px] border-primary/40 h-8 w-9 p-0.5" ref={mathButtonRef}>
                         <button
                             type="button"
                             onClick={() => toggleMathDropdown()}
@@ -724,7 +724,7 @@ export default function BoardTopBar({
                     </div>
 
 
-                    <div className="relative group border rounded-[5px] border-primary/40 h-8 w-8" ref={emojiButtonRef}>
+                    <div className="relative group border rounded-[5px] border-primary/40 h-8 w-9 p-0.5" ref={emojiButtonRef}>
                         <button
                             type="button"
                             onClick={() => toggleEmojiDropdown()}

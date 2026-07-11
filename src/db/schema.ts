@@ -218,6 +218,7 @@ export const classes = mysqlTable('tb_classes', {
   recordingSizeInMB: varchar('recording_size_in_mb', { length: 125 }),
   isAutoApprove: tinyint('is_auto_approve').default(1),
   maxStudents: int('max_students').default(10),
+  hasQuiz: tinyint('has_quiz').default(0),
 });
 
 export const notifications = mysqlTable('tb_notifications', {
@@ -393,3 +394,38 @@ export const apiCreditsRelations = relations(apiCredits, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+export const quizzes = mysqlTable('tb_quizzes', {
+  id: int('id').autoincrement().primaryKey(),
+  classId: int('class_id').notNull(),
+  question: text('question').notNull(),
+  options: text('options').notNull(), // JSON string representing array of strings
+  correctOption: int('correct_option').notNull(), // 0-based index
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+});
+
+export const sharedQuizzes = mysqlTable('tb_shared_quizzes', {
+  id: int('id').autoincrement().primaryKey(),
+  shareToken: varchar('share_token', { length: 255 }).notNull().unique(),
+  teacherId: varchar('teacher_id', { length: 255 }).notNull(),
+  classId: int('class_id'), // null if started without class
+  quizTitle: varchar('quiz_title', { length: 255 }).default('Quiz').notNull(),
+  questions: text('questions').notNull(), // JSON snapshot: Array of { question, options, correctOption }
+  timerDuration: int('timer_duration').default(0), // in seconds, 0 means no timer
+  expiresAt: timestamp('expires_at').notNull(),
+  isActive: tinyint('is_active').default(1).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+});
+
+export const quizSubmissions = mysqlTable('tb_quiz_submissions', {
+  id: int('id').autoincrement().primaryKey(),
+  quizLinkId: int('quiz_link_id').notNull(),
+  studentName: varchar('student_name', { length: 255 }).notNull(),
+  answers: text('answers').notNull(), // JSON representation of chosen options
+  score: int('score').notNull(),
+  totalQuestions: int('total_questions').notNull(),
+  timeTaken: int('time_taken').default(0), // in seconds
+  submittedAt: timestamp('submitted_at').defaultNow().notNull(),
+});

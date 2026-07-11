@@ -104,6 +104,8 @@ export default async function LiveSlugPage({
                     userId={`teacher-${teacherSession.teacherId}`}
                     isClassEnded={teacherSession.isClassEnded === 1}
                     endedAt={teacherSession.endedAt ? new Date(teacherSession.endedAt).getTime() : undefined}
+                    hasQuiz={teacherSession.hasQuiz === 1}
+                    classId={teacherSession.id}
                 />
             </div>
         );
@@ -166,6 +168,8 @@ export default async function LiveSlugPage({
                     visitorId={authData.visitorId}
                     isClassEnded={studentSession.isClassEnded === 1}
                     endedAt={studentSession.endedAt ? new Date(studentSession.endedAt).getTime() : undefined}
+                    hasQuiz={studentSession.hasQuiz === 1}
+                    classId={studentSession.id}
                 />
             </div>
         );
