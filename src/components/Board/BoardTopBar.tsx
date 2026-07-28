@@ -33,6 +33,7 @@ import { cn, getContrastColor } from "@/lib/utils"
 import { useSocket } from "@/hooks/use-socket"
 import { toast } from "sonner"
 import { SessionTimer } from "./SessionTimer"
+import ScreenRecorderButton from "./ScreenRecorderButton"
 import Swal from "sweetalert2"
 import Image from "next/image"
 import logo from "../../../public/logo.png"
@@ -886,6 +887,9 @@ export default function BoardTopBar({
                             </button>
                         </div>
                     )}
+
+                    {/* Screen Recorder Button */}
+                    <ScreenRecorderButton sessionId={sessionId} role={role} />
 
                     {/* Fullscreen Toggle */}
                     <div className="flex items-center shrink-0 px-1 h-8">

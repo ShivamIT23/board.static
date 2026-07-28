@@ -864,39 +864,12 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         })
 
         canvas.on("mouse:move", (opt) => {
-            // Image Stamp preview while dragging
+            // Image Stamp preview while dragging (disabled - do not show dotted box)
             if (shapeStartRef.current && toolRef.current === "image-stamp") {
-                const pt = canvas.getScenePoint(opt.e)
-                const start = shapeStartRef.current
-                const w = pt.x - start.x
-                const h = pt.y - start.y
-                const left = w >= 0 ? start.x : start.x + w
-                const top = h >= 0 ? start.y : start.y + h
-                const absW = Math.abs(w)
-                const absH = Math.abs(h)
-
-                // Remove previous preview
                 canvas.getObjects().forEach(obj => {
                     if ((obj as FabricObject & { _isPreview?: boolean })._isPreview) canvas.remove(obj)
                 })
                 shapePreviewRef.current = null
-
-                if (absW > 5 || absH > 5) {
-                    const preview = new Rect({
-                        left, top, width: absW, height: absH,
-                        fill: "transparent",
-                        stroke: "#4488ff",
-                        strokeWidth: 2,
-                        strokeDashArray: [6, 4],
-                        selectable: false,
-                        evented: false,
-                        opacity: 0.7,
-                    });
-                    (preview as FabricObject & { _isPreview?: boolean })._isPreview = true
-                    shapePreviewRef.current = preview
-                    canvas.add(preview)
-                    canvas.requestRenderAll()
-                }
                 return
             }
 
@@ -1482,6 +1455,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     lockMovementX: role !== "teacher",
                     lockMovementY: role !== "teacher",
                 });
+                fImg.setCoords();
                 (fImg as BoardFabricObject).id = data.id
                 boardFileObjsRef.current[data.id] = fImg
                 canvas.add(fImg)

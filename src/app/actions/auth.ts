@@ -37,12 +37,16 @@ export async function getHistoricalChats(sessionId: string, before?: number) {
             const quizShareAttachment = Array.isArray(parsedAttachments)
                 ? parsedAttachments.find((a: { type?: string }) => a?.type === "quizShare")
                 : null;
+            const pollResultsAttachment = Array.isArray(parsedAttachments)
+                ? parsedAttachments.find((a: { type?: string }) => a?.type === "pollResults")
+                : null;
             return {
                 id: c.id.toString(),
                 user: { name: c.userName, isTeacher: c.isTeacher === 1 },
                 message: c.message,
-                attachments: quizShareAttachment ? undefined : parsedAttachments,
+                attachments: (quizShareAttachment || pollResultsAttachment) ? undefined : parsedAttachments,
                 quizShare: quizShareAttachment ? quizShareAttachment.quizShare : undefined,
+                pollResults: pollResultsAttachment ? pollResultsAttachment.pollResults : undefined,
                 timestamp: new Date(c.timestamp).getTime()
             };
         }).reverse();

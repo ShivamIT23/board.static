@@ -62,18 +62,18 @@ export const verifications = mysqlTable('tb_verifications', {
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
 });
 
-// export const admins = mysqlTable('admins',{
-//   id: int('id').primaryKey().autoincrement(),
-//   name: varchar('name', { length: 255 }).notNull(),
-//   email: varchar('email', { length: 255 }).notNull().unique(),
-//   password: varchar('password', { length: 255 }).notNull(),
-//   contact: varchar('contact', { length: 20 }),
-//   apiKey: varchar('api_key', { length: 255 }),
-//   status: tinyint('status').default(1),
-//   hide: tinyint('hide').default(0),
-//   createdAt: timestamp('created_at').defaultNow(),
-//   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
-// })
+export const admins = mysqlTable('tb_admins',{
+  id: int('id').primaryKey().autoincrement(),
+  name: varchar('name', { length: 255 }).notNull(),
+  email: varchar('email', { length: 255 }).notNull().unique(),
+  password: varchar('password', { length: 255 }).notNull(),
+  contact: varchar('contact', { length: 20 }),
+  apiKey: varchar('api_key', { length: 255 }),
+  status: tinyint('status').default(1),
+  hide: tinyint('hide').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+})
 
 export const packages = mysqlTable('tb_packages',{
   id: int('id').primaryKey().autoincrement(),
@@ -428,4 +428,32 @@ export const quizSubmissions = mysqlTable('tb_quiz_submissions', {
   totalQuestions: int('total_questions').notNull(),
   timeTaken: int('time_taken').default(0), // in seconds
   submittedAt: timestamp('submitted_at').defaultNow().notNull(),
+});
+
+export const products = mysqlTable('tb_products', {
+  id: int('id').primaryKey().autoincrement(),
+  name: varchar('name', { length: 100 }).notNull(),
+  details: varchar('details', { length: 255 }).notNull(),
+  href: varchar('href', { length: 255 }),
+  slug: varchar('slug', { length: 150 }).notNull().unique(),
+  tagline: varchar('tagline', { length: 255 }),
+  content: text('content'),
+  icon: varchar('icon', { length: 50 }).notNull(),
+  color: varchar('color', { length: 50 }).notNull(),
+  status: tinyint('status').default(1),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+});
+
+export const recordings = mysqlTable('tb_recordings', {
+  id: int('id').primaryKey().autoincrement(),
+  sessionId: varchar('session_id', { length: 100 }).notNull().unique(),
+  resolution: varchar('resolution', { length: 20 }).notNull(),
+  chunkCount: int('chunk_count').default(0).notNull(),
+  fileName: varchar('file_name', { length: 255 }).notNull(),
+  filePath: varchar('file_path', { length: 255 }).notNull(),
+  downloadUrl: varchar('download_url', { length: 500 }).notNull(),
+  status: varchar('status', { length: 50 }).default('completed').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
 });
