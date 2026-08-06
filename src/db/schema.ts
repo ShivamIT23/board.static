@@ -1,4 +1,4 @@
-import { mysqlTable, int, varchar, timestamp, tinyint, datetime, text } from 'drizzle-orm/mysql-core';
+import { mysqlTable, int, varchar, timestamp, tinyint, datetime, text, longtext } from 'drizzle-orm/mysql-core';
 import { relations, sql } from 'drizzle-orm';
 import { mysqlEnum } from 'drizzle-orm/mysql-core';
 
@@ -170,7 +170,7 @@ export const payments = mysqlTable('tb_payments', {
   id: int('id').primaryKey().autoincrement(),
 
   userId: varchar('user_id', { length: 255 }).notNull(),
-  userPackageId: int('user_package_id').notNull(),
+  userPackageId: int('user_package_id'), // Optional for non-package payments (like credits)
 
   amount: int('amount').notNull(), // in paise (₹100 = 10000)
   currency: varchar('currency', { length: 10 }).default('INR'),
@@ -202,9 +202,10 @@ export const classes = mysqlTable('tb_classes', {
   duration: int('duration').default(60), // in minutes
   durationAdded: int('duration_added').default(60), // original/total session duration in minutes
 
+
   adminId: int('admin_id').default(0),
 
-  sessionId: varchar('session_id', { length: 255 }).notNull(),
+  sessionId: varchar('session_id', { length: 255 }).notNull().unique(),
   isRestricted: tinyint('is_restricted').default(0),
   status: mysqlEnum("status", ["scheduled", "started", "completed", "cancelled"]).default('scheduled'),
 
@@ -306,9 +307,10 @@ export const classBoardStates = mysqlTable('tb_class_board_states', {
   id: int('id').primaryKey().autoincrement(),
   sessionId: varchar('session_id', { length: 255 }).notNull().references(() => classes.sessionId, { onDelete: 'cascade' }),
   page: int('page').default(0).notNull(),
-  data: text('data').notNull(), // JSON string of board objects for this page
+  data: longtext('data').notNull(), // JSON string of board objects for this page
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
 });
+
 
 export const classBoardFiles = mysqlTable('tb_class_board_files', {
   id: int('id').primaryKey().autoincrement(),
@@ -394,6 +396,17 @@ export const apiCreditsRelations = relations(apiCredits, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+export const creditPackages = mysqlTable('tb_credit_packages', {
+  id: int('id').primaryKey().autoincrement(),
+  name: varchar('name', { length: 255 }).notNull(),
+  credits: int('credits').notNull(),
+  price: int('price').notNull(),
+  currency: varchar('currency', { length: 10 }).default('USD').notNull(),
+  status: tinyint('status').default(1), // 1 = active, 0 = hidden
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+});
 
 export const quizzes = mysqlTable('tb_quizzes', {
   id: int('id').autoincrement().primaryKey(),

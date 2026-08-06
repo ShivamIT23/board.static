@@ -793,7 +793,7 @@ export default function QuizModal({
 
             {/* Results Overlay Panel */}
             {showResults && sharedToken && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
                     <div className="relative w-[540px] max-w-[94vw] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
                         {/* Results Header */}
                         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/40 shrink-0">

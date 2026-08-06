@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react"
-import { MessageCircle, Minimize2, User2, Settings, MessageSquareOff, File as FileIcon, FileX, BarChart2 } from "lucide-react"
+import { MessageCircle, Minimize2, User2, Settings, MessageSquareOff, File as FileIcon, FileX, BarChart2, Video } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSocket } from "../providers/socket-provider"
 import { getHistoricalChats } from "@/app/actions/auth"
@@ -10,6 +10,7 @@ import { toast } from "sonner"
 import MessageList from "./MessageList"
 import ChatInput from "./ChatInput"
 import UserList from "./UserList"
+import LiveKitStream from "../Board/LiveKitStream"
 import Swal from "sweetalert2"
 
 import type { Attachment, ChatMessage, RoomUser, Visitor } from "@/types/chat"
@@ -443,144 +444,173 @@ export default function ChatRoom({
         )
     }
 
-    if (!isOpen) {
-        return (
-            <div className="w-12 bg-card border-l border-border flex flex-col items-center py-4 gap-4 transition-all duration-300">
-                <button
-                    type="button"
-                    onClick={() => setIsOpen(true)}
-                    className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-all"
-                    title="Open Chat"
-                >
-                    <MessageCircle size={20} />
-                </button>
-                <div className="flex flex-col items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-[10px] font-bold text-muted-foreground">{userCount}</span>
-                </div>
-            </div>
-        )
-    }
-
     return (
-        <aside className="w-64 sm:w-72 md:w-80 flex flex-col bg-card border-l border-border transition-all duration-300 z-30 shrink-0 h-full relative">
-            <div className="h-10 flex items-center justify-between px-3 sm:px-6 border-b border-border shrink-0">
-                <span className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">Chat</span>
-                <div className="flex items-center gap-2 relative">
+        <aside className={cn(
+            "flex flex-col bg-card border-l border-border transition-all duration-300 z-30 shrink-0 h-full relative overflow-hidden",
+            isOpen ? "w-64 sm:w-72 md:w-80" : "w-12 items-center"
+        )}>
+            {/* Top Video Header Box - ALWAYS MOUNTED so LiveKit WebRTC audio & video never disconnects */}
+            <div className={cn("w-full transition-all duration-300 shrink-0", !isOpen && "hidden")}>
+                <LiveKitStream
+                    roomId={sessionId}
+                    userId={userName || "user"}
+                    userName={userName || "User"}
+                    isTeacher={role === "teacher"}
+                    socketUrl={process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3005"}
+                />
+            </div>
+
+            {!isOpen ? (
+                /* Collapsed Toolbar View when Chat is closed */
+                <div className="flex flex-col items-center py-4 gap-4 w-full h-full">
+                    {/* Video Icon Button - Opens Chatroom */}
                     <button
-                        ref={visitorsButtonRef}
                         type="button"
-                        onClick={toggleVisitors}
-                        className={cn(
-                            "p-1.5 text-muted-foreground flex gap-1 items-center hover:text-foreground transition-colors",
-                            showVisitors && "text-foreground bg-muted rounded-md"
-                        )}
+                        onClick={() => setIsOpen(true)}
+                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-all relative group"
+                        title="Open Video & Audio Stream"
                     >
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />{userCount}<User2 size={16} />
+                        <Video size={20} />
+                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                     </button>
 
-                    {role === "teacher" && onOpenPoll && (
-                        <button
-                            type="button"
-                            onClick={onOpenPoll}
-                            className={cn(
-                                "p-1.5 flex items-center gap-1 text-xs font-bold rounded-md transition-colors",
-                                hasActivePoll
-                                    ? "bg-emerald-500/20 text-emerald-500 animate-pulse"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                            )}
-                            title="Classroom Polls"
-                        >
-                            <BarChart2 size={16} />
-                            <span className="text-[10px] font-extrabold uppercase">Polls</span>
-                        </button>
-                    )}
+                    {/* Chat Icon Button - Opens Chatroom */}
+                    <button
+                        type="button"
+                        onClick={() => setIsOpen(true)}
+                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-all relative group"
+                        title="Open Chat"
+                    >
+                        <MessageCircle size={20} />
+                    </button>
 
-                    {role === "teacher" && onOpenQuiz && (
-                        <button
-                            type="button"
-                            onClick={onOpenQuiz}
-                            className={cn(
-                                "p-1.5 flex items-center gap-1 text-xs font-bold rounded-md transition-colors",
-                                hasActiveQuiz
-                                    ? "bg-indigo-500/20 text-indigo-450 dark:text-indigo-400 animate-pulse border border-indigo-500/30"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                            )}
-                            title="Classroom Quiz"
-                        >
-                            <span className="relative flex h-2 w-2 mr-0.5">
-                                {hasActiveQuiz && (
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                                )}
-                                <span className={cn("relative inline-flex rounded-full h-2 w-2", hasActiveQuiz ? "bg-indigo-500" : "bg-muted-foreground/60")}></span>
-                            </span>
-                            <span className="text-[10px] font-extrabold uppercase">Quiz</span>
-                        </button>
-                    )}
-
-                    {role === "student" && hasActiveQuiz && onOpenQuiz && (
-                        <button
-                            type="button"
-                            onClick={onOpenQuiz}
-                            className="p-1.5 flex items-center gap-1 text-xs font-bold rounded-md bg-indigo-500/25 text-indigo-650 dark:text-indigo-300 animate-pulse border border-indigo-500/30 transition-all hover:scale-105"
-                            title="Take Live Quiz"
-                        >
-                            <span className="relative flex h-2 w-2 mr-0.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-                            </span>
-                            <span className="text-[10px] font-extrabold uppercase animate-pulse">Quiz Live!</span>
-                        </button>
-                    )}
-
-                    {showVisitors && (
-                        <div
-                            ref={visitorsRef}
-                            className="absolute top-10 right-0 w-52 bg-card border border-border rounded-[5px] shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200"
-                        >
-                            <UserList
-                                roomUsers={roomUsers}
-                                role={role}
-                                visitors={visitors}
-                                isLoadingVisitors={isLoadingVisitors}
-                                isAutoApprove={roomSettings.isAutoApprove}
-                                toggleUserPermission={toggleUserPermission}
-                                socket={socket}
-                            />
-                        </div>
-                    )}
-
-                    {role === "teacher" && (
-                        <button
-                            ref={settingsButtonRef}
-                            type="button"
-                            onClick={() => {
-                                setShowSettings(prev => {
-                                    const next = !prev;
-                                    if (next) setShowVisitors(false);
-                                    return next;
-                                });
-                            }}
-                            className={cn("p-1.5 text-muted-foreground hover:text-foreground", showSettings && "text-primary bg-primary/10 rounded-md")}
-                        >
-                            <Settings size={16} />
-                        </button>
-                    )}
-
-                    <div className="flex items-center gap-2 relative ml-auto">
-                        <button type="button" onClick={() => setIsOpen(false)} className="p-1.5 text-muted-foreground hover:text-foreground">
-                            <Minimize2 size={16} />
-                        </button>
+                    {/* User Count Badge */}
+                    <div className="flex flex-col items-center gap-1 mt-auto">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[10px] font-bold text-muted-foreground">{userCount}</span>
                     </div>
                 </div>
-            </div>
+            ) : (
+                /* Expanded Chatroom Content */
+                <>
+                    <div className="h-10 flex items-center justify-between px-3 border-b border-border shrink-0">
+                        <span className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">Chat</span>
+                        <div className="flex items-center gap-2 relative">
+                            <button
+                                ref={visitorsButtonRef}
+                                type="button"
+                                onClick={toggleVisitors}
+                                className={cn(
+                                    "p-1.5 text-muted-foreground flex gap-1 items-center hover:text-foreground transition-colors",
+                                    showVisitors && "text-foreground bg-muted rounded-md"
+                                )}
+                            >
+                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />{userCount}<User2 size={16} />
+                            </button>
 
-            {role === "teacher" && showSettings && (
-                <div
-                    ref={settingsRef}
-                    className="absolute top-[40px] left-0 right-0 z-50 bg-background/60 backdrop-blur-xl border-b border-border shadow-2xl animate-in slide-in-from-top-2 duration-300"
-                >
-                    <div className="px-2 py-2 space-y-4">
+                            {role === "teacher" && onOpenPoll && (
+                                <button
+                                    type="button"
+                                    onClick={onOpenPoll}
+                                    className={cn(
+                                        "p-1.5 flex items-center gap-1 text-xs font-bold rounded-md transition-colors",
+                                        hasActivePoll
+                                            ? "bg-emerald-500/20 text-emerald-500 animate-pulse"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                    )}
+                                    title="Classroom Polls"
+                                >
+                                    <BarChart2 size={16} />
+                                    <span className="text-[10px] font-extrabold uppercase">Polls</span>
+                                </button>
+                            )}
+
+                            {role === "teacher" && onOpenQuiz && (
+                                <button
+                                    type="button"
+                                    onClick={onOpenQuiz}
+                                    className={cn(
+                                        "p-1.5 flex items-center gap-1 text-xs font-bold rounded-md transition-colors",
+                                        hasActiveQuiz
+                                            ? "bg-indigo-500/20 text-indigo-450 dark:text-indigo-400 animate-pulse border border-indigo-500/30"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                    )}
+                                    title="Classroom Quiz"
+                                >
+                                    <span className="relative flex h-2 w-2 mr-0.5">
+                                        {hasActiveQuiz && (
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                        )}
+                                        <span className={cn("relative inline-flex rounded-full h-2 w-2", hasActiveQuiz ? "bg-indigo-500" : "bg-muted-foreground/60")}></span>
+                                    </span>
+                                    <span className="text-[10px] font-extrabold uppercase">Quiz</span>
+                                </button>
+                            )}
+
+                            {role === "student" && hasActiveQuiz && onOpenQuiz && (
+                                <button
+                                    type="button"
+                                    onClick={onOpenQuiz}
+                                    className="p-1.5 flex items-center gap-1 text-xs font-bold rounded-md bg-indigo-500/25 text-indigo-650 dark:text-indigo-300 animate-pulse border border-indigo-500/30 transition-all hover:scale-105"
+                                    title="Take Live Quiz"
+                                >
+                                    <span className="relative flex h-2 w-2 mr-0.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                                    </span>
+                                    <span className="text-[10px] font-extrabold uppercase animate-pulse">Quiz Live!</span>
+                                </button>
+                            )}
+
+                            {showVisitors && (
+                                <div
+                                    ref={visitorsRef}
+                                    className="absolute top-10 right-0 w-52 bg-card border border-border rounded-[5px] shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200"
+                                >
+                                    <UserList
+                                        roomUsers={roomUsers}
+                                        role={role}
+                                        visitors={visitors}
+                                        isLoadingVisitors={isLoadingVisitors}
+                                        isAutoApprove={roomSettings.isAutoApprove}
+                                        toggleUserPermission={toggleUserPermission}
+                                        socket={socket}
+                                    />
+                                </div>
+                            )}
+
+                            {role === "teacher" && (
+                                <button
+                                    ref={settingsButtonRef}
+                                    type="button"
+                                    onClick={() => setShowSettings(!showSettings)}
+                                    className={cn(
+                                        "p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded-md",
+                                        showSettings && "bg-muted text-foreground"
+                                    )}
+                                    title="Room Settings"
+                                >
+                                    <Settings size={16} />
+                                </button>
+                            )}
+
+                            <button
+                                type="button"
+                                onClick={() => setIsOpen(false)}
+                                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                                title="Close Chat"
+                            >
+                                <Minimize2 size={16} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {role === "teacher" && showSettings && (
+                        <div
+                            ref={settingsRef}
+                            className="absolute top-[40px] left-0 right-0 z-50 bg-background/60 backdrop-blur-xl border-b border-border shadow-2xl animate-in slide-in-from-top-2 duration-300"
+                        >
+                            <div className="px-2 py-2 space-y-4">
                         {/* <div className="flex items-center justify-between mb-1">
                             <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/70">Room Controls</h3>
                             <div className="h-px flex-1 bg-border/40 ml-3" />
@@ -671,6 +701,8 @@ export default function ChatRoom({
                 roomUser={roomUsers.find(u => u.socket_id === socket?.id)}
                 socket={socket}
             />
-        </aside>
+        </>
+    )}
+</aside>
     )
 }

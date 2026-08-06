@@ -15,12 +15,14 @@ export const SessionTimer = React.memo(({ initialDuration, durationAdded, startT
     }
 
     const [currentDurationAdded, setCurrentDurationAdded] = useState(() => durationAdded || initialDuration || 60);
+    const [prevDurationAdded, setPrevDurationAdded] = useState(durationAdded);
 
-    useEffect(() => {
+    if (durationAdded !== undefined && durationAdded !== prevDurationAdded) {
+        setPrevDurationAdded(durationAdded);
         if (durationAdded) {
             setCurrentDurationAdded(durationAdded);
         }
-    }, [durationAdded]);
+    }
 
     const [timeLeft, setTimeLeft] = useState(() => {
         if (!startTime) return initialDuration;
@@ -162,62 +164,21 @@ export const SessionTimer = React.memo(({ initialDuration, durationAdded, startT
         }
     }, [timeLeft, role, showExtendDialog, isClassEnded]);
 
-    // Teacher: when timer reaches 0, show a 10-second auto-end countdown Swal
-    const hasShownZeroPromptRef = useRef(false)
+    // Teacher: when timer reaches 0, directly end the class
+    const hasEndedRef = useRef(false)
     useEffect(() => {
         if (role !== "teacher" || isClassEnded) return
-        if (timeLeft > 0 || hasShownZeroPromptRef.current) return
-        hasShownZeroPromptRef.current = true
-
-        let countdown = 10
-        const swalInstance = Swal.fire({
-            title: "⏰ Time's Up!",
-            html: `<p>The session time has ended.</p><p>The class will auto-end in <b id="swal-countdown">${countdown}</b> seconds.</p><p>Would you like to extend the session?</p>`,
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonText: "Extend Time",
-            confirmButtonColor: "#6366f1",
-            cancelButtonText: "End Class Now",
-            cancelButtonColor: "#ef4444",
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            didOpen: () => {
-                const countdownEl = document.getElementById('swal-countdown')
-                const timer = setInterval(() => {
-                    countdown--
-                    if (countdownEl) countdownEl.textContent = countdown.toString()
-                    if (countdown <= 0) {
-                        clearInterval(timer)
-                        Swal.close()
-                    }
-                }, 1000)
-                    // Store timer so it can be cleared on dismiss
-                    ; (Swal as unknown as { _countdownTimer?: ReturnType<typeof setInterval> })._countdownTimer = timer
-            },
-            willClose: () => {
-                const timer = (Swal as unknown as { _countdownTimer?: ReturnType<typeof setInterval> })._countdownTimer
-                if (timer) clearInterval(timer)
-            }
-        })
-
-        swalInstance.then((result) => {
-            if (result.isConfirmed) {
-                // Teacher chose to extend — show the extend dialog
-                hasShownZeroPromptRef.current = false
-                showExtendDialog()
-            } else {
-                // Teacher chose "End Class Now" OR countdown expired → end the class
-                if (onEndSession) onEndSession(sessionId)
-            }
-        })
-    }, [timeLeft, role, sessionId, onEndSession, showExtendDialog, isClassEnded])
+        if (timeLeft > 0 || hasEndedRef.current) return
+        hasEndedRef.current = true
+        if (onEndSession) onEndSession(sessionId)
+    }, [timeLeft, role, sessionId, onEndSession, isClassEnded])
 
     const isLowTime = timeLeft <= 5;
     const isCritical = timeLeft <= 1;
 
     return (
         <div className="flex items-center gap-1.5 px-1 py-0.5 h-full">
-            <span className={`text-sm font-black uppercase tracking-widest transition-all duration-300 ${isCritical
+            <span suppressHydrationWarning className={`text-sm font-black uppercase tracking-widest transition-all duration-300 ${isCritical
                     ? 'text-red-500 animate-pulse scale-110'
                     : isLowTime
                         ? 'text-amber-500 animate-pulse-scale'

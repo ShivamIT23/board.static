@@ -29,14 +29,17 @@ export async function saveRecordingAction(
     });
 
     if (existingRec) {
+      // Do not overwrite if worker callback already marked recording as completed
+      const newStatus = existingRec.status === "completed" ? "completed" : status;
       await db
         .update(recordings)
         .set({
           downloadUrl: recordingUrl,
-          status: status,
+          status: newStatus,
         })
         .where(eq(recordings.sessionId, sessionId));
     } else {
+
       await db.insert(recordings).values({
         sessionId: sessionId,
         resolution: resolution,

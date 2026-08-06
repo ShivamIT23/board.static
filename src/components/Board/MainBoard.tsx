@@ -36,7 +36,6 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
     setEndedAt: React.Dispatch<React.SetStateAction<number | undefined>>
 }) {
     // Board State
-    const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
     const [tool, setTool] = useState("pen:pen")
     const [imageStampData, setImageStampData] = useState<string | null>(null)
     const [color, setColor] = useState("#FFFFFF")
@@ -201,11 +200,26 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
             const now = serverEndedAt || Date.now();
             setEndedAt(now);
             setIsClassEnded(true);
-            setDrawingEnabled(true);
             setIsViewLocked(false);
-            toast.warning("This session has been ended by the teacher. You can still view and use the board for 10 minutes.", { duration: 10000 });
-            // Disable socket to prevent further updates
             socket.disconnect();
+
+            Swal.fire({
+                title: "Class Ended",
+                text: "This session has been ended by the teacher. Redirecting...",
+                icon: "info",
+                timer: 2000,
+                showConfirmButton: false,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+            }).then(() => {
+                const targetUrl = process.env.NEXT_PUBLIC_MAIN_APP_URL || "/class-ended";
+                window.location.href = targetUrl;
+            });
+
+            setTimeout(() => {
+                const targetUrl = process.env.NEXT_PUBLIC_MAIN_APP_URL || "/class-ended";
+                window.location.href = targetUrl;
+            }, 2000);
         }
         socket.on("session_ended", handleSessionEnded);
         /*─── END OF SESSION ENDED LISTENER ────────────────────── */
@@ -249,8 +263,6 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
                 const elapsed = now - endedAt;
                 const gracePeriod = 10 * 60 * 1000;
                 const remaining = Math.max(0, Math.floor((gracePeriod - elapsed) / 1000));
-                setRemainingSeconds(remaining);
-
                 if (remaining <= 0) {
                     window.location.href = "/class-ended";
                 }
@@ -496,6 +508,9 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
 
     const handleEndSession = async (sid: string) => {
         try {
+            if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("end-class-recording"));
+            }
             /* ─── START OF END SESSION ACTION CALL (COMMENTABLE) ────*/
             const result = await endSessionAction(sid, userId || "unknown");
 
@@ -503,8 +518,25 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
                 const now = Date.now();
                 setEndedAt(now);
                 setIsClassEnded(true);
-                setDrawingEnabled(true);
                 setIsViewLocked(false);
+
+                Swal.fire({
+                    title: "Class Ended",
+                    text: "The class has been ended successfully. Redirecting...",
+                    icon: "success",
+                    timer: 2000,
+                    showConfirmButton: false,
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                }).then(() => {
+                    const targetUrl = process.env.NEXT_PUBLIC_MAIN_APP_URL || "/class-ended";
+                    window.location.href = targetUrl;
+                });
+
+                setTimeout(() => {
+                    const targetUrl = process.env.NEXT_PUBLIC_MAIN_APP_URL || "/class-ended";
+                    window.location.href = targetUrl;
+                }, 2000);
             } else {
                 toast.error("Failed to end session properly via server action.");
             }
@@ -595,19 +627,7 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
                         */
                     />
 
-                    {/* ─── SESSION ENDED COUNTDOWN UI (COMMENTABLE) ──────── */}
-                    {isClassEnded && remainingSeconds !== null && (
-                        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-100 flex items-center gap-3 px-6 py-3 bg-zinc-900/95 backdrop-blur-xl border-2 border-orange-500 rounded-lg shadow-[0_0_50px_rgba(249,115,22,0.3)] animate-in fade-in slide-in-from-bottom-8 duration-700">
-                            <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                            <span className="text-sm font-medium text-zinc-100 whitespace-nowrap">
-                                Session Ended. Closing in
-                            </span>
-                            <span className="text-lg font-bold text-orange-500 font-mono min-w-[60px]">
-                                {Math.floor(remainingSeconds / 60)}:{(remainingSeconds % 60).toString().padStart(2, '0')}
-                            </span>
-                        </div>
-                    )}
-                    {/* ─────────────────────────────────────────────────── */}
+
 
 
                     <div className="flex-1 overflow-hidden relative flex">

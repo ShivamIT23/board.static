@@ -65,6 +65,11 @@ export const SocketProvider = ({
     });
 
     socketInstance.on("error", (data: { message: string }) => {
+      if (data?.message && data.message.toLowerCase().includes("class has already ended")) {
+        const targetUrl = process.env.NEXT_PUBLIC_MAIN_APP_URL || "/class-ended";
+        window.location.href = targetUrl;
+        return;
+      }
       toast.error(data.message || "An error occurred with the socket connection.");
     });
 

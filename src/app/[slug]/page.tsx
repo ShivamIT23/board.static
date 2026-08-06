@@ -83,13 +83,9 @@ export default async function LiveSlugPage({
             teacherSession.startTime = new Date();
         }
 
-        /* ─── START OF END SESSION REDIRECT LOGIC (COMMENTABLE) ──── */
+        /* ─── START OF END SESSION REDIRECT LOGIC ──── */
         if (teacherSession.isClassEnded === 1) {
-            const endedAt = teacherSession.endedAt ? new Date(teacherSession.endedAt).getTime() : 0;
-            const now = new Date().getTime(); 
-            if (now - endedAt > 10 * 60 * 1000) {
-                return redirect("/class-ended");
-            }
+            return redirect("/class-ended");
         }
         /*─── END OF END SESSION REDIRECT LOGIC ────────────────────── */
         return (
@@ -117,13 +113,9 @@ export default async function LiveSlugPage({
     });
 
     if (studentSession) {
-        /* ─── START OF END SESSION REDIRECT LOGIC (COMMENTABLE) ──── */
+        /* ─── START OF END SESSION REDIRECT LOGIC ──── */
         if (studentSession.isClassEnded === 1) {
-            const endedAt = studentSession.endedAt ? new Date(studentSession.endedAt).getTime() : 0;
-            const now = new Date().getTime(); 
-            if (now - endedAt > 10 * 60 * 1000) {
-                return redirect("/class-ended");
-            }
+            return redirect("/class-ended");
         }
         /*─── END OF END SESSION REDIRECT LOGIC ────────────────────── */
         const cookieStore = await cookies();
