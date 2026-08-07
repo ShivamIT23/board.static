@@ -201,15 +201,18 @@ export default function ScreenRecorderButton({
 
       toast.info(`Recording at ${preset.label} (${preset.width}×${preset.height})`, { duration: 2000 });
 
-      // Start session on Go backend
+      // Start session on Go backend (pass current class sessionId if available)
       const sessionRes = await fetch(`${API_BASE}/api/sessions/start`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: sessionId || undefined }),
       });
       if (!sessionRes.ok) {
         throw new Error("Failed to initialize recording session on backend");
       }
       const sessionData = await sessionRes.json();
       sessionIdRef.current = sessionData.sessionId;
+
 
       // Get screen stream at the selected resolution
       const stream = await navigator.mediaDevices.getDisplayMedia({
