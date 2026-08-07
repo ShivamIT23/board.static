@@ -188,6 +188,13 @@ export default function ScreenRecorderButton({
       setDownloadUrl(null);
       stoppingRef.current = false;
 
+      // Mobile Browser Check: getDisplayMedia is disabled by W3C specification on mobile browsers
+      if (typeof navigator === "undefined" || !navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== "function") {
+        toast.error("Screen recording is supported on Desktop & Laptop browsers. Mobile web browsers do not allow in-browser screen capture.");
+        return;
+      }
+
+
       // Re-detect if on auto (connection conditions may have changed)
       let resKey = effectiveRes;
       if (selectedResolution === "auto") {
@@ -404,47 +411,37 @@ export default function ScreenRecorderButton({
   };
 
   const recordingLoop = async (stream: MediaStream, preset: ResolutionPreset) => {
-    let index = 0;
-    while (!stoppingRef.current && stream.active) {
-      const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
-        ? "video/webm;codecs=vp9,opus"
-        : MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")
-        ? "video/webm;codecs=vp8,opus"
-        : "video/webm";
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+      ? "video/webm;codecs=vp9,opus"
+      : MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")
+      ? "video/webm;codecs=vp8,opus"
+      : "video/webm";
 
-      const mr = new MediaRecorder(stream, {
-        mimeType,
-        videoBitsPerSecond: preset.bitrate,
-      });
-      mediaRecorderRef.current = mr;
+    let chunkIndex = 0;
 
-      const chunkPromise = new Promise<Blob | null>((resolve) => {
-        const parts: Blob[] = [];
-        mr.ondataavailable = (ev) => {
-          if (ev.data.size > 0) parts.push(ev.data);
-        };
-        mr.onstop = () => {
-          if (parts.length === 0) resolve(null);
-          else resolve(new Blob(parts, { type: mimeType }));
-        };
-      });
+    // Use a SINGLE continuous MediaRecorder for the entire session.
+    // timeslice fires ondataavailable every CHUNK_INTERVAL_MS (10s).
+    // This preserves continuous audio/video timestamps across chunks
+    // and eliminates static-frame artifacts from repeated start/stop cycles.
+    const mr = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: preset.bitrate,
+    });
+    mediaRecorderRef.current = mr;
 
-      mr.start();
-
-      await new Promise((r) => setTimeout(r, CHUNK_INTERVAL_MS));
-
-      if (mr.state !== "inactive") {
-        mr.stop();
+    mr.ondataavailable = (ev) => {
+      if (ev.data.size > 0 && !stoppingRef.current) {
+        const blob = new Blob([ev.data], { type: mimeType });
+        const currentIdx = chunkIndex++;
+        setChunkCount(chunkIndex);
+        uploadChunk(blob, currentIdx, sessionIdRef.current!).catch(console.error);
       }
+    };
 
-      const blob = await chunkPromise;
-      if (!blob || stoppingRef.current) break;
-
-      const currentIdx = index++;
-      setChunkCount(index);
-      uploadChunk(blob, currentIdx, sessionIdRef.current!).catch(console.error);
-    }
+    // Start with timeslice — fires ondataavailable every CHUNK_INTERVAL_MS
+    mr.start(CHUNK_INTERVAL_MS);
   };
+
 
 
 
