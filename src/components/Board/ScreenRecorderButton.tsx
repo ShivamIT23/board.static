@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Video, Square, Loader2, Download, ChevronDown, Gauge, Wifi, Monitor, Cpu } from "lucide-react";
 import { toast } from "sonner";
 import { saveRecordingAction } from "@/app/actions/recording";
@@ -133,7 +134,19 @@ export default function ScreenRecorderButton({
   const [autoDetectedRes, setAutoDetectedRes] = useState<Exclude<ResolutionKey, "auto"> | null>(null);
   const [autoReasons, setAutoReasons] = useState<string[]>([]);
   const [showResDropdown, setShowResDropdown] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const toggleDropdown = () => {
+    if (!showResDropdown && dropdownRef.current) {
+      const rect = dropdownRef.current.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + 4,
+        left: Math.max(8, rect.left),
+      });
+    }
+    setShowResDropdown((prev) => !prev);
+  };
 
   const streamRef = useRef<MediaStream | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -542,10 +555,10 @@ export default function ScreenRecorderButton({
     <div className="flex items-center gap-1 shrink-0 px-1 border-r border-border/50 h-7">
       {/* ─── Resolution Picker (visible when idle or done) ─── */}
       {(phase === "idle" || phase === "done") && (
-        <div className="relative z-999" ref={dropdownRef}>
+        <div className="relative" ref={dropdownRef}>
           <button
             type="button"
-            onClick={() => setShowResDropdown(!showResDropdown)}
+            onClick={toggleDropdown}
             className="flex items-center gap-1 px-1.5 h-6 rounded border border-border/60 bg-muted/40 hover:bg-muted/70 text-muted-foreground transition-all text-[10px] font-bold cursor-pointer"
             title="Recording Quality"
           >
@@ -554,8 +567,11 @@ export default function ScreenRecorderButton({
             <ChevronDown size={9} className={`transition-transform ${showResDropdown ? "rotate-180" : ""}`} />
           </button>
 
-          {showResDropdown && (
-            <div className="absolute top-full z-999 left-0 mt-1 w-52 bg-popover border border-border rounded-[5px] shadow-xl py-1 animate-in fade-in slide-in-from-top-1 duration-150">
+          {showResDropdown && createPortal(
+            <div
+              className="fixed z-9999 w-52 bg-popover border border-border rounded-[5px] shadow-2xl py-1 animate-in fade-in slide-in-from-top-1 duration-150"
+              style={{ top: dropdownPos.top, left: dropdownPos.left }}
+            >
               {/* Auto option */}
               <button
                 type="button"
@@ -613,7 +629,8 @@ export default function ScreenRecorderButton({
                   </div>
                 </>
               )}
-            </div>
+            </div>,
+            document.body
           )}
         </div>
       )}
