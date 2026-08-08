@@ -460,7 +460,7 @@ export const products = mysqlTable('tb_products', {
 
 export const recordings = mysqlTable('tb_recordings', {
   id: int('id').primaryKey().autoincrement(),
-  sessionId: varchar('session_id', { length: 100 }).notNull().unique(),
+  sessionId: varchar('session_id', { length: 100 }).notNull(),
   resolution: varchar('resolution', { length: 20 }).notNull(),
   chunkCount: int('chunk_count').default(0).notNull(),
   fileName: varchar('file_name', { length: 255 }).notNull(),

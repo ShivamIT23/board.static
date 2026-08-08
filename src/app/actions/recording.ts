@@ -15,17 +15,20 @@ export async function saveRecordingAction(
       return { success: false, error: "sessionId and recordingUrl are required" };
     }
 
+    const classSessionId = sessionId.includes("_") ? sessionId.split("_")[0] : sessionId;
+    const fileName = recordingUrl.substring(recordingUrl.lastIndexOf("/") + 1) || `recording_${sessionId}.webm`;
+
     // 1. Update tb_classes with recording_url for the session
     await db
       .update(classes)
       .set({
         recordingUrl: recordingUrl,
       })
-      .where(eq(classes.sessionId, sessionId));
+      .where(eq(classes.sessionId, classSessionId));
 
-    // 2. Save into tb_recordings if not already existing
+    // 2. Save into tb_recordings matching by fileName / downloadUrl
     const existingRec = await db.query.recordings.findFirst({
-      where: eq(recordings.sessionId, sessionId),
+      where: eq(recordings.fileName, fileName),
     });
 
     if (existingRec) {
@@ -37,19 +40,19 @@ export async function saveRecordingAction(
           downloadUrl: recordingUrl,
           status: newStatus,
         })
-        .where(eq(recordings.sessionId, sessionId));
+        .where(eq(recordings.fileName, fileName));
     } else {
-
       await db.insert(recordings).values({
-        sessionId: sessionId,
+        sessionId: classSessionId,
         resolution: resolution,
         chunkCount: chunkCount,
-        fileName: `recording_${sessionId}.webm`,
+        fileName: fileName,
         filePath: recordingUrl,
         downloadUrl: recordingUrl,
         status: status,
       });
     }
+
 
     return { success: true, recordingUrl };
   } catch (error: unknown) {
