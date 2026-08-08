@@ -136,6 +136,7 @@ export default function ScreenRecorderButton({
   const [showResDropdown, setShowResDropdown] = useState(false);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const toggleDropdown = () => {
     if (!showResDropdown && dropdownRef.current) {
@@ -182,7 +183,12 @@ export default function ScreenRecorderButton({
   // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node)
+      ) {
         setShowResDropdown(false);
       }
     };
@@ -569,6 +575,7 @@ export default function ScreenRecorderButton({
 
           {showResDropdown && createPortal(
             <div
+              ref={menuRef}
               className="fixed z-9999 w-52 bg-popover border border-border rounded-[5px] shadow-2xl py-1 animate-in fade-in slide-in-from-top-1 duration-150"
               style={{ top: dropdownPos.top, left: dropdownPos.left }}
             >
