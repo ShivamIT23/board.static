@@ -539,19 +539,19 @@ export default function ScreenRecorderButton({
   };
 
   return (
-    <div className="flex items-center gap-1 shrink-0 px-2 border-r border-border/50 h-8">
+    <div className="flex items-center gap-1 shrink-0 px-1 border-r border-border/50 h-7">
       {/* ─── Resolution Picker (visible when idle or done) ─── */}
       {(phase === "idle" || phase === "done") && (
         <div className="relative z-999" ref={dropdownRef}>
           <button
             type="button"
             onClick={() => setShowResDropdown(!showResDropdown)}
-            className="flex items-center gap-1 px-1.5 h-7 rounded-[4px] border border-border/60 bg-muted/40 hover:bg-muted/70 text-muted-foreground transition-all text-[10px] font-bold cursor-pointer"
+            className="flex items-center gap-1 px-1.5 h-6 rounded border border-border/60 bg-muted/40 hover:bg-muted/70 text-muted-foreground transition-all text-[10px] font-bold cursor-pointer"
             title="Recording Quality"
           >
-            <Gauge size={12} />
-            <span className="hidden sm:inline">{resLabel}</span>
-            <ChevronDown size={10} className={`transition-transform ${showResDropdown ? "rotate-180" : ""}`} />
+            <Gauge size={11} />
+            <span className="hidden md:inline">{resLabel}</span>
+            <ChevronDown size={9} className={`transition-transform ${showResDropdown ? "rotate-180" : ""}`} />
           </button>
 
           {showResDropdown && (
@@ -625,13 +625,11 @@ export default function ScreenRecorderButton({
           target="_blank"
           rel="noopener noreferrer"
           download
-          className="flex items-center gap-1.5 p-1.5 h-8 rounded-[5px] border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-all duration-300 shadow-sm"
+          className="flex items-center gap-1 px-1.5 h-6 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-all text-[10px] font-bold shadow-sm"
           title="Download Recording"
         >
-          <Download size={16} />
-          <span className="hidden xl:block text-[10px] font-black uppercase tracking-wider">
-            Download
-          </span>
+          <Download size={12} />
+          <span className="hidden md:inline">Download</span>
         </a>
       )}
 
@@ -640,12 +638,12 @@ export default function ScreenRecorderButton({
         <button
           type="button"
           onClick={handleStart}
-          className="flex items-center gap-1.5 p-1.5 h-8 rounded-[5px] border border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all duration-300 shadow-sm cursor-pointer"
+          className="flex items-center gap-1 px-1.5 h-6 rounded border border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all text-[10px] font-bold shadow-sm cursor-pointer"
           title="Start Recording Screen"
         >
-          <Video size={16} />
-          <span className="hidden xl:block text-[10px] font-black uppercase tracking-wider">
-            {phase === "done" ? "Record Again" : "Record"}
+          <Video size={12} />
+          <span className="hidden md:inline">
+            {phase === "done" ? "Record New" : "Record"}
           </span>
         </button>
       )}
@@ -655,40 +653,35 @@ export default function ScreenRecorderButton({
         <button
           type="button"
           onClick={handleStop}
-          className="flex items-center gap-1.5 p-1.5 h-8 rounded-[5px] border border-red-500 bg-red-500 text-white hover:bg-red-600 transition-all duration-300 shadow-md animate-pulse cursor-pointer"
+          className="flex items-center gap-1 px-1.5 h-6 rounded border border-red-500 bg-red-500 text-white hover:bg-red-600 transition-all text-[10px] font-bold shadow-md animate-pulse cursor-pointer"
           title="Click to Stop Recording"
         >
-          <Square size={14} className="fill-current" />
-          <span className="text-[10px] font-black tracking-wider">
+          <Square size={11} className="fill-current" />
+          <span className="text-[10px] font-bold tracking-wider">
             {formatTimer(elapsedSeconds)} ({chunkCount})
-            <span className="ml-1 opacity-70">{activeResolutionRef.current}</span>
           </span>
         </button>
       )}
 
       {phase === "merging" && (
-        <div className="flex items-center gap-1.5 p-1.5 h-8 rounded-[5px] border border-amber-500/30 bg-amber-500/10 text-amber-500">
-          <Loader2 size={16} className="animate-spin" />
-          <span className="hidden xl:block text-[10px] font-black uppercase tracking-wider">
-            Merging...
-          </span>
+        <div className="flex items-center gap-1 px-1.5 h-6 rounded border border-amber-500/30 bg-amber-500/10 text-amber-500 text-[10px] font-bold">
+          <Loader2 size={12} className="animate-spin" />
+          <span className="hidden md:inline">Merging...</span>
         </div>
       )}
-
 
       {phase === "error" && (
         <button
           type="button"
           onClick={handleStart}
-          className="flex items-center gap-1.5 p-1.5 h-8 rounded-[5px] border border-red-500/40 bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all duration-300 cursor-pointer"
+          className="flex items-center gap-1 px-1.5 h-6 rounded border border-red-500/40 bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all text-[10px] font-bold cursor-pointer"
           title="Retry Recording"
         >
-          <Video size={16} />
-          <span className="hidden xl:block text-[10px] font-black uppercase tracking-wider">
-            Retry
-          </span>
+          <Video size={12} />
+          <span className="hidden md:inline">Retry</span>
         </button>
       )}
     </div>
   );
+
 }
