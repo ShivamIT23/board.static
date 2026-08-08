@@ -136,6 +136,8 @@ export default function ScreenRecorderButton({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const stoppingRef = useRef(false);
@@ -222,7 +224,7 @@ export default function ScreenRecorderButton({
 
 
       // Get screen stream at the selected resolution
-      const stream = await navigator.mediaDevices.getDisplayMedia({
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           width: { ideal: preset.width },
           height: { ideal: preset.height },
@@ -239,15 +241,57 @@ export default function ScreenRecorderButton({
         surfaceSwitching?: string;
       });
 
-      streamRef.current = stream;
+      streamRef.current = displayStream;
 
-      stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+      // Capture teacher's microphone audio separately.
+      // getDisplayMedia only captures tab/system audio — the teacher's mic
+      // audio goes directly to LiveKit over WebRTC, so it's NOT in the tab output.
+      // We use getUserMedia to grab the mic and mix both audio sources together.
+      let micStream: MediaStream | null = null;
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          video: false,
+        });
+        micStreamRef.current = micStream;
+        console.log("[Recorder] Microphone captured for recording");
+      } catch (micErr) {
+        console.warn("[Recorder] Could not capture microphone — recording without mic audio:", micErr);
+      }
+
+      // Mix audio sources: tab audio (from getDisplayMedia) + mic audio (from getUserMedia)
+      const audioCtx = new AudioContext();
+      audioContextRef.current = audioCtx;
+      const destination = audioCtx.createMediaStreamDestination();
+
+      // Add tab/system audio tracks if present
+      const tabAudioTracks = displayStream.getAudioTracks();
+      if (tabAudioTracks.length > 0) {
+        const tabSource = audioCtx.createMediaStreamSource(new MediaStream(tabAudioTracks));
+        tabSource.connect(destination);
+        console.log("[Recorder] Tab audio mixed into recording");
+      }
+
+      // Add microphone audio if captured
+      if (micStream && micStream.getAudioTracks().length > 0) {
+        const micSource = audioCtx.createMediaStreamSource(micStream);
+        micSource.connect(destination);
+        console.log("[Recorder] Mic audio mixed into recording");
+      }
+
+      // Build the final combined stream: display video + mixed audio
+      const combinedStream = new MediaStream([
+        ...displayStream.getVideoTracks(),
+        ...destination.stream.getAudioTracks(),
+      ]);
+
+      displayStream.getVideoTracks()[0]?.addEventListener("ended", () => {
         if (!stoppingRef.current) handleStop();
       });
 
       setPhase("recording");
       toast.success("Recording started!");
-      recordingLoop(stream, preset);
+      recordingLoop(combinedStream, preset);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error("Failed to start recording:", err);
@@ -273,6 +317,15 @@ export default function ScreenRecorderButton({
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
+    }
+    // Clean up mic stream and audio context
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((track) => track.stop());
+      micStreamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
     }
 
     const resKey = activeResolutionRef.current;
@@ -370,6 +423,12 @@ export default function ScreenRecorderButton({
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {});
+      }
     };
   }, []);
 
@@ -464,7 +523,7 @@ export default function ScreenRecorderButton({
     <div className="flex items-center gap-1 shrink-0 px-2 border-r border-border/50 h-8">
       {/* ─── Resolution Picker (visible only when idle) ─── */}
       {phase === "idle" && (
-        <div className="relative" ref={dropdownRef}>
+        <div className="relative z-999" ref={dropdownRef}>
           <button
             type="button"
             onClick={() => setShowResDropdown(!showResDropdown)}
@@ -477,7 +536,7 @@ export default function ScreenRecorderButton({
           </button>
 
           {showResDropdown && (
-            <div className="absolute top-full left-0 mt-1 z-50 w-52 bg-popover border border-border rounded-[5px] shadow-xl py-1 animate-in fade-in slide-in-from-top-1 duration-150">
+            <div className="absolute top-full z-999 left-0 mt-1 w-52 bg-popover border border-border rounded-[5px] shadow-xl py-1 animate-in fade-in slide-in-from-top-1 duration-150">
               {/* Auto option */}
               <button
                 type="button"
