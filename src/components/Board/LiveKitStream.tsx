@@ -160,6 +160,9 @@ export default function LiveKitStream({
       await room.localParticipant.setMicrophoneEnabled(nextState);
       setIsMicOn(nextState);
       toast.info(nextState ? "Microphone turned ON" : "Microphone turned OFF");
+
+      // Notify the screen recorder to mute/unmute its mic GainNode
+      window.dispatchEvent(new CustomEvent("recorder-mic-toggle", { detail: { enabled: nextState } }));
     } catch (err: unknown) {
       console.error("[LiveKit Mic Error]:", err);
       toast.error("Could not access microphone");

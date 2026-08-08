@@ -138,12 +138,26 @@ export default function ScreenRecorderButton({
   const streamRef = useRef<MediaStream | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const micGainRef = useRef<GainNode | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const stoppingRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const canvasTickRef = useRef<NodeJS.Timeout | null>(null);
   const activeResolutionRef = useRef<Exclude<ResolutionKey, "auto">>("720p");
+
+  // Listen for LiveKit mic toggle events to mute/unmute recording mic
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (micGainRef.current) {
+        micGainRef.current.gain.value = detail?.enabled ? 1 : 0;
+        console.log(`[Recorder] Mic gain set to ${detail?.enabled ? 1 : 0}`);
+      }
+    };
+    window.addEventListener("recorder-mic-toggle", handler);
+    return () => window.removeEventListener("recorder-mic-toggle", handler);
+  }, []);
 
   // Run auto-detection on mount
   useEffect(() => {
@@ -272,11 +286,16 @@ export default function ScreenRecorderButton({
         console.log("[Recorder] Tab audio mixed into recording");
       }
 
-      // Add microphone audio if captured
+      // Add microphone audio if captured — routed through a GainNode
+      // so LiveKit mic toggle can mute/unmute recording mic in real-time
       if (micStream && micStream.getAudioTracks().length > 0) {
         const micSource = audioCtx.createMediaStreamSource(micStream);
-        micSource.connect(destination);
-        console.log("[Recorder] Mic audio mixed into recording");
+        const micGain = audioCtx.createGain();
+        micGain.gain.value = 1; // start unmuted
+        micGainRef.current = micGain;
+        micSource.connect(micGain);
+        micGain.connect(destination);
+        console.log("[Recorder] Mic audio mixed into recording (with gain control)");
       }
 
       // Build the final combined stream: display video + mixed audio
