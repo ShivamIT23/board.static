@@ -540,8 +540,8 @@ export default function ScreenRecorderButton({
 
   return (
     <div className="flex items-center gap-1 shrink-0 px-2 border-r border-border/50 h-8">
-      {/* ─── Resolution Picker (visible only when idle) ─── */}
-      {phase === "idle" && (
+      {/* ─── Resolution Picker (visible when idle or done) ─── */}
+      {(phase === "idle" || phase === "done") && (
         <div className="relative z-999" ref={dropdownRef}>
           <button
             type="button"
@@ -618,8 +618,25 @@ export default function ScreenRecorderButton({
         </div>
       )}
 
-      {/* ─── Record Button ─── */}
-      {phase === "idle" && (
+      {/* ─── Download Button (visible when done) ─── */}
+      {phase === "done" && downloadUrl && (
+        <a
+          href={downloadUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          download
+          className="flex items-center gap-1.5 p-1.5 h-8 rounded-[5px] border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-all duration-300 shadow-sm"
+          title="Download Recording"
+        >
+          <Download size={16} />
+          <span className="hidden xl:block text-[10px] font-black uppercase tracking-wider">
+            Download
+          </span>
+        </a>
+      )}
+
+      {/* ─── Record Button (visible when idle or done) ─── */}
+      {(phase === "idle" || phase === "done") && (
         <button
           type="button"
           onClick={handleStart}
@@ -628,7 +645,7 @@ export default function ScreenRecorderButton({
         >
           <Video size={16} />
           <span className="hidden xl:block text-[10px] font-black uppercase tracking-wider">
-            Record
+            {phase === "done" ? "Record Again" : "Record"}
           </span>
         </button>
       )}
@@ -658,21 +675,6 @@ export default function ScreenRecorderButton({
         </div>
       )}
 
-      {phase === "done" && downloadUrl && (
-        <a
-          href={downloadUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          download
-          className="flex items-center gap-1.5 p-1.5 h-8 rounded-[5px] border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-all duration-300 shadow-sm"
-          title="Download Recording"
-        >
-          <Download size={16} />
-          <span className="hidden xl:block text-[10px] font-black uppercase tracking-wider">
-            Download
-          </span>
-        </a>
-      )}
 
       {phase === "error" && (
         <button
