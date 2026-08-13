@@ -179,6 +179,36 @@ export default function LiveKitStream({
     }
   };
 
+  // Re-attach video track whenever switching between sidebar and expanded view
+  useEffect(() => {
+    if (!room) return;
+
+    const timer = setTimeout(() => {
+      if (isTeacher && isCameraOn && localVideoRef.current) {
+        const pub = Array.from(room.localParticipant.videoTrackPublications.values()).find(
+          (p) => p.track && p.track.kind === Track.Kind.Video
+        ) as LocalTrackPublication | undefined;
+        if (pub && pub.track) {
+          pub.track.detach(localVideoRef.current);
+          pub.track.attach(localVideoRef.current);
+        }
+      }
+
+      if (!isTeacher && hasRemoteVideo && remoteVideoRef.current) {
+        room.remoteParticipants.forEach((participant) => {
+          participant.videoTrackPublications.forEach((pub) => {
+            if (pub.track && pub.track.kind === Track.Kind.Video && remoteVideoRef.current) {
+              pub.track.detach(remoteVideoRef.current);
+              pub.track.attach(remoteVideoRef.current);
+            }
+          });
+        });
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [isExpanded, room, isTeacher, isCameraOn, hasRemoteVideo]);
+
   // ─── FULLSCREEN / EXPANDED VIDEO VIEW (REPLACES WHITEBOARD) ───
   const renderExpandedView = () => {
     return (
