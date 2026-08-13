@@ -5,6 +5,7 @@ import { Room, RoomEvent, Track, LocalTrackPublication, RemoteTrackPublication, 
 import { Mic, MicOff, Video as VideoIcon, VideoOff, Volume2, VolumeX, Radio, UserCheck, Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import ScreenRecorderButton from "./ScreenRecorderButton";
 
 interface LiveKitStreamProps {
   roomId: string;
@@ -214,7 +215,7 @@ export default function LiveKitStream({
     return (
       <div
         className={cn(
-          "fixed top-12 left-0 bottom-0 z-40 bg-slate-950/95 backdrop-blur-xl p-3 sm:p-6 flex flex-col justify-between animate-in fade-in zoom-in-95 duration-200 transition-all",
+          "fixed top-0 left-0 bottom-0 z-40 bg-slate-950/95 backdrop-blur-xl p-3 sm:p-6 flex flex-col justify-between animate-in fade-in zoom-in-95 duration-200 transition-all",
           isChatOpen ? "right-64 sm:right-72 md:right-80" : "right-0"
         )}
       >
@@ -230,7 +231,7 @@ export default function LiveKitStream({
               (isTeacher ? isCameraOn : hasRemoteVideo) ? "opacity-100" : "opacity-0 pointer-events-none"
             )}
           />
-          <div className="flex items-center justify-between z-10">
+          <div className="flex items-center justify-between z-10 gap-2">
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-800 text-xs font-semibold text-slate-200 backdrop-blur-md shadow-md">
                 <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
@@ -243,6 +244,14 @@ export default function LiveKitStream({
                 </span>
               )}
             </div>
+
+            {/* Screen Recorder Options when Top Toolbar is Hidden */}
+            {isTeacher && (
+              <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-1 backdrop-blur-md shadow-lg flex items-center">
+                <ScreenRecorderButton sessionId={roomId} role="teacher" />
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => setIsExpanded(false)}
