@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { Room, RoomEvent, Track, LocalTrackPublication, RemoteTrackPublication, RemoteParticipant } from "livekit-client";
-import { Mic, MicOff, Video as VideoIcon, VideoOff, Volume2, VolumeX, Radio, UserCheck, Maximize2, Minimize2 } from "lucide-react";
+import { Mic, MicOff, Video as VideoIcon, VideoOff, Volume2, VolumeX, Radio, UserCheck, Maximize2, Minimize2, MonitorUp, MonitorOff } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Socket } from "socket.io-client";
@@ -31,6 +31,7 @@ export default function LiveKitStream({
   const [room, setRoom] = useState<Room | null>(null);
   const [isMicOn, setIsMicOn] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isMutedByStudent, setIsMutedByStudent] = useState(false);
 
   // Toggle Audio Mute for Student (Student only)
@@ -94,6 +95,13 @@ export default function LiveKitStream({
         roomInstance.on(RoomEvent.LocalTrackPublished, (pub: LocalTrackPublication) => {
           if (pub.track && pub.track.kind === Track.Kind.Video && localVideoRef.current) {
             pub.track.attach(localVideoRef.current);
+          }
+        });
+
+        roomInstance.on(RoomEvent.LocalTrackUnpublished, (pub: LocalTrackPublication) => {
+          if (pub.source === Track.Source.ScreenShare) {
+            setIsScreenSharing(false);
+            toast.info("Screen sharing stopped");
           }
         });
 
@@ -182,6 +190,25 @@ export default function LiveKitStream({
     }
   };
 
+  // Toggle Screen Share (Teacher only)
+  const toggleScreenShare = async () => {
+    if (!room || !isTeacher) return;
+    try {
+      const nextState = !isScreenSharing;
+      await room.localParticipant.setScreenShareEnabled(nextState, { audio: true });
+      setIsScreenSharing(nextState);
+      if (nextState) {
+        toggleExpand(true);
+        toast.success("Screen sharing started");
+      } else {
+        toast.info("Screen sharing stopped");
+      }
+    } catch (err: unknown) {
+      console.error("[LiveKit ScreenShare Error]:", err);
+      toast.error("Could not start screen sharing");
+    }
+  };
+
   // Toggle expand state and sync to students via socket
   const toggleExpand = (nextState: boolean) => {
     setIsExpanded(nextState);
@@ -255,7 +282,7 @@ export default function LiveKitStream({
             muted={isTeacher}
             className={cn(
               "absolute inset-0 w-full h-full object-contain z-0 transition-opacity duration-300",
-              (isTeacher ? isCameraOn : hasRemoteVideo) ? "opacity-100" : "opacity-0 pointer-events-none"
+              (isTeacher ? (isCameraOn || isScreenSharing) : hasRemoteVideo) ? "opacity-100" : "opacity-0 pointer-events-none"
             )}
           />
           <div className="flex items-center justify-between z-10 gap-2">
@@ -264,10 +291,10 @@ export default function LiveKitStream({
                 <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
                 <span>{isTeacher ? "Teacher (You)" : `${teacherName}'s Stream`}</span>
               </div>
-              {((isTeacher && (isMicOn || isCameraOn)) || (!isTeacher && hasRemoteVideo)) && (
+              {((isTeacher && (isMicOn || isCameraOn || isScreenSharing)) || (!isTeacher && hasRemoteVideo)) && (
                 <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse backdrop-blur-md shadow-md">
                   <Radio className="h-3.5 w-3.5" />
-                  LIVE
+                  {isScreenSharing ? "SCREEN SHARE ACTIVE" : "LIVE"}
                 </span>
               )}
             </div>
@@ -338,6 +365,19 @@ export default function LiveKitStream({
                 >
                   {isCameraOn ? <VideoIcon className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
                   <span>{isCameraOn ? "Camera ON" : "Camera OFF"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleScreenShare}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs transition-all cursor-pointer",
+                    isScreenSharing
+                      ? "bg-purple-500/20 border-purple-500/50 text-purple-400 hover:bg-purple-500/30"
+                      : "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
+                  )}
+                >
+                  {isScreenSharing ? <MonitorOff className="w-4 h-4" /> : <MonitorUp className="w-4 h-4" />}
+                  <span>{isScreenSharing ? "Stop Share" : "Share Screen"}</span>
                 </button>
               </>
             ) : (
