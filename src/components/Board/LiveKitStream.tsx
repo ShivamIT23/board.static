@@ -13,6 +13,7 @@ interface LiveKitStreamProps {
   isTeacher: boolean;
   socketUrl: string;
   isCollapsed?: boolean;
+  isChatOpen?: boolean;
 }
 
 export default function LiveKitStream({
@@ -22,6 +23,7 @@ export default function LiveKitStream({
   isTeacher,
   socketUrl,
   isCollapsed = false,
+  isChatOpen = true,
 }: LiveKitStreamProps) {
   const [room, setRoom] = useState<Room | null>(null);
   const [isMicOn, setIsMicOn] = useState(false);
@@ -180,7 +182,12 @@ export default function LiveKitStream({
   // ─── FULLSCREEN / EXPANDED VIDEO VIEW (REPLACES WHITEBOARD) ───
   const renderExpandedView = () => {
     return (
-      <div className="fixed top-12 left-0 sm:left-14 right-0 bottom-0 z-40 bg-slate-950/95 backdrop-blur-xl p-3 sm:p-6 flex flex-col justify-between animate-in fade-in zoom-in-95 duration-200">
+      <div
+        className={cn(
+          "fixed top-12 left-0 bottom-0 z-40 bg-slate-950/95 backdrop-blur-xl p-3 sm:p-6 flex flex-col justify-between animate-in fade-in zoom-in-95 duration-200 transition-all",
+          isChatOpen ? "right-64 sm:right-72 md:right-80" : "right-0"
+        )}
+      >
         <div className="w-full flex-1 bg-slate-950 rounded-2xl border border-slate-800/90 shadow-2xl relative overflow-hidden flex flex-col justify-between p-4">
           <audio ref={audioRef} autoPlay />
           <video
