@@ -458,6 +458,7 @@ export default function ChatRoom({
                     isTeacher={role === "teacher"}
                     socketUrl={process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3005"}
                     isChatOpen={isOpen}
+                    socket={socket}
                 />
             </div>
 

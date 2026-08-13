@@ -5,7 +5,7 @@ import { Room, RoomEvent, Track, LocalTrackPublication, RemoteTrackPublication, 
 import { Mic, MicOff, Video as VideoIcon, VideoOff, Volume2, VolumeX, Radio, UserCheck, Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import ScreenRecorderButton from "./ScreenRecorderButton";
+import { Socket } from "socket.io-client";
 
 interface LiveKitStreamProps {
   roomId: string;
@@ -15,6 +15,7 @@ interface LiveKitStreamProps {
   socketUrl: string;
   isCollapsed?: boolean;
   isChatOpen?: boolean;
+  socket?: Socket | null;
 }
 
 export default function LiveKitStream({
@@ -25,11 +26,20 @@ export default function LiveKitStream({
   socketUrl,
   isCollapsed = false,
   isChatOpen = true,
+  socket = null,
 }: LiveKitStreamProps) {
   const [room, setRoom] = useState<Room | null>(null);
   const [isMicOn, setIsMicOn] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isMutedByStudent, setIsMutedByStudent] = useState(false);
+
+  // Toggle Audio Mute for Student (Student only)
+  const toggleStudentMute = () => {
+    if (audioRef.current) {
+      audioRef.current.muted = !isMutedByStudent;
+      setIsMutedByStudent(!isMutedByStudent);
+    }
+  };
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
   const [isTeacherAudioActive, setIsTeacherAudioActive] = useState(false);
   const [teacherName, setTeacherName] = useState<string>("Teacher");
@@ -172,13 +182,30 @@ export default function LiveKitStream({
     }
   };
 
-  // Toggle Audio Mute for Student (Student only)
-  const toggleStudentMute = () => {
-    if (audioRef.current) {
-      audioRef.current.muted = !isMutedByStudent;
-      setIsMutedByStudent(!isMutedByStudent);
+  // Toggle expand state and sync to students via socket
+  const toggleExpand = (nextState: boolean) => {
+    setIsExpanded(nextState);
+    if (isTeacher && socket) {
+      socket.emit("video_toggle_expand", {
+        roomId,
+        payload: { expanded: nextState },
+      });
     }
   };
+
+  // Sync video expand/minimize state from teacher to students
+  useEffect(() => {
+    if (!socket) return;
+    const handleExpandSync = (data: { payload?: { expanded?: boolean } }) => {
+      if (typeof data?.payload?.expanded === "boolean") {
+        setIsExpanded(data.payload.expanded);
+      }
+    };
+    socket.on("video_toggle_expand", handleExpandSync);
+    return () => {
+      socket.off("video_toggle_expand", handleExpandSync);
+    };
+  }, [socket]);
 
   // Re-attach video track whenever switching between sidebar and expanded view
   useEffect(() => {
@@ -215,7 +242,7 @@ export default function LiveKitStream({
     return (
       <div
         className={cn(
-          "fixed top-0 left-0 bottom-0 z-40 bg-slate-950/95 backdrop-blur-xl p-3 sm:p-6 flex flex-col justify-between animate-in fade-in zoom-in-95 duration-200 transition-all",
+          "fixed top-12 left-0 bottom-0 z-40 bg-slate-950/95 backdrop-blur-xl p-3 sm:p-6 flex flex-col justify-between animate-in fade-in zoom-in-95 duration-200 transition-all",
           isChatOpen ? "right-64 sm:right-72 md:right-80" : "right-0"
         )}
       >
@@ -245,16 +272,9 @@ export default function LiveKitStream({
               )}
             </div>
 
-            {/* Screen Recorder Options when Top Toolbar is Hidden */}
-            {isTeacher && (
-              <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-1 backdrop-blur-md shadow-lg flex items-center">
-                <ScreenRecorderButton sessionId={roomId} role="teacher" />
-              </div>
-            )}
-
             <button
               type="button"
-              onClick={() => setIsExpanded(false)}
+              onClick={() => toggleExpand(false)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 text-xs font-bold text-slate-200 hover:text-white hover:bg-slate-800 backdrop-blur-md shadow-xl transition-all cursor-pointer"
               title="Restore Whiteboard"
             >
@@ -332,7 +352,7 @@ export default function LiveKitStream({
             )}
             <button
               type="button"
-              onClick={() => setIsExpanded(false)}
+              onClick={() => toggleExpand(false)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold transition-all cursor-pointer"
             >
               <Minimize2 className="w-4 h-4" />
@@ -355,7 +375,7 @@ export default function LiveKitStream({
       <div className="p-1 bg-muted/20 border-b border-border shrink-0 w-full flex flex-col items-center">
         <audio ref={audioRef} autoPlay />
         <div
-          onClick={() => setIsExpanded(true)}
+          onClick={() => toggleExpand(true)}
           className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-slate-950 border border-slate-800 shadow-md relative overflow-hidden flex flex-col items-center justify-center cursor-pointer group"
           title="Click to Expand Video over Whiteboard"
         >
@@ -411,9 +431,10 @@ export default function LiveKitStream({
                   LIVE
                 </span>
               )}
+              {/* Fullscreen Video Button (Replaces Whiteboard) */}
               <button
                 type="button"
-                onClick={() => setIsExpanded(true)}
+                onClick={() => toggleExpand(true)}
                 className="p-1 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 backdrop-blur-md transition-all cursor-pointer"
                 title="Expand Video (Replace Whiteboard)"
               >
@@ -523,9 +544,10 @@ export default function LiveKitStream({
             >
               {isMutedByStudent ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
             </button>
+            {/* Fullscreen Video Button (Replaces Whiteboard) */}
             <button
               type="button"
-              onClick={() => setIsExpanded(true)}
+              onClick={() => toggleExpand(true)}
               className="p-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 backdrop-blur-md transition-all cursor-pointer"
               title="Expand Video (Replace Whiteboard)"
             >
