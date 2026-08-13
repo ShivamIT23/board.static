@@ -737,110 +737,25 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
                             )}
                             */}
                         </div>
-                        {/* Normal sidebar chat (hidden in fullscreen) */}
-                        {!isFullscreen && (
-                            <ChatRoom
-                                userCount={userCount}
-                                roomUsers={roomUsers}
-                                setRoomUsers={setRoomUsers}
-                                setUserCount={setUserCount}
-                                role={role}
-                                userName={userName}
-                                sessionId={sessionId}
-                                isOpen={isChatOpen}
-                                setIsOpen={setIsChatOpen}
-                                onOpenPoll={() => setIsPollOpen(true)}
-                                hasActivePoll={!!(poll && poll.isActive)}
-                                onOpenQuiz={() => setIsQuizOpen(true)}
-                                hasActiveQuiz={!!(currentQuiz && currentQuiz.isActive)}
-                                hasQuiz={!!hasQuiz}
-                            />
-                        )}
-
-                        {/* Fullscreen floating chat bubble + panel */}
-                        {isFullscreen && (
-                            <>
-                                {/* Floating Chat Panel */}
-                                {isFsChatOpen && (
-                                    <div className="fixed bottom-20 right-4 z-9999 w-80 sm:w-96 h-[70vh] max-h-[600px] rounded-2xl overflow-hidden shadow-2xl shadow-black/40 border border-border/60 animate-in slide-in-from-bottom-4 fade-in zoom-in-95 duration-300 flex flex-col bg-card backdrop-blur-xl">
-                                        {/* Panel Header */}
-                                        <div className="h-10 flex items-center justify-between px-4 bg-sidebar/90 backdrop-blur-md border-b border-border/50 shrink-0">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Live Chat</span>
-                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-bold">{userCount}</span>
-                                            </div>
-                                            <button
-                                                onClick={() => setIsFsChatOpen(false)}
-                                                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
-                                                title="Minimize chat"
-                                            >
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                    <polyline points="4 14 10 14 10 20" />
-                                                    <polyline points="20 10 14 10 14 4" />
-                                                    <line x1="14" y1="10" x2="21" y2="3" />
-                                                    <line x1="3" y1="21" x2="10" y2="14" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                        {/* Embedded ChatRoom */}
-                                        <div className="flex-1 min-h-0 flex flex-col">
-                                            <ChatRoom
-                                                userCount={userCount}
-                                                roomUsers={roomUsers}
-                                                setRoomUsers={setRoomUsers}
-                                                setUserCount={setUserCount}
-                                                role={role}
-                                                userName={userName}
-                                                sessionId={sessionId}
-                                                isOpen={true}
-                                                setIsOpen={() => setIsFsChatOpen(false)}
-                                                compact={true}
-                                                onOpenPoll={() => setIsPollOpen(true)}
-                                                hasActivePoll={!!(poll && poll.isActive)}
-                                                onOpenQuiz={() => setIsQuizOpen(true)}
-                                                hasActiveQuiz={!!(currentQuiz && currentQuiz.isActive)}
-                                                hasQuiz={!!hasQuiz}
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Floating Chat Bubble */}
-                                <button
-                                    onClick={() => setIsFsChatOpen(prev => !prev)}
-                                    className={cn(
-                                        "fixed bottom-4 right-4 z-9999 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl shadow-black/40 transition-all duration-300 active:scale-90 group",
-                                        isFsChatOpen
-                                            ? "bg-primary/90 text-primary-foreground scale-90 rotate-0"
-                                            : "bg-linear-to-br from-indigo-500 to-violet-600 text-white hover:scale-110 hover:shadow-indigo-500/40"
-                                    )}
-                                    title={isFsChatOpen ? "Close chat" : "Open chat"}
-                                >
-                                    {isFsChatOpen ? (
-                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                            <line x1="18" y1="6" x2="6" y2="18" />
-                                            <line x1="6" y1="6" x2="18" y2="18" />
-                                        </svg>
-                                    ) : (
-                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                                        </svg>
-                                    )}
-                                    {/* Unread Badge */}
-                                    {!isFsChatOpen && unreadCount > 0 && (
-                                        <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold shadow-lg animate-in zoom-in duration-200">
-                                            {unreadCount > 99 ? "99+" : unreadCount}
-                                        </span>
-                                    )}
-                                    {/* Pulse ring when unread */}
-                                    {!isFsChatOpen && unreadCount > 0 && (
-                                        <span className="absolute inset-0 rounded-full bg-indigo-500/30 animate-ping" />
-                                    )}
-                                </button>
-                            </>
-                        )}
+                        {/* Sidebar chat & video stream (always mounted) */}
+                        <ChatRoom
+                            userCount={userCount}
+                            roomUsers={roomUsers}
+                            setRoomUsers={setRoomUsers}
+                            setUserCount={setUserCount}
+                            role={role}
+                            userName={userName}
+                            sessionId={sessionId}
+                            isOpen={isChatOpen}
+                            setIsOpen={setIsChatOpen}
+                            onOpenPoll={() => setIsPollOpen(true)}
+                            hasActivePoll={!!(poll && poll.isActive)}
+                            onOpenQuiz={() => setIsQuizOpen(true)}
+                            hasActiveQuiz={!!(currentQuiz && currentQuiz.isActive)}
+                            hasQuiz={!!hasQuiz}
+                        />
                     </div>
+
 
                 </div>
 
