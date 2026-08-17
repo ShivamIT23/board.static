@@ -495,9 +495,9 @@ export default function ChatRoom({
             ) : (
                 /* Expanded Chatroom Content */
                 <>
-                    <div className="h-10 flex items-center justify-between px-3 border-b border-border shrink-0">
+                    <div className="h-10 flex items-center justify-between px-3 border-b border-border shrink-0 relative">
                         <span className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">Chat</span>
-                        <div className="flex items-center gap-2 relative">
+                        <div className="flex items-center gap-2">
                             <button
                                 ref={visitorsButtonRef}
                                 type="button"
@@ -605,60 +605,55 @@ export default function ChatRoom({
                                 <Minimize2 size={16} />
                             </button>
                         </div>
-                    </div>
 
-                    {role === "teacher" && showSettings && (
-                        <div
-                            ref={settingsRef}
-                            className="absolute top-[40px] left-0 right-0 z-50 bg-background/60 backdrop-blur-xl border-b border-border shadow-2xl animate-in slide-in-from-top-2 duration-300"
-                        >
-                            <div className="px-2 py-2 space-y-4">
-                        {/* <div className="flex items-center justify-between mb-1">
-                            <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/70">Room Controls</h3>
-                            <div className="h-px flex-1 bg-border/40 ml-3" />
-                        </div> */}
-
-                        <div className="flex items-center justify-between p-2 rounded-[2px] bg-muted/30 hover:bg-muted/50 transition-colors group">
-                            <div className="flex flex-col gap-0.5">
-                                <span className="text-[11px] font-bold text-foreground/90 group-hover:text-foreground transition-colors">Global Chat</span>
-                                <span className="text-[9px] text-muted-foreground leading-tight">Enable chat messaging for everyone</span>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => toggleSetting("chat")}
-                                className={cn(
-                                    "relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300",
-                                    roomSettings.chatEnabled
-                                        ? "bg-emerald-500/15 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.1)] hover:bg-emerald-500/20"
-                                        : "bg-rose-500/15 text-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.1)] hover:bg-rose-500/20"
-                                )}
+                        {role === "teacher" && showSettings && (
+                            <div
+                                ref={settingsRef}
+                                className="absolute top-full left-0 right-0 z-50 bg-background/95 backdrop-blur-xl border-b border-border shadow-2xl animate-in slide-in-from-top-2 duration-300"
                             >
-                                {roomSettings.chatEnabled ? <MessageCircle size={16} /> : <MessageSquareOff size={16} />}
-                            </button>
-                        </div>
+                                <div className="px-2 py-2 space-y-4">
+                                    <div className="flex items-center justify-between p-2 rounded-[2px] bg-muted/30 hover:bg-muted/50 transition-colors group">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-[11px] font-bold text-foreground/90 group-hover:text-foreground transition-colors">Global Chat</span>
+                                            <span className="text-[9px] text-muted-foreground leading-tight">Enable chat messaging for everyone</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleSetting("chat")}
+                                            className={cn(
+                                                "relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300",
+                                                roomSettings.chatEnabled
+                                                    ? "bg-emerald-500/15 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.1)] hover:bg-emerald-500/20"
+                                                    : "bg-rose-500/15 text-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.1)] hover:bg-rose-500/20"
+                                            )}
+                                        >
+                                            {roomSettings.chatEnabled ? <MessageCircle size={16} /> : <MessageSquareOff size={16} />}
+                                        </button>
+                                    </div>
 
-                        <div className="flex items-center justify-between p-2 rounded-[2px] bg-muted/30 hover:bg-muted/50 transition-colors group">
-                            <div className="flex flex-col gap-0.5">
-                                <span className="text-[11px] font-bold text-foreground/90 group-hover:text-foreground transition-colors">File Sharing</span>
-                                <span className="text-[9px] text-muted-foreground leading-tight">Allow attachments and screenshots</span>
+                                    <div className="flex items-center justify-between p-2 rounded-[2px] bg-muted/30 hover:bg-muted/50 transition-colors group">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-[11px] font-bold text-foreground/90 group-hover:text-foreground transition-colors">File Sharing</span>
+                                            <span className="text-[9px] text-muted-foreground leading-tight">Allow attachments and screenshots</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleSetting("attachments")}
+                                            disabled={!roomSettings.chatEnabled}
+                                            className={cn(
+                                                "relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 disabled:opacity-30",
+                                                roomSettings.attachmentsEnabled
+                                                    ? "bg-indigo-500/15 text-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.1)] hover:bg-indigo-500/20"
+                                                    : "bg-zinc-500/15 text-zinc-500 hover:bg-zinc-500/20"
+                                            )}
+                                        >
+                                            {roomSettings.attachmentsEnabled ? <FileIcon size={16} /> : <FileX size={16} />}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => toggleSetting("attachments")}
-                                disabled={!roomSettings.chatEnabled}
-                                className={cn(
-                                    "relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 disabled:opacity-30",
-                                    roomSettings.attachmentsEnabled
-                                        ? "bg-indigo-500/15 text-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.1)] hover:bg-indigo-500/20"
-                                        : "bg-zinc-500/15 text-zinc-500 hover:bg-zinc-500/20"
-                                )}
-                            >
-                                {roomSettings.attachmentsEnabled ? <FileIcon size={16} /> : <FileX size={16} />}
-                            </button>
-                        </div>
+                        )}
                     </div>
-                </div>
-            )}
 
             <MessageList
                 role={role}
