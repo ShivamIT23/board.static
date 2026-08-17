@@ -143,20 +143,6 @@
 }
 
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --sidebar: #0A0E14;
-    --header: #111620;
-    --header-button: #191923;
-    --secondary-bg: #1e3a8a;
-    --footer: #3b1e5c;
-    --text-heading: #6366F1;
-    --text-subheading: #9CA3AF;
-    --text-body: #E5E7EB;
-    --text-muted: #9CA3AF;
-  }
-}
-
 .dark {
   color-scheme: dark;
   --background: oklch(0.145 0 0);
