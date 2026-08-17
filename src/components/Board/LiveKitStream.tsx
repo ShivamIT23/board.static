@@ -269,11 +269,11 @@ export default function LiveKitStream({
     return (
       <div
         className={cn(
-          "fixed top-12 left-0 bottom-0 z-40 bg-slate-950/95 backdrop-blur-xl p-3 sm:p-6 flex flex-col justify-between animate-in fade-in zoom-in-95 duration-200 transition-all",
+          "fixed top-12 left-0 bottom-0 z-40 bg-slate-100/95 dark:bg-slate-950/95 backdrop-blur-xl p-3 sm:p-6 flex flex-col justify-between animate-in fade-in zoom-in-95 duration-200 transition-all",
           isChatOpen ? "right-64 sm:right-72 md:right-80" : "right-0"
         )}
       >
-        <div className="w-full flex-1 bg-slate-950 rounded-2xl border border-slate-800/90 shadow-2xl relative overflow-hidden flex flex-col justify-between p-4">
+        <div className="w-full flex-1 bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800/90 shadow-2xl relative overflow-hidden flex flex-col justify-between p-4">
           <audio ref={audioRef} autoPlay />
           <video
             ref={isTeacher ? localVideoRef : remoteVideoRef}
@@ -287,12 +287,12 @@ export default function LiveKitStream({
           />
           <div className="flex items-center justify-between z-10 gap-2">
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-800 text-xs font-semibold text-slate-200 backdrop-blur-md shadow-md">
-                <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 backdrop-blur-md shadow-md">
+                <UserCheck className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
                 <span>{isTeacher ? "Teacher (You)" : `${teacherName}'s Stream`}</span>
               </div>
               {((isTeacher && (isMicOn || isCameraOn || isScreenSharing)) || (!isTeacher && hasRemoteVideo)) && (
-                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse backdrop-blur-md shadow-md">
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-red-500/20 text-red-500 dark:text-red-400 border border-red-500/40 animate-pulse backdrop-blur-md shadow-md">
                   <Radio className="h-3.5 w-3.5" />
                   {isScreenSharing ? "SCREEN SHARE ACTIVE" : "LIVE"}
                 </span>
@@ -302,10 +302,10 @@ export default function LiveKitStream({
             <button
               type="button"
               onClick={() => toggleExpand(false)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 text-xs font-bold text-slate-200 hover:text-white hover:bg-slate-800 backdrop-blur-md shadow-xl transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 backdrop-blur-md shadow-xl transition-all cursor-pointer"
               title="Restore Whiteboard"
             >
-              <Minimize2 className="w-4 h-4 text-emerald-400" />
+              <Minimize2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
               <span>Restore Whiteboard</span>
             </button>
           </div>
@@ -316,28 +316,28 @@ export default function LiveKitStream({
                   className={cn(
                     "p-4 rounded-2xl border flex items-center justify-center transition-colors shadow-2xl",
                     (isTeacher ? isMicOn : isTeacherAudioActive)
-                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                      : "bg-slate-900/90 border-slate-800 text-slate-500"
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500 dark:text-emerald-400"
+                      : "bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500"
                   )}
                 >
                   {(isTeacher ? isMicOn : isTeacherAudioActive) ? (
-                    <Mic className="w-8 h-8 text-emerald-400 animate-pulse" />
+                    <Mic className="w-8 h-8 text-emerald-500 dark:text-emerald-400 animate-pulse" />
                   ) : (
-                    <MicOff className="w-8 h-8 text-slate-500" />
+                    <MicOff className="w-8 h-8 text-slate-400 dark:text-slate-500" />
                   )}
                 </div>
-                <div className="p-4 rounded-2xl border bg-slate-900/90 border-slate-800 text-slate-500 flex items-center justify-center shadow-2xl">
+                <div className="p-4 rounded-2xl border bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 flex items-center justify-center shadow-2xl">
                   <VideoOff className="w-8 h-8" />
                 </div>
               </div>
-              <p className="text-sm font-bold text-slate-300 tracking-wide">
-                Audio: <span className={(isTeacher ? isMicOn : isTeacherAudioActive) ? "text-emerald-400" : "text-slate-500"}>{(isTeacher ? isMicOn : isTeacherAudioActive) ? "ON" : "OFF"}</span>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 tracking-wide">
+                Audio: <span className={(isTeacher ? isMicOn : isTeacherAudioActive) ? "text-emerald-500 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500"}>{(isTeacher ? isMicOn : isTeacherAudioActive) ? "ON" : "OFF"}</span>
                 {" • "}
-                Video: <span className="text-slate-500">OFF</span>
+                Video: <span className="text-slate-400 dark:text-slate-500">OFF</span>
               </p>
             </div>
           )}
-          <div className="flex items-center justify-center gap-4 z-10 mt-auto bg-slate-950/90 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-800 mx-auto shadow-2xl">
+          <div className="flex items-center justify-center gap-4 z-10 mt-auto bg-white/90 dark:bg-slate-950/90 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 mx-auto shadow-2xl">
             {isTeacher ? (
               <>
                 <button
@@ -346,8 +346,8 @@ export default function LiveKitStream({
                   className={cn(
                     "flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs transition-all cursor-pointer",
                     isMicOn
-                      ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30"
-                      : "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
+                      ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/30"
+                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
                   )}
                 >
                   {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
@@ -359,8 +359,8 @@ export default function LiveKitStream({
                   className={cn(
                     "flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs transition-all cursor-pointer",
                     isCameraOn
-                      ? "bg-blue-500/20 border-blue-500/50 text-blue-400 hover:bg-blue-500/30"
-                      : "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
+                      ? "bg-blue-500/20 border-blue-500/50 text-blue-600 dark:text-blue-400 hover:bg-blue-500/30"
+                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
                   )}
                 >
                   {isCameraOn ? <VideoIcon className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
@@ -372,8 +372,8 @@ export default function LiveKitStream({
                   className={cn(
                     "flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs transition-all cursor-pointer",
                     isScreenSharing
-                      ? "bg-purple-500/20 border-purple-500/50 text-purple-400 hover:bg-purple-500/30"
-                      : "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
+                      ? "bg-purple-500/20 border-purple-500/50 text-purple-600 dark:text-purple-400 hover:bg-purple-500/30"
+                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
                   )}
                 >
                   {isScreenSharing ? <MonitorOff className="w-4 h-4" /> : <MonitorUp className="w-4 h-4" />}
@@ -446,7 +446,7 @@ export default function LiveKitStream({
   if (isTeacher) {
     return (
       <div className="p-2.5 bg-muted/20 border-b border-border shrink-0">
-        <div className="w-full aspect-video bg-slate-950 rounded-xl border border-slate-800/90 shadow-md relative overflow-hidden flex flex-col justify-between p-3">
+        <div className="w-full aspect-video bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800/90 shadow-md relative overflow-hidden flex flex-col justify-between p-3">
           <video
             ref={localVideoRef}
             autoPlay
@@ -459,14 +459,14 @@ export default function LiveKitStream({
           />
 
           <div className="flex items-center justify-between z-10">
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900/80 border border-slate-800 text-[11px] font-semibold text-slate-300 backdrop-blur-md shadow-sm">
-              <UserCheck className="w-3 h-3 text-emerald-400" />
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-700 dark:text-slate-300 backdrop-blur-md shadow-sm">
+              <UserCheck className="w-3 h-3 text-emerald-500 dark:text-emerald-400" />
               <span>Teacher (You)</span>
             </div>
 
             <div className="flex items-center gap-1.5">
               {(isMicOn || isCameraOn) && (
-                <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse backdrop-blur-md shadow-sm">
+                <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-red-500/20 text-red-500 dark:text-red-400 border border-red-500/40 animate-pulse backdrop-blur-md shadow-sm">
                   <Radio className="h-3 w-3" />
                   LIVE
                 </span>
@@ -475,10 +475,10 @@ export default function LiveKitStream({
               <button
                 type="button"
                 onClick={() => toggleExpand(true)}
-                className="p-1 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 backdrop-blur-md transition-all cursor-pointer"
+                className="p-1 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white backdrop-blur-md transition-all cursor-pointer"
                 title="Expand Video (Replace Whiteboard)"
               >
-                <Maximize2 className="w-3.5 h-3.5 text-slate-300" />
+                <Maximize2 className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -553,7 +553,7 @@ export default function LiveKitStream({
   // ─── STUDENT EXPANDED VIEW ───
   return (
     <div className="p-2.5 bg-muted/20 border-b border-border shrink-0">
-      <div className="w-full aspect-video bg-slate-950 rounded-xl border border-slate-800/90 shadow-md relative overflow-hidden flex flex-col justify-between p-3">
+      <div className="w-full aspect-video bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800/90 shadow-md relative overflow-hidden flex flex-col justify-between p-3">
         <audio ref={audioRef} autoPlay />
         <video
           ref={remoteVideoRef}
@@ -565,13 +565,13 @@ export default function LiveKitStream({
           )}
         />
         <div className="flex items-center justify-between z-10">
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900/80 border border-slate-800 text-[11px] font-semibold text-slate-300 backdrop-blur-md shadow-sm">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-700 dark:text-slate-300 backdrop-blur-md shadow-sm">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>{teacherName}&apos;s Stream</span>
           </div>
           <div className="flex items-center gap-1.5">
             {hasRemoteVideo && (
-              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse backdrop-blur-md shadow-sm">
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-red-500/20 text-red-500 dark:text-red-400 border border-red-500/40 animate-pulse backdrop-blur-md shadow-sm">
                 <Radio className="h-3 w-3" />
                 LIVE
               </span>
@@ -579,7 +579,7 @@ export default function LiveKitStream({
             <button
               type="button"
               onClick={toggleStudentMute}
-              className="p-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white backdrop-blur-md transition-colors cursor-pointer"
               title={isMutedByStudent ? "Unmute Teacher Audio" : "Mute Teacher Audio"}
             >
               {isMutedByStudent ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
@@ -588,10 +588,10 @@ export default function LiveKitStream({
             <button
               type="button"
               onClick={() => toggleExpand(true)}
-              className="p-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 backdrop-blur-md transition-all cursor-pointer"
+              className="p-1.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white backdrop-blur-md transition-all cursor-pointer"
               title="Expand Video (Replace Whiteboard)"
             >
-              <Maximize2 className="w-4 h-4 text-slate-300" />
+              <Maximize2 className="w-4 h-4" />
             </button>
           </div>
         </div>
