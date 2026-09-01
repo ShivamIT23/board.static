@@ -42,6 +42,7 @@ export const accounts = mysqlTable('tb_accounts', {
   userId: varchar('user_id', { length: 255 }).notNull().references(() => users.id),
   accountId: varchar('account_id', { length: 255 }).notNull(),
   providerId: varchar('provider_id', { length: 255 }).notNull(),
+  issuer: varchar("issuer", { length: 255 }),
   accessToken: text('access_token'),
   refreshToken: text('refresh_token'),
   idToken: text('id_token'),
@@ -62,18 +63,30 @@ export const verifications = mysqlTable('tb_verifications', {
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
 });
 
-export const admins = mysqlTable('tb_admins',{
+export const roles = mysqlTable('tb_roles', {
+  id: int('id').primaryKey().autoincrement(),
+  name: varchar('name', { length: 100 }).notNull().unique(),
+  description: varchar('description', { length: 255 }),
+  permissions: text('permissions'), // JSON string array of permission keys
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+});
+
+export const admins = mysqlTable('tb_admins', {
   id: int('id').primaryKey().autoincrement(),
   name: varchar('name', { length: 255 }).notNull(),
   email: varchar('email', { length: 255 }).notNull().unique(),
   password: varchar('password', { length: 255 }).notNull(),
   contact: varchar('contact', { length: 20 }),
   apiKey: varchar('api_key', { length: 255 }),
+  roleId: int('role_id'),
+  role: varchar('role', { length: 50 }).default('admin'),
+  permissions: text('permissions'), // Custom permission overrides (JSON)
   status: tinyint('status').default(1),
   hide: tinyint('hide').default(0),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
-})
+});
 
 export const packages = mysqlTable('tb_packages',{
   id: int('id').primaryKey().autoincrement(),
@@ -124,6 +137,16 @@ export const packageFeatures = mysqlTable('tb_package_features', {
   value: varchar('value', { length: 255 }), // flexible
 });
 
+export const userFeatures = mysqlTable('tb_user_features', {
+  id: int('id').primaryKey().autoincrement(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
+  featureId: int('feature_id').notNull(),
+  value: varchar('value', { length: 255 }), // "true"/"false", numeric, text
+  isOverride: tinyint('is_override').default(0).notNull(), // 1 = admin manually set, skip cascade
+  sourcePackageId: int('source_package_id'), // which plan this was synced from (NULL for custom)
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+});
+
 export const students = mysqlTable('tb_students', {
   id: int('id').primaryKey().autoincrement(),
 
@@ -162,6 +185,8 @@ export const userPackages = mysqlTable('tb_user_packages', {
 
   paymentStatus: mysqlEnum("payment_status", ["paid", "unpaid"]).default('unpaid'),
   // 0 = unpaid, 1 = paid
+
+  isCustom: tinyint('is_custom').default(0).notNull(), // 1 = custom package, no plan cascade
 
   createdAt: timestamp('created_at').defaultNow(),
 });
@@ -220,6 +245,15 @@ export const classes = mysqlTable('tb_classes', {
   isAutoApprove: tinyint('is_auto_approve').default(1),
   maxStudents: int('max_students').default(10),
   hasQuiz: tinyint('has_quiz').default(0),
+
+  // In-Class Advanced Access Options
+  allowAudio: tinyint('allow_audio').default(1),
+  allowVideo: tinyint('allow_video').default(1),
+  allowRecording: tinyint('allow_recording').default(1),
+  allowPolls: tinyint('allow_polls').default(1),
+  allowQuiz: tinyint('allow_quiz').default(1),
+  allowChats: tinyint('allow_chats').default(1),
+  allowScreenSharing: tinyint('allow_screen_sharing').default(1),
 });
 
 export const notifications = mysqlTable('tb_notifications', {
@@ -239,6 +273,17 @@ export const userPackagesRelations = relations(userPackages, ({ one }) => ({
   package: one(packages, {
     fields: [userPackages.packageId],
     references: [packages.id],
+  }),
+}));
+
+export const userFeaturesRelations = relations(userFeatures, ({ one }) => ({
+  user: one(users, {
+    fields: [userFeatures.userId],
+    references: [users.id],
+  }),
+  feature: one(features, {
+    fields: [userFeatures.featureId],
+    references: [features.id],
   }),
 }));
 
@@ -263,6 +308,7 @@ export const support = mysqlTable('tb_support', {
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
   status: mysqlEnum("status", ["open", "processing", "closed"]).default('open'), 
   priority: mysqlEnum('priority', ['low', 'medium', 'high']).default('medium'),
+  type : mysqlEnum('type', ['support', 'sales', 'technical']).default('support'),
 });
 
 export const supportChats = mysqlTable('tb_support_chats', {
@@ -466,7 +512,19 @@ export const recordings = mysqlTable('tb_recordings', {
   fileName: varchar('file_name', { length: 255 }).notNull(),
   filePath: varchar('file_path', { length: 255 }).notNull(),
   downloadUrl: varchar('download_url', { length: 500 }).notNull(),
+  recordingSizeInMB: varchar('recording_size_in_mb', { length: 125 }),
   status: varchar('status', { length: 50 }).default('completed').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+});
+
+export const siteSettings = mysqlTable('tb_site_settings', {
+  id: int('id').primaryKey().autoincrement(),
+  settingKey: varchar('setting_key', { length: 100 }).default('default').notNull().unique(),
+  whatsappNumber: varchar('whatsapp_number', { length: 50 }).default('+91-7503663732').notNull(),
+  supportEmail: varchar('support_email', { length: 255 }).default('digital@tutorarc.com').notNull(),
+  marqueeText: text('marquee_text'),
+  contactPhone: varchar('contact_phone', { length: 50 }).default('+91-7503663732').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
 });

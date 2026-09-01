@@ -2,9 +2,10 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Video, Square, Loader2, Download, ChevronDown, Gauge, Wifi, Monitor, Cpu } from "lucide-react";
+import { Video, Square, Loader2, CheckCircle2, ChevronDown, Gauge, Wifi, Monitor, Cpu } from "lucide-react";
 import { toast } from "sonner";
-import { saveRecordingAction } from "@/app/actions/recording";
+import { saveRecordingAction, getRecordingsAction } from "@/app/actions/recording";
+import { cn } from "@/lib/utils";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_RECORDER_API_URL ||
@@ -14,6 +15,15 @@ const CHUNK_INTERVAL_MS = 10000; // 10s per chunk
 
 type RecordingPhase = "idle" | "recording" | "merging" | "done" | "error";
 type ResolutionKey = "auto" | "360p" | "480p" | "720p" | "1080p";
+
+interface RecordedSegment {
+  id: string;
+  partNumber: number;
+  durationSeconds: number;
+  status: string;
+  createdAt: string;
+  sizeMB?: string;
+}
 
 // ─── Resolution Presets ─────────────────────────────────────────────
 interface ResolutionPreset {
@@ -128,6 +138,66 @@ export default function ScreenRecorderButton({
   const [chunkCount, setChunkCount] = useState(0);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const elapsedSecondsRef = useRef(0);
+
+  useEffect(() => {
+    elapsedSecondsRef.current = elapsedSeconds;
+  }, [elapsedSeconds]);
+
+  // Multi-part recordings state
+  const [recordedSegments, setRecordedSegments] = useState<RecordedSegment[]>([]);
+  const [showRecsDropdown, setShowRecsDropdown] = useState(false);
+  const [recsDropdownPos, setRecsDropdownPos] = useState({ top: 0, left: 0 });
+  const recsTriggerRef = useRef<HTMLButtonElement>(null);
+  const recsMenuRef = useRef<HTMLDivElement>(null);
+
+  const toggleRecsDropdown = () => {
+    if (!showRecsDropdown && recsTriggerRef.current) {
+      const rect = recsTriggerRef.current.getBoundingClientRect();
+      setRecsDropdownPos({
+        top: rect.bottom + 4,
+        left: Math.max(8, rect.left - 40),
+      });
+    }
+    setShowRecsDropdown((prev) => !prev);
+  };
+
+  // Load existing recordings for this sessionId on mount
+  useEffect(() => {
+    if (!sessionId) return;
+    async function fetchSessionRecordings() {
+      const res = await getRecordingsAction(sessionId!);
+      if (res.success && res.recordings.length > 0) {
+        setRecordedSegments(
+          res.recordings.map((r, idx) => ({
+            id: r.id,
+            partNumber: idx + 1,
+            durationSeconds: (r.chunkCount && r.chunkCount > 0) ? r.chunkCount * 10 : 60,
+            status: r.status,
+            createdAt: new Date(r.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            sizeMB: r.recordingSizeInMB,
+          }))
+        );
+      }
+    }
+    fetchSessionRecordings();
+  }, [sessionId]);
+
+  // Close recordings dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        recsTriggerRef.current &&
+        !recsTriggerRef.current.contains(e.target as Node) &&
+        recsMenuRef.current &&
+        !recsMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowRecsDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   // Resolution state
   const [selectedResolution, setSelectedResolution] = useState<ResolutionKey>("auto");
@@ -395,6 +465,18 @@ export default function ScreenRecorderButton({
       setDownloadUrl(finalVideoUrl);
       setPhase("done");
 
+      // Append completed recording segment to recordedSegments
+      const segmentDuration = Math.max(1, elapsedSecondsRef.current);
+      setRecordedSegments((prev) => [
+        ...prev,
+        {
+          id: `rec_${Date.now()}`,
+          partNumber: prev.length + 1,
+          durationSeconds: segmentDuration,
+          status: "processing",
+          createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        },
+      ]);
 
       // Optimistic save: store predicted URL with status "processing"
       const activeSessionId = sessionId || sessionIdRef.current;
@@ -544,6 +626,8 @@ export default function ScreenRecorderButton({
 
   if (role !== "teacher") return null;
 
+  const totalRecordedSeconds = recordedSegments.reduce((sum, item) => sum + item.durationSeconds, 0);
+
   // Resolution display label
   const resLabel = selectedResolution === "auto"
     ? `Auto (${autoDetectedRes ?? "720p"})`
@@ -642,19 +726,66 @@ export default function ScreenRecorderButton({
         </div>
       )}
 
-      {/* ─── Download Button (visible when done) ─── */}
-      {phase === "done" && downloadUrl && (
-        <a
-          href={downloadUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          download
-          className="flex items-center gap-1 px-1.5 h-6 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-all text-[10px] font-bold shadow-sm"
-          title="Download Recording"
-        >
-          <Download size={12} />
-          <span className="hidden md:inline">Download</span>
-        </a>
+      {/* ─── Session Recordings Dropdown (visible when 1 or more recordings exist) ─── */}
+      {recordedSegments.length > 0 && (
+        <div className="relative">
+          <button
+            ref={recsTriggerRef}
+            type="button"
+            onClick={toggleRecsDropdown}
+            className="flex items-center gap-1.5 px-2 h-6 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all text-[10px] font-bold shadow-xs cursor-pointer"
+            title="Click to view all recordings in this session"
+          >
+            <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
+            <span>
+              {recordedSegments.length} {recordedSegments.length === 1 ? "Recording" : "Recordings"} ({formatTimer(totalRecordedSeconds)})
+            </span>
+            <ChevronDown size={10} className={cn("transition-transform duration-200", showRecsDropdown && "rotate-180")} />
+          </button>
+
+          {showRecsDropdown && createPortal(
+            <div
+              ref={recsMenuRef}
+              className="fixed z-[9999] w-64 p-2 rounded-[5px] bg-white dark:bg-slate-950 border border-border shadow-2xl animate-in fade-in slide-in-from-top-1 duration-150"
+              style={{ top: recsDropdownPos.top, left: recsDropdownPos.left }}
+            >
+              <div className="px-2 py-1.5 border-b border-border/50 mb-1 flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+                  Session Recordings
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                  Total: {formatTimer(totalRecordedSeconds)}
+                </span>
+              </div>
+
+              <div className="space-y-1 max-h-56 overflow-y-auto pr-0.5">
+                {recordedSegments.map((rec, idx) => (
+                  <div
+                    key={rec.id || idx}
+                    className="flex items-center justify-between p-2 rounded-[4px] bg-muted/40 hover:bg-muted/70 transition-colors border border-border/40"
+                  >
+                    <div className="flex flex-col min-w-0 pr-2">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
+                        <span className="text-xs font-bold text-foreground truncate">
+                          Part {rec.partNumber || idx + 1}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5 ml-4">
+                        <span>{rec.createdAt}</span>
+                        {rec.sizeMB && <span>• {rec.sizeMB} MB</span>}
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shrink-0">
+                      {formatTimer(rec.durationSeconds)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>,
+            document.body
+          )}
+        </div>
       )}
 
       {/* ─── Record Button (visible when idle or done) ─── */}
@@ -690,7 +821,7 @@ export default function ScreenRecorderButton({
       {phase === "merging" && (
         <div className="flex items-center gap-1 px-1.5 h-6 rounded border border-amber-500/30 bg-amber-500/10 text-amber-500 text-[10px] font-bold">
           <Loader2 size={12} className="animate-spin" />
-          <span className="hidden md:inline">Merging...</span>
+          <span className="hidden md:inline">Saving...</span>
         </div>
       )}
 

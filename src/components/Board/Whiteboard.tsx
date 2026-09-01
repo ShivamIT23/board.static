@@ -502,27 +502,46 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     return new Path(d, { ...common, fill: stroke })
                 }
                 case "line": {
-                    // Use Path instead of Line to avoid Fabric.js bounding-box issues with negative coords
                     const dirX = (data as ShapePayload & { dragDirX?: number }).dragDirX ?? 1
                     const dirY = (data as ShapePayload & { dragDirY?: number }).dragDirY ?? 1
-                    const x1 = dirX >= 0 ? 0 : w
-                    const y1 = dirY >= 0 ? 0 : h
-                    const x2 = dirX >= 0 ? w : 0
-                    const y2 = dirY >= 0 ? h : 0
-                    return new Path(`M ${x1} ${y1} L ${x2} ${y2}`, { ...common, fill: "transparent" })
+                    const p1X = dirX >= 0 ? left : left + w
+                    const p1Y = dirY >= 0 ? top : top + h
+                    const p2X = dirX >= 0 ? left + w : left
+                    const p2Y = dirY >= 0 ? top + h : top
+                    return new Line([p1X, p1Y, p2X, p2Y], {
+                        stroke,
+                        strokeWidth,
+                        strokeLineCap: "round",
+                        strokeLineJoin: "round",
+                        selectable: true,
+                        evented: true,
+                    })
                 }
                 case "arrow": {
-                    // Arrow = line with filled arrowhead for sharp tip
-                    const angle = Math.atan2(h, w)
-                    const headLen = Math.max(12, strokeWidth * 0.3)
-                    const x2 = w, y2 = h
-                    const xTip1 = x2 - headLen * Math.cos(angle - Math.PI / 8)
-                    const yTip1 = y2 - headLen * Math.sin(angle - Math.PI / 8)
-                    const xTip2 = x2 - headLen * Math.cos(angle + Math.PI / 8)
-                    const yTip2 = y2 - headLen * Math.sin(angle + Math.PI / 8)
+                    const dirX = (data as ShapePayload & { dragDirX?: number }).dragDirX ?? 1
+                    const dirY = (data as ShapePayload & { dragDirY?: number }).dragDirY ?? 1
+                    const p1X = dirX >= 0 ? left : left + w
+                    const p1Y = dirY >= 0 ? top : top + h
+                    const p2X = dirX >= 0 ? left + w : left
+                    const p2Y = dirY >= 0 ? top + h : top
 
-                    const d = `M 0 0 L ${x2} ${y2} M ${x2} ${y2} L ${xTip1} ${yTip1} L ${xTip2} ${yTip2} Z`
-                    return new Path(d, { ...common, fill: stroke })
+                    const angle = Math.atan2(p2Y - p1Y, p2X - p1X)
+                    const headLen = Math.max(14, strokeWidth * 2.5)
+                    const xTip1 = p2X - headLen * Math.cos(angle - Math.PI / 7)
+                    const yTip1 = p2Y - headLen * Math.sin(angle - Math.PI / 7)
+                    const xTip2 = p2X - headLen * Math.cos(angle + Math.PI / 7)
+                    const yTip2 = p2Y - headLen * Math.sin(angle + Math.PI / 7)
+
+                    const d = `M ${p1X} ${p1Y} L ${p2X} ${p2Y} M ${p2X} ${p2Y} L ${xTip1} ${yTip1} L ${xTip2} ${yTip2} Z`
+                    return new Path(d, {
+                        stroke,
+                        strokeWidth,
+                        fill: stroke,
+                        strokeLineCap: "round",
+                        strokeLineJoin: "round",
+                        selectable: true,
+                        evented: true,
+                    })
                 }
                 default:
                     if (data.shapeType.startsWith("graph-plain") || data.shapeType.startsWith("graph-labeled")) {
@@ -924,8 +943,8 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     stroke,
                     strokeWidthRatio: brushSizeRef.current / canvas.width,
                 }
-                // Pass drag direction for line tool so Path knows start/end corners
-                if (shapeType === "line") {
+                // Pass drag direction for line and arrow tools
+                if (shapeType === "line" || shapeType === "arrow") {
                     previewData.dragDirX = w >= 0 ? 1 : -1
                     previewData.dragDirY = h >= 0 ? 1 : -1
                 }
@@ -1080,7 +1099,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                     page: currentPageRef.current,
                     timestamp: Date.now(),
                 }
-                if (shapeType === "line") {
+                if (shapeType === "line" || shapeType === "arrow") {
                     shapePayload.dragDirX = w >= 0 ? 1 : -1
                     shapePayload.dragDirY = h >= 0 ? 1 : -1
                 }

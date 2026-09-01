@@ -5,7 +5,27 @@ import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "ne
 if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
   const orig = console.error;
   console.error = (...args: unknown[]) => {
-    if (typeof args[0] === "string" && args[0].includes("Encountered a script tag")) return;
+    const text = args
+      .map((a) => {
+        if (typeof a === "string") return a;
+        if (a && typeof a === "object") {
+          try {
+            return JSON.stringify(a);
+          } catch {
+            return "";
+          }
+        }
+        return "";
+      })
+      .join(" ");
+
+    if (
+      text.includes("Encountered a script tag") ||
+      text.includes("Unknown DataChannel error") ||
+      text.includes("DataChannel error on")
+    ) {
+      return;
+    }
     orig.apply(console, args);
   };
 }

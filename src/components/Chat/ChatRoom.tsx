@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react"
-import { MessageCircle, Minimize2, User2, Settings, MessageSquareOff, File as FileIcon, FileX, BarChart2, Video } from "lucide-react"
+import { MessageCircle, Minimize2, User2, Settings, MessageSquareOff, File as FileIcon, FileX, BarChart2, Video, Lock, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSocket } from "../providers/socket-provider"
 import { getHistoricalChats } from "@/app/actions/auth"
@@ -31,6 +31,15 @@ interface ChatRoomProps {
     onOpenQuiz?: () => void
     hasActiveQuiz?: boolean
     hasQuiz?: boolean
+    allowAudio?: boolean
+    allowVideo?: boolean
+    allowRecording?: boolean
+    allowPolls?: boolean
+    allowQuiz?: boolean
+    allowChats?: boolean
+    allowScreenSharing?: boolean
+    onExpandChange?: (expanded: boolean) => void
+    isMobile?: boolean
 }
 
 export default function ChatRoom({
@@ -47,7 +56,16 @@ export default function ChatRoom({
     onOpenPoll,
     hasActivePoll,
     onOpenQuiz,
-    hasActiveQuiz
+    hasActiveQuiz,
+    allowAudio = true,
+    allowVideo = true,
+    allowRecording = true,
+    allowPolls = true,
+    allowQuiz = true,
+    allowChats = true,
+    allowScreenSharing = true,
+    onExpandChange,
+    isMobile = false,
 }: ChatRoomProps) {
     const { socket } = useSocket()
     const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -80,6 +98,8 @@ export default function ChatRoom({
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [showScrollButton, setShowScrollButton] = useState(false)
     const [isAtBottom, setIsAtBottom] = useState(true)
+
+    const [isVideoExpanded, setIsVideoExpanded] = useState(false)
 
     // Socket listeners
     useEffect(() => {
@@ -444,37 +464,72 @@ export default function ChatRoom({
         )
     }
 
+    // ─── MOBILE: Don't render if not open ───
+    if (isMobile && !isOpen) return null;
+
     return (
-        <aside className={cn(
-            "flex flex-col bg-card border-l border-border transition-all duration-300 z-30 shrink-0 h-full relative overflow-hidden",
-            isOpen ? "w-64 sm:w-72 md:w-80" : "w-12 items-center"
-        )}>
-            {/* Top Video Header Box - ALWAYS MOUNTED so LiveKit WebRTC audio & video never disconnects */}
-            <div className={cn("w-full transition-all duration-300 shrink-0", !isOpen && "hidden")}>
-                <LiveKitStream
-                    roomId={sessionId}
-                    userId={userName || "user"}
-                    userName={userName || "User"}
-                    isTeacher={role === "teacher"}
-                    socketUrl={process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3005"}
-                    isChatOpen={isOpen}
-                    socket={socket}
+        <>
+            {/* Mobile Backdrop */}
+            {isMobile && (
+                <div
+                    className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200"
+                    onClick={() => setIsOpen(false)}
                 />
-            </div>
+            )}
+
+            <aside
+                className={cn(
+                    isMobile
+                        ? "fixed bottom-0 left-0 right-0 h-[70%] z-50 flex flex-col bg-sidebar rounded-t-2xl border-t border-border shadow-2xl animate-sheet-up overflow-hidden"
+                        : "flex flex-col bg-card border-l border-border transition-all duration-300 z-30 shrink-0 h-full relative overflow-hidden",
+                    !isMobile && (isOpen ? "w-64 sm:w-72 md:w-80" : "w-12 items-center")
+                )}
+            >
+                {/* Mobile Drag Indicator Handle */}
+                {isMobile && (
+                    <div className="w-full flex justify-center pt-2 pb-1 bg-sidebar cursor-pointer" onClick={() => setIsOpen(false)}>
+                        <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+                    </div>
+                )}
+
+                {/* Top Video Header Box - Desktop only (mobile uses floating PiP) */}
+                {!isMobile && (allowAudio || allowVideo) && (
+                    <div className={cn("w-full transition-all duration-300 shrink-0", (!isOpen && !isVideoExpanded) && "hidden")}>
+                        <LiveKitStream
+                            roomId={sessionId}
+                            userId={userName || "user"}
+                        userName={userName || "User"}
+                        isTeacher={role === "teacher"}
+                        socketUrl={process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3005"}
+                        isChatOpen={isOpen}
+                        onExpandChange={(expanded) => {
+                            setIsVideoExpanded(expanded)
+                            onExpandChange?.(expanded)
+                        }}
+                        onToggleChat={() => setIsOpen(!isOpen)}
+                        socket={socket}
+                        allowAudio={allowAudio}
+                        allowVideo={allowVideo}
+                        allowScreenSharing={allowScreenSharing}
+                    />
+                </div>
+            )}
 
             {!isOpen ? (
                 /* Collapsed Toolbar View when Chat is closed */
                 <div className="flex flex-col items-center py-4 gap-4 w-full h-full">
                     {/* Video Icon Button - Opens Chatroom */}
-                    <button
-                        type="button"
-                        onClick={() => setIsOpen(true)}
-                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-all relative group"
-                        title="Open Video & Audio Stream"
-                    >
-                        <Video size={20} />
-                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                    </button>
+                    {(allowAudio || allowVideo) && (
+                        <button
+                            type="button"
+                            onClick={() => setIsOpen(true)}
+                            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-all relative group"
+                            title="Open Video & Audio Stream"
+                        >
+                            <Video size={20} />
+                            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                        </button>
+                    )}
 
                     {/* Chat Icon Button - Opens Chatroom */}
                     <button
@@ -510,7 +565,7 @@ export default function ChatRoom({
                                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />{userCount}<User2 size={16} />
                             </button>
 
-                            {role === "teacher" && onOpenPoll && (
+                            {role === "teacher" && onOpenPoll && allowPolls !== false && (
                                 <button
                                     type="button"
                                     onClick={onOpenPoll}
@@ -527,7 +582,7 @@ export default function ChatRoom({
                                 </button>
                             )}
 
-                            {role === "teacher" && onOpenQuiz && (
+                            {role === "teacher" && onOpenQuiz && allowQuiz !== false && (
                                 <button
                                     type="button"
                                     onClick={onOpenQuiz}
@@ -549,7 +604,7 @@ export default function ChatRoom({
                                 </button>
                             )}
 
-                            {role === "student" && hasActiveQuiz && onOpenQuiz && (
+                            {role === "student" && hasActiveQuiz && onOpenQuiz && allowQuiz !== false && (
                                 <button
                                     type="button"
                                     onClick={onOpenQuiz}
@@ -567,7 +622,7 @@ export default function ChatRoom({
                             {showVisitors && (
                                 <div
                                     ref={visitorsRef}
-                                    className="absolute top-10 right-0 w-52 bg-card border border-border rounded-[5px] shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200"
+                                    className="absolute top-10 left-0 w-64 sm:w-56 max-w-[90vw] bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200"
                                 >
                                     <UserList
                                         roomUsers={roomUsers}
@@ -599,10 +654,13 @@ export default function ChatRoom({
                             <button
                                 type="button"
                                 onClick={() => setIsOpen(false)}
-                                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
-                                title="Close Chat"
+                                className={cn(
+                                    "p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded-md",
+                                    isMobile && "bg-muted/50"
+                                )}
+                                title={isMobile ? "Close Chat" : "Minimize Sidebar"}
                             >
-                                <Minimize2 size={16} />
+                                {isMobile ? <X size={18} /> : <Minimize2 size={16} />}
                             </button>
                         </div>
 
@@ -612,6 +670,11 @@ export default function ChatRoom({
                                 className="absolute top-full left-0 right-0 z-50 bg-background/95 backdrop-blur-xl border-b border-border shadow-2xl animate-in slide-in-from-top-2 duration-300"
                             >
                                 <div className="px-2 py-2 space-y-4">
+                        {/* <div className="flex items-center justify-between mb-1">
+                            <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/70">Room Controls</h3>
+                            <div className="h-px flex-1 bg-border/40 ml-3" />
+                        </div> */}
+
                                     <div className="flex items-center justify-between p-2 rounded-[2px] bg-muted/30 hover:bg-muted/50 transition-colors group">
                                         <div className="flex flex-col gap-0.5">
                                             <span className="text-[11px] font-bold text-foreground/90 group-hover:text-foreground transition-colors">Global Chat</span>
@@ -682,24 +745,31 @@ export default function ChatRoom({
                 </div>
             )}
 
-            <ChatInput
-                inputMessage={inputMessage}
-                setInputMessage={setInputMessage}
-                recipient={recipient}
-                setRecipient={setRecipient}
-                sendMessage={sendMessage}
-                fileInputRef={fileInputRef}
-                handleFileSelect={handleFileSelect}
-                selectedFile={selectedFile}
-                filePreview={filePreview}
-                clearSelectedFile={clearSelectedFile}
-                role={role}
-                roomSettings={roomSettings}
-                roomUser={roomUsers.find(u => u.socket_id === socket?.id)}
-                socket={socket}
-            />
+            {allowChats === false ? (
+                <div className="p-3 bg-muted/60 border-t border-border text-center text-xs text-muted-foreground font-semibold flex items-center justify-center gap-2">
+                    <Lock size={14} className="text-red-500" /> Live Chat is disabled for this session.
+                </div>
+            ) : (
+                <ChatInput
+                    inputMessage={inputMessage}
+                    setInputMessage={setInputMessage}
+                    recipient={recipient}
+                    setRecipient={setRecipient}
+                    sendMessage={sendMessage}
+                    fileInputRef={fileInputRef}
+                    handleFileSelect={handleFileSelect}
+                    selectedFile={selectedFile}
+                    filePreview={filePreview}
+                    clearSelectedFile={clearSelectedFile}
+                    role={role}
+                    roomSettings={roomSettings}
+                    roomUser={roomUsers.find(u => u.socket_id === socket?.id)}
+                    socket={socket}
+                />
+            )}
         </>
     )}
 </aside>
+</>
     )
 }

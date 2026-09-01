@@ -11,6 +11,10 @@ import { useSocket } from "@/hooks/use-socket"
 import type { RoomUser, Poll, QuizState } from "@/types/chat"
 import PollModal from "./PollModal"
 import QuizModal from "./QuizModal"
+import MobileTool from "./MobileTool"
+import LiveKitStream from "./LiveKitStream"
+import { useIsMobile } from "@/hooks/useIsMobile"
+import { MessageCircle } from "lucide-react"
 import { endSessionAction } from "@/app/actions/auth"
 import { toast } from "sonner"
 import Swal from "sweetalert2"
@@ -29,9 +33,16 @@ interface MainBoardProps {
     startTime?: number
     hasQuiz?: boolean
     classId?: number
+    allowAudio?: boolean
+    allowVideo?: boolean
+    allowRecording?: boolean
+    allowPolls?: boolean
+    allowQuiz?: boolean
+    allowChats?: boolean
+    allowScreenSharing?: boolean
 }
 
-function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId, isClassEnded, setIsClassEnded, endedAt, setEndedAt, durationAdded, startTime, hasQuiz, classId }: MainBoardProps & {
+function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId, isClassEnded, setIsClassEnded, endedAt, setEndedAt, durationAdded, startTime, hasQuiz, classId, allowAudio = true, allowVideo = true, allowRecording = true, allowPolls = true, allowQuiz = true, allowChats = true, allowScreenSharing = true }: MainBoardProps & {
     setIsClassEnded: React.Dispatch<React.SetStateAction<boolean | undefined>>,
     setEndedAt: React.Dispatch<React.SetStateAction<number | undefined>>
 }) {
@@ -46,11 +57,20 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
     const [drawingEnabled, setDrawingEnabled] = useState(role === "teacher")
     const [userCount, setUserCount] = useState(1)
     const [roomUsers, setRoomUsers] = useState<RoomUser[]>([])
-    const [isChatOpen, setIsChatOpen] = useState(true)
+    const [isChatOpen, setIsChatOpen] = useState(allowChats !== false)
+    const [isVideoExpanded, setIsVideoExpanded] = useState(false)
     const [isViewLocked, setIsViewLocked] = useState(true)
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [isFsChatOpen, setIsFsChatOpen] = useState(false)
     const [unreadCount, setUnreadCount] = useState(0)
+
+    const isMobile = useIsMobile()
+
+    // Close chat sidebar on mobile, open on desktop if allowed
+    useEffect(() => {
+        if (isMobile) setIsChatOpen(false)
+        else setIsChatOpen(allowChats !== false)
+    }, [isMobile, allowChats])
     const [poll, setPoll] = useState<Poll | null>(null)
     const [pollsHistory, setPollsHistory] = useState<Poll[]>([])
     const [isPollOpen, setIsPollOpen] = useState(false)
@@ -605,6 +625,7 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
                         tool={tool}
                         setTool={setTool}
                         isOpen={isChatOpen}
+                        isVideoExpanded={isVideoExpanded}
                         duration={duration}
                         durationAdded={durationAdded}
                         startTime={startTime}
@@ -622,6 +643,9 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
                         isFullscreen={isFullscreen}
                         onToggleFullscreen={toggleFullscreen}
                         onImageStamp={(dataUrl) => setImageStampData(dataUrl)}
+                        allowRecording={allowRecording}
+                        allowScreenSharing={allowScreenSharing}
+                        isMobile={isMobile}
                         /* ── YT VIDEO FEATURE (COMMENTED OUT) ──
                         onYoutubeSync={(state) => setYoutubeState(state)}
                         */
@@ -632,19 +656,21 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
 
                     <div className="flex-1 overflow-hidden relative flex">
 
-                        <Toolbar
-                            tool={tool}
-                            setTool={setTool}
-                            role={role}
-                            color={color}
-                            setColor={setColor}
-                            brushSize={brushSize}
-                            setBrushSize={setBrushSize}
-                            onClearCanvas={role === "teacher" ? () => {
-                                document.dispatchEvent(new CustomEvent("clear-canvas-emit"))
-                            } : undefined}
-                            isClassEnded={isClassEnded}
-                        />
+                        {!isMobile && (
+                            <Toolbar
+                                tool={tool}
+                                setTool={setTool}
+                                role={role}
+                                color={color}
+                                setColor={setColor}
+                                brushSize={brushSize}
+                                setBrushSize={setBrushSize}
+                                onClearCanvas={role === "teacher" ? () => {
+                                    document.dispatchEvent(new CustomEvent("clear-canvas-emit"))
+                                } : undefined}
+                                isClassEnded={isClassEnded}
+                            />
+                        )}
                         <div className="flex-1 relative flex flex-col overflow-hidden">
                             {/* Chrome Tabs Style Pagination */}
                             <div className="flex items-end px-3 pt-1.5 overflow-x-auto no-scrollbar gap-1 bg-muted/30 border-b border-border/50">
@@ -653,7 +679,7 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
                                         key={pageNum}
                                         onClick={() => handlePageChange(pageNum)}
                                         className={`
-                                            relative flex items-center h-6 px-2 min-w-[50px] max-w-[150px] cursor-pointer 
+                                            relative flex items-center h-6 px-2 min-w-12.5 max-w-44 cursor-pointer 
                                             transition-all duration-200 rounded-t-lg group
                                             ${currentPage === pageNum
                                                 ? "bg-background text-foreground shadow-[0_-4px_8px_rgba(0,0,0,0.1)] z-10"
@@ -661,13 +687,16 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
                                             }
                                         `}
                                     >
-                                        <span className="text-[11px] font-bold truncate shrink-0 mr-1.5">
+                                        <span
+                                            className="text-[11px] font-bold truncate flex-1 min-w-0 mr-1"
+                                            title={pageLabels[pageNum]}
+                                        >
                                             {pageLabels[pageNum]}
                                         </span>
                                         {role === "teacher" && totalPages > 1 && (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleDeletePage(pageNum) }}
-                                                className={`ml-auto p-0.5 rounded-full transition-colors
+                                                className={`ml-1 shrink-0 p-0.5 rounded-full transition-colors
                                                     ${currentPage === pageNum
                                                         ? "opacity-60 hover:opacity-100 hover:bg-destructive/20 hover:text-destructive"
                                                         : "opacity-0 group-hover:opacity-60 hover:opacity-100! hover:bg-destructive/20 hover:text-destructive"
@@ -737,29 +766,124 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
                             )}
                             */}
                         </div>
-                        {/* Sidebar chat & video stream (always mounted) */}
-                        <ChatRoom
-                            userCount={userCount}
-                            roomUsers={roomUsers}
-                            setRoomUsers={setRoomUsers}
-                            setUserCount={setUserCount}
-                            role={role}
-                            userName={userName}
-                            sessionId={sessionId}
-                            isOpen={isChatOpen}
-                            setIsOpen={setIsChatOpen}
-                            onOpenPoll={() => setIsPollOpen(true)}
-                            hasActivePoll={!!(poll && poll.isActive)}
-                            onOpenQuiz={() => setIsQuizOpen(true)}
-                            hasActiveQuiz={!!(currentQuiz && currentQuiz.isActive)}
-                            hasQuiz={!!hasQuiz}
-                        />
+                        {/* Sidebar chat & video stream (desktop only) */}
+                        {!isMobile && (
+                            <ChatRoom
+                                userCount={userCount}
+                                roomUsers={roomUsers}
+                                setRoomUsers={setRoomUsers}
+                                setUserCount={setUserCount}
+                                role={role}
+                                userName={userName}
+                                sessionId={sessionId}
+                                isOpen={isChatOpen}
+                                setIsOpen={setIsChatOpen}
+                                onOpenPoll={() => setIsPollOpen(true)}
+                                hasActivePoll={!!(poll && poll.isActive)}
+                                onOpenQuiz={() => setIsQuizOpen(true)}
+                                hasActiveQuiz={!!(currentQuiz && currentQuiz.isActive)}
+                                hasQuiz={!!hasQuiz}
+                                allowAudio={allowAudio}
+                                allowVideo={allowVideo}
+                                allowRecording={allowRecording}
+                                allowPolls={allowPolls}
+                                allowQuiz={allowQuiz}
+                                allowChats={allowChats}
+                                allowScreenSharing={allowScreenSharing}
+                                onExpandChange={(expanded) => setIsVideoExpanded(expanded)}
+                            />
+                        )}
                     </div>
-
-
                 </div>
-
             </div>
+
+            {/* ── Mobile-only floating elements ─────────────────── */}
+            {isMobile && (
+                <>
+                    {/* All Mobile Tools Bottom Dock */}
+                    <MobileTool
+                        tool={tool}
+                        setTool={setTool}
+                        role={role}
+                        color={color}
+                        setColor={setColor}
+                        boardColor={currentBoardColor}
+                        setBoardColor={updateBoardBackground}
+                        brushSize={brushSize}
+                        setBrushSize={setBrushSize}
+                        onClearCanvas={role === "teacher" ? () => {
+                            document.dispatchEvent(new CustomEvent("clear-canvas-emit"))
+                        } : undefined}
+                        isClassEnded={isClassEnded}
+                        isViewLocked={isViewLocked}
+                        onToggleViewLocked={toggleViewLocked}
+                        onPdfUpload={role === "teacher" ? handlePdfUpload : undefined}
+                        onImageStamp={(dataUrl) => {
+                            setImageStampData(dataUrl)
+                            setTool("image-stamp")
+                        }}
+                        drawingEnabled={drawingEnabled}
+                    />
+
+                    {/* Floating PiP Video Stream */}
+                    {(allowAudio || allowVideo) && (
+                        <LiveKitStream
+                            roomId={sessionId}
+                            userId={userName || "user"}
+                            userName={userName || "User"}
+                            isTeacher={role === "teacher"}
+                            socketUrl={process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3005"}
+                            isChatOpen={isChatOpen}
+                            onExpandChange={(expanded) => setIsVideoExpanded(expanded)}
+                            onToggleChat={() => setIsChatOpen(!isChatOpen)}
+                            socket={socket}
+                            allowAudio={allowAudio}
+                            allowVideo={allowVideo}
+                            allowScreenSharing={allowScreenSharing}
+                            isMobile={true}
+                        />
+                    )}
+
+                    {/* Chat FAB Button */}
+                    {!isChatOpen && allowChats !== false && (
+                        <button
+                            type="button"
+                            onClick={() => setIsChatOpen(true)}
+                            className="fixed bottom-24 right-3 z-40 p-3 rounded-full bg-primary text-primary-foreground shadow-2xl shadow-primary/30 hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                            title="Open Chat"
+                        >
+                            <MessageCircle className="w-5 h-5" />
+                        </button>
+                    )}
+
+                    {/* Full-screen / Bottom-sheet Chat Overlay */}
+                    <ChatRoom
+                        userCount={userCount}
+                        roomUsers={roomUsers}
+                        setRoomUsers={setRoomUsers}
+                        setUserCount={setUserCount}
+                        role={role}
+                        userName={userName}
+                        sessionId={sessionId}
+                        isOpen={isChatOpen}
+                        setIsOpen={setIsChatOpen}
+                        onOpenPoll={() => setIsPollOpen(true)}
+                        hasActivePoll={!!(poll && poll.isActive)}
+                        onOpenQuiz={() => setIsQuizOpen(true)}
+                        hasActiveQuiz={!!(currentQuiz && currentQuiz.isActive)}
+                        hasQuiz={!!hasQuiz}
+                        allowAudio={allowAudio}
+                        allowVideo={allowVideo}
+                        allowRecording={allowRecording}
+                        allowPolls={allowPolls}
+                        allowQuiz={allowQuiz}
+                        allowChats={allowChats}
+                        allowScreenSharing={allowScreenSharing}
+                        onExpandChange={(expanded) => setIsVideoExpanded(expanded)}
+                        isMobile={true}
+                    />
+                </>
+            )}
             
             <PollModal
                 isOpen={isPollOpen}
@@ -787,7 +911,7 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
     )
 }
 
-export default function MainBoard({ duration, sessionId, role, userName, userId, visitorId, isClassEnded: initialIsClassEnded, endedAt: initialEndedAt, durationAdded, startTime, hasQuiz, classId }: MainBoardProps) {
+export default function MainBoard({ duration, sessionId, role, userName, userId, visitorId, isClassEnded: initialIsClassEnded, endedAt: initialEndedAt, durationAdded, startTime, hasQuiz, classId, allowAudio = true, allowVideo = true, allowRecording = true, allowPolls = true, allowQuiz = true, allowChats = true, allowScreenSharing = true }: MainBoardProps) {
     const [isClassEnded, setIsClassEnded] = useState(initialIsClassEnded)
     const [endedAt, setEndedAt] = useState(initialEndedAt)
 
@@ -835,6 +959,13 @@ export default function MainBoard({ duration, sessionId, role, userName, userId,
                 startTime={startTime}
                 hasQuiz={hasQuiz}
                 classId={classId}
+                allowAudio={allowAudio}
+                allowVideo={allowVideo}
+                allowRecording={allowRecording}
+                allowPolls={allowPolls}
+                allowQuiz={allowQuiz}
+                allowChats={allowChats}
+                allowScreenSharing={allowScreenSharing}
             />
         </SocketProvider>
     )

@@ -5,7 +5,8 @@ import { eq } from "drizzle-orm";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { sessionId, recordingUrl, resolution, chunkCount } = body;
+    const { sessionId, recordingUrl, resolution, chunkCount, recordingSizeInMB, sizeInMB } = body;
+    const recSizeMB = recordingSizeInMB || sizeInMB;
 
     if (!sessionId || !recordingUrl) {
       return NextResponse.json(
@@ -17,13 +18,15 @@ export async function POST(req: Request) {
     const classSessionId = sessionId.includes("_") ? sessionId.split("_")[0] : sessionId;
     const fileName = recordingUrl.substring(recordingUrl.lastIndexOf("/") + 1) || `recording_${sessionId}.webm`;
 
-    // 1. Update tb_classes with recording_url for the session
-    await db
-      .update(classes)
-      .set({
-        recordingUrl: recordingUrl,
-      })
-      .where(eq(classes.sessionId, classSessionId));
+    // 1. Update tb_classes recordingSizeInMB if present (do not overwrite single recordingUrl on classes)
+    if (recSizeMB) {
+      await db
+        .update(classes)
+        .set({
+          recordingSizeInMB: String(recSizeMB),
+        })
+        .where(eq(classes.sessionId, classSessionId));
+    }
 
     // 2. Save into tb_recordings matching by fileName / downloadUrl
     const existingRec = await db.query.recordings.findFirst({
@@ -35,6 +38,7 @@ export async function POST(req: Request) {
         .update(recordings)
         .set({
           downloadUrl: recordingUrl,
+          ...(recSizeMB && { recordingSizeInMB: String(recSizeMB) }),
           status: "completed",
         })
         .where(eq(recordings.fileName, fileName));
@@ -46,6 +50,7 @@ export async function POST(req: Request) {
         fileName: fileName,
         filePath: recordingUrl,
         downloadUrl: recordingUrl,
+        recordingSizeInMB: recSizeMB ? String(recSizeMB) : null,
         status: "completed",
       });
     }

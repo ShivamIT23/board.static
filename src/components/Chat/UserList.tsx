@@ -181,7 +181,7 @@ export default function UserList({
                                     <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-card shadow-sm" />
                                 </div>
                                 <div className="flex flex-col min-w-0">
-                                    <span className="text-[11px] font-bold text-foreground/90 truncate">
+                                    <span className="text-[11px] font-bold text-foreground/90 truncate max-w-[85px] sm:max-w-[100px]" title={user.username}>
                                         {user.username}{role === "teacher" && user.role !== "teacher" && user.visitor_id && `_${user.visitor_id}`}
                                     </span>
                                     <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tight">
@@ -189,51 +189,51 @@ export default function UserList({
                                     </span>
                                 </div>
                             </div>
-                            <div className="flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex flex-row sm:flex-col items-center gap-1 sm:gap-0.5 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                 {user.socket_id !== socket?.id && role === "teacher" && (
                                     <>
-                                    <div className="flex items-center">
-                                        <button
-                                            type="button"
-                                            onClick={() => toggleUserPermission(user.user_id, "text", user.textEnabled ?? true)}
-                                            className={cn(
-                                                "p-1 rounded transition-colors",
-                                                user.textEnabled !== false ? "text-indigo-500 hover:bg-indigo-500/10" : "text-zinc-400 hover:bg-zinc-400/10"
-                                            )}
-                                            title={user.textEnabled !== false ? "Disable chat" : "Enable chat"}
-                                        >
-                                            {user.textEnabled !== false ? <MessageSquare size={12} /> : <MessageSquareOff size={12} />}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => toggleUserPermission(user.user_id, "drawing", user.drawingEnabled ?? true)}
-                                            className={cn(
-                                                "p-1 rounded transition-colors",
-                                                user.drawingEnabled !== false ? "text-blue-500 hover:bg-blue-500/10" : "text-zinc-400 hover:bg-zinc-400/10"
-                                            )}
-                                            title={user.drawingEnabled !== false ? "Disable drawing" : "Enable drawing"}
-                                        >
-                                            {user.drawingEnabled !== false ? <Pencil size={12} /> : <PencilOff size={12} />}
-                                        </button>
+                                        <div className="flex items-center gap-0.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleUserPermission(user.user_id, "text", user.textEnabled ?? true)}
+                                                className={cn(
+                                                    "p-1 rounded transition-colors cursor-pointer",
+                                                    user.textEnabled !== false ? "text-indigo-500 hover:bg-indigo-500/10" : "text-zinc-400 hover:bg-zinc-400/10"
+                                                )}
+                                                title={user.textEnabled !== false ? "Disable chat" : "Enable chat"}
+                                            >
+                                                {user.textEnabled !== false ? <MessageSquare size={13} /> : <MessageSquareOff size={13} />}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleUserPermission(user.user_id, "drawing", user.drawingEnabled ?? true)}
+                                                className={cn(
+                                                    "p-1 rounded transition-colors cursor-pointer",
+                                                    user.drawingEnabled !== false ? "text-blue-500 hover:bg-blue-500/10" : "text-zinc-400 hover:bg-zinc-400/10"
+                                                )}
+                                                title={user.drawingEnabled !== false ? "Disable drawing" : "Enable drawing"}
+                                            >
+                                                {user.drawingEnabled !== false ? <Pencil size={13} /> : <PencilOff size={13} />}
+                                            </button>
                                         </div>
-                                        <div className="flex items-center">
-                                        <div className="w-px h-3 bg-border mx-0.5" />
-                                        <button
-                                            type="button"
-                                            onClick={() => handleKick(user)}
-                                            className="p-1 rounded text-orange-500 hover:bg-orange-500/10 transition-colors"
-                                            title="Kick Out"
-                                        >
-                                            <UserMinus size={12} />
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleBan(user)}
-                                            className="p-1 rounded text-red-500 hover:bg-red-500/10 transition-colors"
-                                            title="Ban Permanently"
-                                        >
-                                            <Ban size={12} />
-                                        </button>
+                                        <div className="flex items-center gap-0.5">
+                                            <div className="w-px h-3 bg-border mx-0.5 sm:hidden" />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleKick(user)}
+                                                className="p-1 rounded text-orange-500 hover:bg-orange-500/10 transition-colors cursor-pointer"
+                                                title="Kick Out"
+                                            >
+                                                <UserMinus size={13} />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleBan(user)}
+                                                className="p-1 rounded text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                                                title="Ban Permanently"
+                                            >
+                                                <Ban size={13} />
+                                            </button>
                                         </div>
                                     </>
                                 )}

@@ -102,6 +102,13 @@ export default async function LiveSlugPage({
                     endedAt={teacherSession.endedAt ? new Date(teacherSession.endedAt).getTime() : undefined}
                     hasQuiz={teacherSession.hasQuiz === 1}
                     classId={teacherSession.id}
+                    allowAudio={teacherSession.allowAudio !== 0}
+                    allowVideo={teacherSession.allowVideo !== 0}
+                    allowRecording={teacherSession.allowRecording !== 0}
+                    allowPolls={teacherSession.allowPolls !== 0}
+                    allowQuiz={teacherSession.allowQuiz !== 0}
+                    allowChats={teacherSession.allowChats !== 0}
+                    allowScreenSharing={teacherSession.allowScreenSharing !== 0}
                 />
             </div>
         );
@@ -162,6 +169,13 @@ export default async function LiveSlugPage({
                     endedAt={studentSession.endedAt ? new Date(studentSession.endedAt).getTime() : undefined}
                     hasQuiz={studentSession.hasQuiz === 1}
                     classId={studentSession.id}
+                    allowAudio={studentSession.allowAudio !== 0}
+                    allowVideo={studentSession.allowVideo !== 0}
+                    allowRecording={studentSession.allowRecording !== 0}
+                    allowPolls={studentSession.allowPolls !== 0}
+                    allowQuiz={studentSession.allowQuiz !== 0}
+                    allowChats={studentSession.allowChats !== 0}
+                    allowScreenSharing={studentSession.allowScreenSharing !== 0}
                 />
             </div>
         );

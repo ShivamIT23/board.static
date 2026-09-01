@@ -20,6 +20,8 @@ async function main() {
       { id: 3, name: 'storage', label: 'Cloud Storage', type: 'limit' },
       { id: 4, name: 'whiteboard', label: 'Whiteboard Access', type: 'boolean' },
       { id: 5, name: 'priority_support', label: 'Priority Support', type: 'boolean' },
+      { id: 11, name: 'audio_video', label: 'Audio/Video', type: 'boolean' },
+      { id: 12, name: 'screen_sharing', label: 'Screen Sharing', type: 'boolean' },
     ]).onDuplicateKeyUpdate({ set: { name: sql`VALUES(name)` } });
 
     // 2. Insert Packages
@@ -76,6 +78,12 @@ async function main() {
       { id: 8, packageId: 2, featureId: 3, value: '20GB' },
       { id: 9, packageId: 2, featureId: 4, value: 'true' },
       { id: 10, packageId: 2, featureId: 5, value: 'true' },
+      { id: 11, packageId: 1, featureId: 11, value: 'false' },
+      { id: 12, packageId: 1, featureId: 12, value: 'false' },
+      { id: 13, packageId: 2, featureId: 11, value: 'true' },
+      { id: 14, packageId: 2, featureId: 12, value: 'true' },
+      { id: 15, packageId: 3, featureId: 11, value: 'true' },
+      { id: 16, packageId: 3, featureId: 12, value: 'true' },
     ]).onDuplicateKeyUpdate({ set: { value: sql`VALUES(value)` } });
 
     console.log('Seeding finished!');

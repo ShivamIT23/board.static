@@ -11,57 +11,38 @@ import {
     MousePointer2,
     Square, Circle, ArrowUpRight, Triangle, Diamond, Star, Ellipse, Pentagon, TriangleRight, RectangleHorizontal,
     Activity, Calculator, Grid3X3, LayoutGrid,
-    Maximize, Minimize
+    Maximize, Minimize, Video
 } from "lucide-react"
 import ReactDOM from "react-dom"
-
-// const Youtube = ({ size = 18, ...props }: { size?: number } & React.SVGProps<SVGSVGElement>) => (
-//     <svg
-//         viewBox="0 0 24 24"
-//         fill="currentColor"
-//         width={size}
-//         height={size}
-//         {...props}
-//     >
-//         <path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.11C19.517 3.545 12 3.545 12 3.545s-7.517 0-9.388.507a3.003 3.003 0 0 0-2.11 2.11C0 8.033 0 12 0 12s0 3.967.502 5.837a3.003 3.003 0 0 0 2.11 2.11c1.871.507 9.388.507 9.388.507s7.517 0 9.388-.507a3.003 3.003 0 0 0 2.11-2.11C24 15.967 24 12 24 12s0-3.967-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-//     </svg>
-// );
-import BackgroundPicker from "./BackgroundPicker"
-import { leaveSession } from "@/app/actions/auth"
+import DemoBackgroundPicker from "./DemoBackgroundPicker"
 import ThemeToggle from "../theme-toggle"
 import { cn, getContrastColor } from "@/lib/utils"
-import { useSocket } from "@/hooks/use-socket"
 import { toast } from "sonner"
-import { SessionTimer } from "./SessionTimer"
-import ScreenRecorderButton from "./ScreenRecorderButton"
 import Swal from "sweetalert2"
 import Image from "next/image"
 import logo from "../../../public/logo.png"
 
-
-
-interface BoardTopBarProps {
+interface DemoTopBarProps {
     tool: string
     setTool: (tool: string) => void
-    isOpen: boolean
+    isOpen?: boolean
     isVideoExpanded?: boolean
-    duration: number
+    duration?: number
     boardColor: string
     setBoardColor: (color: string) => void
-    role: "teacher" | "student"
-    sessionId: string
+    role?: "teacher" | "student"
+    sessionId?: string
     isViewLocked?: boolean
-    userName: string;
+    userName?: string
     onToggleViewLocked?: (enabled: boolean) => void
     drawingEnabled?: boolean
     onPdfUpload?: (file: File) => void
-    onEndSession?: (sid: string) => void
+    onEndSession?: (sid?: string) => void
     isClassEnded?: boolean
     isFullscreen?: boolean
     onToggleFullscreen?: () => void
     durationAdded?: number
     startTime?: number
-    onYoutubeSync?: (state: { videoId: string; playStatus: "playing" | "paused"; currentTime: number; lastUpdated: number }) => void
     onImageStamp?: (dataUrl: string) => void
     allowRecording?: boolean
     allowScreenSharing?: boolean
@@ -90,7 +71,6 @@ const GRAPH_TOOLS = [
     { id: "graph-labeled", label: "Labeled Plane", icon: Calculator },
     { id: "large-grid", label: "Grid", icon: LayoutGrid },
 ] as const
-
 
 const MATH_SYMBOLS = [
     { id: "sigma", label: "Σ", value: "Σ" },
@@ -126,45 +106,38 @@ const EMOJIS = [
     { id: "cry", label: "Cry", value: "😭" },
 ] as const
 
-
 type GraphToolId = typeof GRAPH_TOOLS[number]["id"]
 
-export default function BoardTopBar({
+export default function DemoTopBar({
     tool,
     setTool,
-    isOpen,
+    isOpen = true,
     isVideoExpanded = false,
-    duration,
+    duration = 3600,
     boardColor,
     setBoardColor,
-    role,
-    sessionId,
+    role = "teacher",
+    sessionId = "demo",
     isViewLocked = true,
-    userName,
+    userName = "Teacher",
     onToggleViewLocked,
-    drawingEnabled,
+    drawingEnabled = true,
     onPdfUpload,
     onEndSession,
-    isClassEnded,
-    isFullscreen,
+    isClassEnded = false,
+    isFullscreen = false,
     onToggleFullscreen,
-    durationAdded,
-    startTime,
-    // onYoutubeSync,
     onImageStamp,
     allowRecording = true,
-    allowScreenSharing = true,
-    isMobile = false
-}: BoardTopBarProps) {
-
-    const { socket } = useSocket()
+    isMobile = false,
+}: DemoTopBarProps) {
     const scrollBarRef = useRef<HTMLDivElement>(null)
     const bgButtonRef = useRef<HTMLDivElement>(null)
 
     const [showBgPicker, setShowBgPicker] = useState(false)
     const [bgPickerPos, setBgPickerPos] = useState<{ top: number; left: number } | null>(null)
     const [canScrollRight, setCanScrollRight] = useState(false)
-    const isMathSymbolTool = tool.startsWith("symbol:")
+    const isMathSymbolTool = tool.startsWith("symbol:") || tool.startsWith("math:")
     const isEmojiTool = tool.startsWith("emoji:")
     const shapeButtonRef = useRef<HTMLDivElement>(null)
     const filledShapeButtonRef = useRef<HTMLDivElement>(null)
@@ -190,17 +163,50 @@ export default function BoardTopBar({
     const [selectedSymbol, setSelectedSymbol] = useState<string>("Σ")
     const [selectedEmoji, setSelectedEmoji] = useState<string>("😊")
 
+    // Infinite Session Timer (Count Up based on session start time)
+    const [secondsElapsed, setSecondsElapsed] = useState<number>(0)
+    useEffect(() => {
+        const key = `demo_start_time_${sessionId}`
+        let startTimeStr = typeof window !== "undefined" ? localStorage.getItem(key) : null
+        if (!startTimeStr) {
+            startTimeStr = Date.now().toString()
+            if (typeof window !== "undefined") {
+                localStorage.setItem(key, startTimeStr)
+            }
+        }
+        const startMs = parseInt(startTimeStr, 10) || Date.now()
+
+        const updateTimer = () => {
+            const now = Date.now()
+            const diffSecs = Math.max(0, Math.floor((now - startMs) / 1000))
+            setSecondsElapsed(diffSecs)
+        }
+
+        updateTimer()
+        const timer = setInterval(updateTimer, 1000)
+        return () => clearInterval(timer)
+    }, [sessionId])
+
+    const formatTimer = (secs: number) => {
+        const h = Math.floor(secs / 3600)
+        const m = Math.floor((secs % 3600) / 60)
+        const s = secs % 60
+        if (h > 0) {
+            return `∞ ${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+        }
+        return `∞ ${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+    }
+
     const ActiveShapeIcon = SHAPE_TOOLS.find(s => s.id === selectedShape)?.icon || Square
     const ActiveFilledShapeIcon = SHAPE_TOOLS.find(s => s.id === selectedFilledShape)?.icon || Square
     const ActiveGraphIcon = GRAPH_TOOLS.find(g => g.id === selectedGraph)?.icon || Activity
 
-    const isShapeTool = SHAPE_TOOLS.some(s => s.id === tool)
+    const isShapeTool = SHAPE_TOOLS.some(s => s.id === tool || tool === `shape:${s.id}`)
     const isFilledShapeTool = SHAPE_TOOLS.some(s => `f-${s.id}` === tool)
-    const isGraphTool = (t: string) => GRAPH_TOOLS.some(g => g.id === t) || t.startsWith("large-grid") || t.startsWith("graph-plain") || t.startsWith("graph-labeled")
+    const isGraphTool = (t: string) => GRAPH_TOOLS.some(g => g.id === t) || t.startsWith("large-grid") || t.startsWith("graph-plain") || t.startsWith("graph-labeled") || t.startsWith("graph:")
 
     const boardFileInputRef = useRef<HTMLInputElement>(null)
     const pdfFileInputRef = useRef<HTMLInputElement>(null)
-
 
     const checkScroll = useCallback(() => {
         const el = scrollBarRef.current
@@ -213,7 +219,6 @@ export default function BoardTopBar({
         window.addEventListener('resize', checkScroll)
         return () => window.removeEventListener('resize', checkScroll)
     }, [checkScroll, isOpen])
-
 
     const toggleBgPicker = useCallback(() => {
         if (showBgPicker) {
@@ -233,7 +238,6 @@ export default function BoardTopBar({
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (showBgPicker && bgButtonRef.current && !bgButtonRef.current.contains(e.target as Node)) {
-                // If the click is on the picker itself (rendered in portal), don't close
                 const picker = document.querySelector('.color-picker-safari')
                 if (picker && picker.contains(e.target as Node)) return
                 setShowBgPicker(false)
@@ -242,6 +246,7 @@ export default function BoardTopBar({
         window.addEventListener('mousedown', handleClickOutside)
         return () => window.removeEventListener('mousedown', handleClickOutside)
     }, [showBgPicker])
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
@@ -351,7 +356,6 @@ export default function BoardTopBar({
         setShowEmojiDropdown(false)
     }
 
-
     const handleBoardFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (!file) return
@@ -374,17 +378,6 @@ export default function BoardTopBar({
             if (onImageStamp) {
                 onImageStamp(dataUrl)
                 setTool("image-stamp")
-            } else if (socket) {
-                // Fallback: place immediately if onImageStamp not provided
-                socket.emit("board_file_add", {
-                    payload: {
-                        id: crypto.randomUUID(),
-                        url: dataUrl,
-                        name: file.name,
-                        position: { x: 0.3, y: 0.3 },
-                        scale: 0.25,
-                    }
-                })
             }
         }
         reader.readAsDataURL(file)
@@ -410,68 +403,6 @@ export default function BoardTopBar({
         onPdfUpload?.(file)
         if (pdfFileInputRef.current) pdfFileInputRef.current.value = ""
     }
-
-    // const extractYoutubeId = (url: string): string | null => {
-    //     if (/^[a-zA-Z0-9_-]{11}$/.test(url)) return url;
-    //     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    //     const match = url.match(regExp);
-    //     return (match && match[2].length === 11) ? match[2] : null;
-    // }
-
-    // const handleYoutubeClick = () => {
-    //     Swal.fire({
-    //         title: 'Sync YouTube Video',
-    //         text: 'Enter a YouTube video URL or Video ID:',
-    //         input: 'text',
-    //         inputPlaceholder: 'https://www.youtube.com/watch?v=...',
-    //         showCancelButton: true,
-    //         confirmButtonText: 'Start Sync',
-    //         cancelButtonText: 'Cancel',
-    //         background: '#18181b',
-    //         color: '#ffffff',
-    //         confirmButtonColor: '#e11d48',
-    //         cancelButtonColor: '#3f3f46',
-    //         inputAttributes: {
-    //             autocapitalize: 'off',
-    //             autocomplete: 'off'
-    //         },
-    //         preConfirm: (value) => {
-    //             if (!value) {
-    //                 Swal.showValidationMessage('Please enter a YouTube link or video ID');
-    //                 return false;
-    //             }
-    //             const videoId = extractYoutubeId(value);
-    //             if (!videoId) {
-    //                 Swal.showValidationMessage('Invalid YouTube URL or Video ID');
-    //                 return false;
-    //             }
-    //             return videoId;
-    //         }
-    //     }).then((result) => {
-    //         if (result.isConfirmed && result.value) {
-    //             const videoId = result.value;
-    //             if (socket) {
-    //                 socket.emit("yt_sync", {
-    //                     roomId: sessionId,
-    //                     payload: {
-    //                         videoId,
-    //                         playStatus: "paused",
-    //                         currentTime: 0,
-    //                         lastUpdated: Date.now()
-    //                     }
-    //                 });
-    //                 onYoutubeSync?.({
-    //                     videoId,
-    //                     playStatus: "paused",
-    //                     currentTime: 0,
-    //                     lastUpdated: Date.now()
-    //                 });
-    //                 toast.success("YouTube sync started");
-    //             }
-    //         }
-    //     });
-    // };
-
 
     const handleGraphItemClick = async (gId: GraphToolId) => {
         if (gId === "large-grid" || gId === "graph-plain" || gId === "graph-labeled") {
@@ -511,6 +442,17 @@ export default function BoardTopBar({
         setShowGraphDropdown(false)
     }
 
+    const handleRecorderClick = () => {
+        Swal.fire({
+            icon: "info",
+            title: "Demo Mode",
+            text: "Screen recording is enabled in live classroom packages with cloud auto-stitching.",
+            showCloseButton: true,
+            confirmButtonColor: "#f97316",
+            confirmButtonText: "Understood",
+        })
+    }
+
     // ─── MOBILE COMPACT TOP BAR ──────────────────────────────
     if (isMobile) {
         return (
@@ -525,15 +467,9 @@ export default function BoardTopBar({
 
                 {/* Timer */}
                 <div className="flex items-center px-2 h-full shrink-0">
-                    <SessionTimer
-                        initialDuration={duration}
-                        durationAdded={durationAdded}
-                        startTime={startTime}
-                        role={role}
-                        sessionId={sessionId}
-                        onEndSession={onEndSession}
-                        isClassEnded={isClassEnded}
-                    />
+                    <span className="font-mono text-[11px] font-bold text-emerald-500 tracking-wider">
+                        {formatTimer(secondsElapsed)}
+                    </span>
                 </div>
 
                 {/* Theme Toggle */}
@@ -541,64 +477,39 @@ export default function BoardTopBar({
                     <ThemeToggle cn="w-7 h-7 rounded-lg" iconSize={14} />
                 </div>
 
-                {/* End / Leave Class Button */}
+                {/* End Class */}
                 {role === "teacher" && (
                     <button
                         type="button"
                         onClick={async () => {
                             const { isConfirmed } = await Swal.fire({
-                                title: "End Session?",
-                                text: "Are you sure you want to end this session for everyone?",
-                                icon: "warning",
+                                title: "Exit Demo Session?",
+                                text: "You will be redirected back to the TutorArc website.",
+                                icon: "question",
                                 showCancelButton: true,
                                 confirmButtonColor: "#f97316",
                                 cancelButtonColor: "#6b7280",
-                                confirmButtonText: "Yes, end session",
-                                cancelButtonText: "Stay"
+                                confirmButtonText: "Exit Demo",
+                                cancelButtonText: "Stay",
                             })
                             if (isConfirmed && onEndSession) onEndSession(sessionId)
                         }}
-                        className="flex items-center justify-center mx-1 px-2.5 h-7 text-[11px] font-bold bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-all shadow-md active:scale-95 cursor-pointer shrink-0"
-                        title="End Session for everyone"
+                        className="flex items-center justify-center mx-1 px-2 h-7 text-[10px] font-semibold bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-all shadow-md active:scale-95 cursor-pointer shrink-0"
+                        title="Exit Demo Class"
                     >
                         End
-                    </button>
-                )}
-
-                {role === "student" && (
-                    <button
-                        type="button"
-                        onClick={async () => {
-                            const { isConfirmed } = await Swal.fire({
-                                title: "Leave Session?",
-                                text: "Are you sure you want to leave this session?",
-                                icon: "question",
-                                showCancelButton: true,
-                                confirmButtonColor: "#ef4444",
-                                cancelButtonColor: "#6b7280",
-                                confirmButtonText: "Yes, leave",
-                                cancelButtonText: "Stay"
-                            })
-                            if (isConfirmed) {
-                                await leaveSession(sessionId);
-                                window.location.href = "about:blank";
-                            }
-                        }}
-                        className="flex items-center justify-center mx-1 px-2.5 h-7 text-[11px] font-bold bg-red-500 hover:bg-red-600 text-white rounded-lg transition-all shadow-md active:scale-95 cursor-pointer shrink-0"
-                        title="Leave Session"
-                    >
-                        Leave
                     </button>
                 )}
             </div>
         )
     }
 
+    // ─── DESKTOP TOP BAR (unchanged) ──────────────────────────
     return (
-        <div className="relative flex w-full items-center min-h-[48px] bg-sidebar backdrop-blur-xl border-b border-border/50 shadow-md animate-in fade-in slide-in-from-top-4 duration-500 overflow-hidden">
-            {/* Fixed Left Section */}
+        <div className="relative z-50 flex w-full items-center min-h-12 bg-sidebar backdrop-blur-xl border-b border-border/50 shadow-md animate-in fade-in slide-in-from-top-4 duration-500 overflow-hidden">
+            {/* Fixed Left Section — Logo */}
             <div className="flex items-center px-1 sm:px-2 h-8 border-r border-border/50 bg-sidebar shrink-0 z-40">
-                <Image alt="Board" src={logo} height={20} width={50} />
+                <Image alt="Board" src={logo} height={20} width={50} priority />
             </div>
 
             {/* Scrollable Area */}
@@ -626,7 +537,16 @@ export default function BoardTopBar({
                         </div>
                     ) : (
                         <>
-                            <button type="button" onClick={() => setTool("select")} className={cn("p-1.5 w-8 h-8 border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center", tool === "select" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Selection Tool">
+                            {/* Selection Tool */}
+                            <button
+                                type="button"
+                                onClick={() => setTool("select")}
+                                className={cn(
+                                    "p-1.5 w-8 h-8 border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center cursor-pointer",
+                                    tool === "select" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                )}
+                                title="Selection Tool"
+                            >
                                 <MousePointer2 size={18} />
                             </button>
 
@@ -636,7 +556,7 @@ export default function BoardTopBar({
                                     type="button"
                                     onClick={() => toggleShapeDropdown()}
                                     className={cn(
-                                        "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
+                                        "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent cursor-pointer",
                                         isShapeTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
                                     )}
                                     title={`Outline Shape (Current: ${selectedShape})`}
@@ -663,14 +583,14 @@ export default function BoardTopBar({
                                                             setShowShapeDropdown(false)
                                                         }}
                                                         className={cn(
-                                                            "p-1.5 rounded-[5px] transition-all duration-200",
+                                                            "p-1.5 rounded-[5px] transition-all duration-200 cursor-pointer",
                                                             tool === shape.id
                                                                 ? "bg-primary text-primary-foreground shadow-md"
                                                                 : "text-muted-foreground hover:text-foreground hover:bg-accent"
                                                         )}
                                                         title={`Outline ${shape.label}`}
                                                     >
-                                                        <Icon size={16} className={`${shape.id == "parallelogram" && "-skew-x-24"}`} />
+                                                        <Icon size={16} className={`${shape.id === "parallelogram" && "-skew-x-24"}`} />
                                                     </button>
                                                 )
                                             })}
@@ -686,7 +606,7 @@ export default function BoardTopBar({
                                     type="button"
                                     onClick={() => toggleFilledShapeDropdown()}
                                     className={cn(
-                                        "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
+                                        "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent cursor-pointer",
                                         isFilledShapeTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
                                     )}
                                     title={`Filled Shape (Current: ${selectedFilledShape})`}
@@ -718,7 +638,7 @@ export default function BoardTopBar({
                                                             setShowFilledShapeDropdown(false)
                                                         }}
                                                         className={cn(
-                                                            "p-1.5 rounded-[5px] transition-all duration-200",
+                                                            "p-1.5 rounded-[5px] transition-all duration-200 cursor-pointer",
                                                             tool === `f-${shape.id}`
                                                                 ? "bg-primary text-primary-foreground shadow-md"
                                                                 : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -726,9 +646,9 @@ export default function BoardTopBar({
                                                         title={`Filled ${shape.label}`}
                                                     >
                                                         <div className="relative">
-                                                            <Icon size={16} className={`${shape.id == "parallelogram" && "-skew-x-24"}`} />
+                                                            <Icon size={16} className={`${shape.id === "parallelogram" && "-skew-x-24"}`} />
                                                             <div className="absolute inset-0 flex items-center justify-center opacity-40">
-                                                                <Icon size={8} fill="currentColor" className={`${shape.id == "parallelogram" && "-skew-x-24"}`} />
+                                                                <Icon size={8} fill="currentColor" className={`${shape.id === "parallelogram" && "-skew-x-24"}`} />
                                                             </div>
                                                         </div>
                                                     </button>
@@ -740,13 +660,13 @@ export default function BoardTopBar({
                                 )}
                             </div>
 
-                            {/* Graph Tools — Simplified Section */}
+                            {/* Graph Tools */}
                             <div className="relative group border rounded-[5px] border-primary/40 h-8 w-9 p-0.5" ref={graphButtonRef}>
                                 <button
                                     type="button"
                                     onClick={() => toggleGraphDropdown()}
                                     className={cn(
-                                        "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
+                                        "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent cursor-pointer",
                                         isGraphTool(tool) ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
                                     )}
                                     title={`Choose graph tool (Current: ${selectedGraph})`}
@@ -769,7 +689,7 @@ export default function BoardTopBar({
                                                         type="button"
                                                         onClick={() => handleGraphItemClick(g.id)}
                                                         className={cn(
-                                                            "p-1.5 rounded-[5px] flex items-center gap-2 transition-all duration-200",
+                                                            "p-1.5 rounded-[5px] flex items-center gap-2 transition-all duration-200 cursor-pointer",
                                                             tool === g.id
                                                                 ? "bg-primary text-primary-foreground shadow-md"
                                                                 : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -786,13 +706,14 @@ export default function BoardTopBar({
                                     document.body
                                 )}
                             </div>
-                            {/* Math Symbols — Simplified Section */}
+
+                            {/* Math Symbols */}
                             <div className="relative group border rounded-[5px] border-primary/40 h-8 w-9 p-0.5" ref={mathButtonRef}>
                                 <button
                                     type="button"
                                     onClick={() => toggleMathDropdown()}
                                     className={cn(
-                                        "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
+                                        "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent cursor-pointer",
                                         isMathSymbolTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
                                     )}
                                     title={`Choose math symbol (Current: ${selectedSymbol})`}
@@ -813,7 +734,7 @@ export default function BoardTopBar({
                                                     type="button"
                                                     onClick={() => handleSymbolClick(s.value)}
                                                     className={cn(
-                                                        "p-1.5 flex items-center justify-center text-sm font-thin rounded-[5px] transition-all duration-200",
+                                                        "p-1.5 flex items-center justify-center text-sm font-thin rounded-[5px] transition-all duration-200 cursor-pointer",
                                                         selectedSymbol === s.value
                                                             ? "bg-primary text-primary-foreground"
                                                             : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -829,13 +750,13 @@ export default function BoardTopBar({
                                 )}
                             </div>
 
-
+                            {/* Emoji Dropdown */}
                             <div className="relative group border rounded-[5px] border-primary/40 h-8 w-9 p-0.5" ref={emojiButtonRef}>
                                 <button
                                     type="button"
                                     onClick={() => toggleEmojiDropdown()}
                                     className={cn(
-                                        "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent",
+                                        "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent cursor-pointer",
                                         isEmojiTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
                                     )}
                                     title={`Choose emoji (Current: ${selectedEmoji})`}
@@ -856,7 +777,7 @@ export default function BoardTopBar({
                                                     type="button"
                                                     onClick={() => handleEmojiClick(e.value)}
                                                     className={cn(
-                                                        "p-1.5 flex items-center justify-center text-lg rounded-[5px] transition-all duration-200",
+                                                        "p-1.5 flex items-center justify-center text-lg rounded-[5px] transition-all duration-200 cursor-pointer",
                                                         selectedEmoji === e.value
                                                             ? "bg-primary text-primary-foreground"
                                                             : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -873,12 +794,12 @@ export default function BoardTopBar({
                             </div>
 
                             {/* Undo/Redo */}
-                            {(role === 'teacher') && (
+                            {role === 'teacher' && (
                                 <div className="flex items-center gap-0.5 h-8 sm:gap-1 px-1 sm:px-2 border-r border-border/50 shrink-0">
                                     <button
                                         type="button"
                                         onClick={() => document.dispatchEvent(new CustomEvent("undo-trigger"))}
-                                        className="p-1.5 aspect-square h-8 border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-300 shadow-sm shrink-0"
+                                        className="p-1.5 aspect-square h-8 border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-300 shadow-sm shrink-0 cursor-pointer"
                                         title="Undo (Ctrl+Z)"
                                     >
                                         <RotateCcw size={18} className="mx-auto" />
@@ -886,7 +807,7 @@ export default function BoardTopBar({
                                     <button
                                         type="button"
                                         onClick={() => document.dispatchEvent(new CustomEvent("redo-trigger"))}
-                                        className="p-1.5 aspect-square h-8 border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-300 shadow-sm shrink-0"
+                                        className="p-1.5 aspect-square h-8 border rounded-[5px] border-primary/40 hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-300 shadow-sm shrink-0 cursor-pointer"
                                         title="Redo (Ctrl+Shift+Z)"
                                     >
                                         <RotateCw size={18} className="mx-auto" />
@@ -902,7 +823,7 @@ export default function BoardTopBar({
                                         type="button"
                                         onClick={() => tool === "image-stamp" ? setTool("pen:pen") : boardFileInputRef.current?.click()}
                                         className={cn(
-                                            "p-1.5 transition-all duration-300 border rounded-[5px] border-primary/40 shadow-sm",
+                                            "p-1.5 transition-all duration-300 border rounded-[5px] border-primary/40 shadow-sm cursor-pointer",
                                             tool === "image-stamp"
                                                 ? "bg-primary text-primary-foreground shadow-lg"
                                                 : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -916,7 +837,7 @@ export default function BoardTopBar({
                                     <button
                                         type="button"
                                         onClick={() => pdfFileInputRef.current?.click()}
-                                        className="p-1.5 border rounded-[5px] border-primary/40 transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent shadow-sm"
+                                        className="p-1.5 border rounded-[5px] border-primary/40 transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-accent shadow-sm cursor-pointer"
                                         title="Upload PDF to Board"
                                     >
                                         <FileUp size={18} />
@@ -924,15 +845,15 @@ export default function BoardTopBar({
                                 </div>
                             )}
 
-                            {(role === 'teacher') && (
+                            {/* Canvas Color Picker */}
+                            {role === 'teacher' && (
                                 <div className="flex items-center gap-2 px-2 border-r border-border/50 h-8">
-                                    <span className="block lg:hidden text-[9px] font-black uppercase tracking-widest text-muted-foreground/50 leading-none">D</span>
                                     <div ref={bgButtonRef} className="h-8">
                                         <button
                                             type="button"
                                             onClick={toggleBgPicker}
                                             className={cn(
-                                                "flex items-center gap-1.5 p-1.5 rounded-[5px] border h-8 transition-all duration-300 shadow-sm",
+                                                "flex items-center gap-1.5 p-1.5 rounded-[5px] border h-8 transition-all duration-300 shadow-sm cursor-pointer",
                                                 showBgPicker ? "ring-2 ring-primary ring-offset-1 border-primary" : "border-primary/40"
                                             )}
                                             style={{
@@ -953,7 +874,7 @@ export default function BoardTopBar({
                                     style={{ top: bgPickerPos.top, left: bgPickerPos.left }}
                                 >
                                     <div className="p-1.5 bg-sidebar border border-border rounded-[5px] shadow-2xl">
-                                        <BackgroundPicker
+                                        <DemoBackgroundPicker
                                             color={boardColor}
                                             onChange={setBoardColor}
                                         />
@@ -962,14 +883,14 @@ export default function BoardTopBar({
                                 document.body
                             )}
 
-                            {/* Board Controls Toggles */}
-                            {(role === "teacher") && (
+                            {/* Synced / Free View Toggle */}
+                            {role === "teacher" && (
                                 <div className="flex items-center gap-1.5 shrink-0 px-2 border-r border-border/50 h-8">
                                     <button
                                         type="button"
                                         onClick={() => onToggleViewLocked?.(!isViewLocked)}
                                         className={cn(
-                                            "flex items-center gap-1.5 p-1.5 h-8 rounded-[5px] border transition-all duration-300 shadow-sm",
+                                            "flex items-center gap-1.5 p-1.5 h-8 rounded-[5px] border transition-all duration-300 shadow-sm cursor-pointer",
                                             isViewLocked
                                                 ? "bg-blue-500/10 border-blue-500/30 text-blue-500 hover:bg-blue-500/20"
                                                 : "bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20"
@@ -984,7 +905,15 @@ export default function BoardTopBar({
 
                             {/* Screen Recorder Button */}
                             {allowRecording !== false && (
-                                <ScreenRecorderButton sessionId={sessionId} role={role} />
+                                <button
+                                    type="button"
+                                    onClick={handleRecorderClick}
+                                    className="flex items-center gap-1.5 px-2.5 h-8 rounded-[5px] border border-primary/40 text-muted-foreground hover:text-red-400 hover:bg-accent transition-all duration-300 shadow-sm shrink-0 cursor-pointer"
+                                    title="Screen Recording (Demo Mode)"
+                                >
+                                    <Video size={16} className="text-red-500" />
+                                    <span className="text-[11px] font-semibold">Record</span>
+                                </button>
                             )}
 
                             {/* Fullscreen Toggle */}
@@ -993,7 +922,7 @@ export default function BoardTopBar({
                                     type="button"
                                     onClick={onToggleFullscreen}
                                     className={cn(
-                                        "flex items-center gap-1.5 p-1.5 h-8 rounded-[5px] border transition-all duration-300 shadow-sm",
+                                        "flex items-center gap-1.5 p-1.5 h-8 rounded-[5px] border transition-all duration-300 shadow-sm cursor-pointer",
                                         isFullscreen
                                             ? "bg-violet-500/10 border-violet-500/30 text-violet-500 hover:bg-violet-500/20"
                                             : "border-primary/40 text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -1007,7 +936,7 @@ export default function BoardTopBar({
                     )}
                 </nav>
 
-                {/* Scroll Indicator (Inside the scrollable area's wrapper) */}
+                {/* Scroll Indicator */}
                 {canScrollRight && (
                     <div
                         className="pointer-events-none absolute right-0 top-0 bottom-0 w-16 flex items-center justify-end pr-1 z-30 transition-opacity duration-300"
@@ -1022,10 +951,10 @@ export default function BoardTopBar({
                 )}
             </div>
 
-            {/* Fixed Action Cluster (Very Right, Always Visible) */}
-            <div className="flex items-center px-1 h-8 border-r border-border/50 bg-sidebar shrink-0 z-40 gap-2">
+            {/* Fixed Action Cluster (Right) */}
+            <div className="flex items-center px-1 h-8 border-r border-border/50 bg-sidebar shrink-0 z-40 gap-1 sm:gap-2">
                 {role === "student" && drawingEnabled === false && (
-                    <div className="text-[10px] font-bold whitespace-nowrap px-2 py-1 bg-red-500/10 text-red-500 rounded-[5px] border border-red-500/20 shadow-sm">
+                    <div className="text-[9px] sm:text-[10px] font-bold whitespace-nowrap px-1.5 sm:px-2 py-0.5 sm:py-1 bg-red-500/10 text-red-500 rounded-[5px] border border-red-500/20 shadow-sm">
                         No Canvas Access
                     </div>
                 )}
@@ -1034,64 +963,39 @@ export default function BoardTopBar({
                         type="button"
                         onClick={async () => {
                             const { isConfirmed } = await Swal.fire({
-                                title: "End Session?",
-                                text: "Are you sure you want to end this session for everyone?",
-                                icon: "warning",
+                                title: "Exit Demo Session?",
+                                text: "You will be redirected back to the TutorArc website.",
+                                icon: "question",
                                 showCancelButton: true,
                                 confirmButtonColor: "#f97316",
                                 cancelButtonColor: "#6b7280",
-                                confirmButtonText: "Yes, end session"
+                                confirmButtonText: "Exit Demo",
+                                cancelButtonText: "Stay in Demo",
                             })
                             if (isConfirmed && onEndSession) onEndSession(sessionId)
                         }}
-                        className="flex items-center justify-center py-1 px-2 h-8 w-fit text-[12px] font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-[5px] transition-all duration-300 shadow-lg shadow-orange-500/20 active:scale-95 group"
-                        title="End Session for everyone"
+                        className="flex items-center justify-center py-1 px-1.5 sm:px-2 h-7 sm:h-8 text-[10px] sm:text-[12px] font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-[5px] transition-all duration-300 shadow-md sm:shadow-lg shadow-orange-500/20 active:scale-95 group cursor-pointer shrink-0"
+                        title="Exit Demo Class"
                     >
                         End Class
                     </button>
                 )}
-                {role === "student" && (
-                    <button
-                        type="button"
-                        onClick={async () => {
-                            const { isConfirmed } = await Swal.fire({
-                                title: "Leave Session?",
-                                text: "Are you sure you want to leave this session?",
-                                icon: "question",
-                                showCancelButton: true,
-                                confirmButtonColor: "#ef4444",
-                                cancelButtonColor: "#6b7280",
-                                confirmButtonText: "Yes, leave"
-                            })
-                            if (isConfirmed) {
-                                await leaveSession(sessionId);
-                                window.location.href = "about:blank";
-                            }
-                        }}
-                        className="flex items-center justify-center py-1 px-2 h-8 w-fit text-[12px] font-medium bg-red-500 dark:bg-red-500/80 hover:bg-red-600 dark:hover:bg-red-500 text-white rounded-[5px] transition-all duration-300 shadow-lg shadow-red-500/20 active:scale-95 group"
-                        title="Leave Session"
-                    >
-                        Leave Class
-                    </button>
-                )}
             </div>
-            <div className="flex items-center px-1 h-8 border-r border-border/50 bg-sidebar shrink-0 z-40">
-                <SessionTimer
-                    initialDuration={duration}
-                    durationAdded={durationAdded}
-                    startTime={startTime}
-                    role={role}
-                    sessionId={sessionId}
-                    onEndSession={onEndSession}
-                    isClassEnded={isClassEnded}
-                />
+
+            {/* Session Timer */}
+            <div className="flex items-center px-1.5 sm:px-2 h-8 border-r border-border/50 bg-sidebar shrink-0 z-40">
+                <span className="font-mono text-[11px] sm:text-xs font-bold text-emerald-500 tracking-wider">
+                    {formatTimer(secondsElapsed)}
+                </span>
             </div>
-            <div className="flex items-center gap-2 px-3 h-8 border-l border-border/50 bg-sidebar shrink-0 z-40 shadow-[-8px_0_12px_rgba(0,0,0,0.05)]">
-                {/* <div className="h-[41px] flex items-center justify-between px-3 sm:px-6 border-b border-border shrink-0"> */}
-                {/* </div> */}
-                <span className="text-[10px] sm:text-xs font-black flex flex-col tracking-widest text-muted-background">{userName} <span className=" text-muted-foreground text-[0.7em]">{role == "teacher" ? "(Teacher)" : "(Student)"}</span></span>
+
+            {/* User Identity & Theme Toggle */}
+            <div className="flex items-center gap-1 sm:gap-2 px-1.5 sm:px-3 h-8 border-l border-border/50 bg-sidebar shrink-0 z-40 shadow-[-8px_0_12px_rgba(0,0,0,0.05)]">
+                <span className="hidden md:flex text-[10px] sm:text-xs font-black flex-col tracking-widest text-muted-background">
+                    {userName} <span className="text-muted-foreground text-[0.7em]">{role === "teacher" ? "(Teacher)" : "(Student)"}</span>
+                </span>
                 <div className="h-8 flex items-center">
-                    <ThemeToggle cn="w-8 h-8 rounded-[5px]" iconSize={14} />
+                    <ThemeToggle cn="w-7 h-7 sm:w-8 sm:h-8 rounded-[5px]" iconSize={14} />
                 </div>
             </div>
         </div>
