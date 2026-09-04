@@ -19,8 +19,8 @@ import {
   ShieldCheck,
   Users,
   Pencil,
-  X,
-  Lock
+  Lock,
+  X
 } from "lucide-react";
 import Image from "next/image";
 import ThemeToggle from "@/components/theme-toggle";
@@ -69,10 +69,10 @@ function HomePageContent() {
       if (roomInput.includes("tutorarc.cloud/")) {
         window.location.href = roomInput.trim();
       } else {
-        window.location.href = `${TUTORARC_MAIN_URL}/register`;
+        window.location.href = `${TUTORARC_MAIN_URL}/signup`;
       }
     } else {
-      window.location.href = `${TUTORARC_MAIN_URL}/register`;
+      window.location.href = `${TUTORARC_MAIN_URL}/signup`;
     }
   };
 
@@ -175,7 +175,7 @@ function HomePageContent() {
               Enter Session
             </a>
             <a
-              href={`${TUTORARC_MAIN_URL}/register`}
+              href={`${TUTORARC_MAIN_URL}/signup`}
               className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500 rounded-[5px] transition-all shadow-md shadow-blue-600/25 flex items-center gap-1.5"
             >
               Sign Up Free
@@ -195,7 +195,7 @@ function HomePageContent() {
           </div>
 
           <h1 className="text-4xl sm:text-6xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.12]">
-            An Interactive <span className="bg-linear-to-r from-blue-600 via-indigo-500 to-purple-600 bg-clip-text text-transparent">Online Teaching Board</span> for Modern Classrooms
+            An Interactive <span className="bg-linear-to-r from-blue-600 via-indigo-500 to-blue-600 bg-clip-text text-transparent">Online Teaching Board</span> for Modern Classrooms
           </h1>
 
           <p className="text-base text-slate-600 dark:text-zinc-400 leading-relaxed max-w-2xl mx-auto">
@@ -446,7 +446,7 @@ function HomePageContent() {
                     ].map((item, idx) => (
                       <div
                         key={idx}
-                        className={`h-8 sm:h-9 rounded-xl flex items-center justify-center text-sm font-medium transition-colors ${
+                        className={`h-8 sm:h-9 rounded-xl flex items-center justify-center hover:cursor-pointer text-sm font-medium transition-colors ${
                           item.active
                             ? "bg-zinc-100 text-zinc-950 font-bold shadow-md"
                             : "text-zinc-300 hover:text-white hover:bg-zinc-800/60"
@@ -519,7 +519,8 @@ function HomePageContent() {
 
       {/* ── 6. Section: Classroom Controls & Permissions ──────────── */}
       <section id="controls" className="py-16 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto scroll-mt-20">
-        <div className="rounded-[5px] bg-linear-to-r from-blue-600 via-indigo-600 to-purple-600 p-8 sm:p-14 text-white shadow-2xl text-left space-y-6 relative overflow-hidden">
+        <div className="rounded-[5px] bg-linear-to-r from-blue-600 via-indigo-600 to-[#6466F1] p-8 sm:p-14 text-white shadow-2xl text-left space-y-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-1/2 h-full bg-white/10 skew-x-12 translate-x-1/2 pointer-events-none" />
           <div className="max-w-2xl space-y-4 relative z-10">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[5px] bg-white/20 border border-white/30 text-white text-xs font-bold uppercase tracking-wider">
               Classroom Management
@@ -549,8 +550,7 @@ function HomePageContent() {
         </div>
       </section>
 
-
-      {/* ── Section: Traditional Platforms vs TutorArc.cloud ────────── */}
+      {/* ── 7. Section: Traditional Platforms vs TutorArc.cloud ────────── */}
       <section id="comparison" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-200 dark:border-zinc-900 space-y-12 scroll-mt-20">
         <div className="text-center space-y-3 max-w-2xl mx-auto">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[5px] bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-wider">
@@ -761,8 +761,7 @@ function HomePageContent() {
         </div>
       </section>
 
-
-      {/* ── 7. Section: Start Your First Session Today ─────────────── */}
+      {/* ── 8. Section: Start Your First Session Today ─────────────── */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto text-center space-y-6">
         <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">
           Start Teaching on TutorArc Board Today
@@ -772,10 +771,10 @@ function HomePageContent() {
         </p>
         <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
           <a
-            href={`${TUTORARC_MAIN_URL}/register`}
+            href={`${TUTORARC_MAIN_URL}/signup`}
             className="px-8 py-3.5 text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-500 rounded-[5px] transition-all shadow-xl shadow-blue-600/30"
           >
-            Get Started for Free →
+            Get Started for Free <span className="ml-1">→</span>
           </a>
           <a
             href={`${TUTORARC_MAIN_URL}/login`}
@@ -786,7 +785,7 @@ function HomePageContent() {
         </div>
       </section>
 
-      {/* ── 8. Section: FAQ ─────────────────────────────────────────── */}
+      {/* ── 9. Section: FAQ ─────────────────────────────────────────── */}
       <section id="faq" className="py-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto border-t border-slate-200 dark:border-zinc-900 space-y-8 scroll-mt-20">
         <div className="text-center space-y-2">
           <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest">FAQ</p>
@@ -830,7 +829,7 @@ function HomePageContent() {
         </div>
       </section>
 
-      {/* ── 9. Footer (Theme-Adaptive with Contact Info) ───────────── */}
+      {/* ── 10. Footer (Theme-Adaptive with Contact Info) ───────────── */}
       <footer className="border-t border-slate-200 dark:border-zinc-900 bg-white dark:bg-zinc-950 text-slate-600 dark:text-zinc-400 py-12 px-4 sm:px-6 lg:px-8 transition-colors duration-200">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 pb-10 border-b border-slate-200 dark:border-zinc-900">
           {/* Column 1: Logo & Description */}
@@ -852,7 +851,7 @@ function HomePageContent() {
             <ul className="space-y-1.5 text-[11px]">
               <li><a href={`${TUTORARC_MAIN_URL}`} className="hover:text-blue-600 dark:hover:text-white transition-colors">TutorArc Cloud Home</a></li>
               <li><a href={`${TUTORARC_MAIN_URL}/login`} className="hover:text-blue-600 dark:hover:text-white transition-colors">Teacher Sign In</a></li>
-              <li><a href={`${TUTORARC_MAIN_URL}/register`} className="hover:text-blue-600 dark:hover:text-white transition-colors">Create Free Account</a></li>
+              <li><a href={`${TUTORARC_MAIN_URL}/signup`} className="hover:text-blue-600 dark:hover:text-white transition-colors">Create Free Account</a></li>
             </ul>
           </div>
 
