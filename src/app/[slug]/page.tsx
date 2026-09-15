@@ -1,5 +1,5 @@
-import { db, classes, classVisitors } from "@/db";
-import { like, eq } from "drizzle-orm";
+import { db, classes, classVisitors, sharedQuizzes } from "@/db";
+import { like, eq, and, inArray } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import MainBoard from "@/components/Board/MainBoard";
 import StudentGate from "@/components/Board/StudentGate";
@@ -24,8 +24,8 @@ export async function generateMetadata({
 
         if (!session) {
             return {
-                title: "Live Board - TutorArc",
-                description: "Join your live advanced digital board classroom session on TutorArc."
+                title: "Live Board - WhiteBoardZone",
+                description: "Join your live advanced digital board classroom session on WhiteBoardZone."
             };
         }
 
@@ -49,8 +49,8 @@ export async function generateMetadata({
     } catch (error) {
         console.error("Error generating metadata:", error);
         return {
-            title: "Live Board - TutorArc",
-            description: "Join your live advanced digital board classroom session on TutorArc."
+            title: "Live Board - WhiteBoardZone",
+            description: "Join your live advanced digital board classroom session on WhiteBoardZone."
         };
     }
 }
@@ -83,6 +83,25 @@ export default async function LiveSlugPage({
             teacherSession.startTime = new Date();
         }
 
+        // Automatically start any quizzes associated with this class session when teacher joins
+        try {
+            const siblingClasses = teacherSession.sessionId
+                ? await db.query.classes.findMany({
+                    where: eq(classes.sessionId, teacherSession.sessionId),
+                    columns: { id: true },
+                })
+                : [];
+            const siblingIds = Array.from(new Set([teacherSession.id, ...siblingClasses.map((c) => c.id)]));
+            if (siblingIds.length > 0) {
+                await db
+                    .update(sharedQuizzes)
+                    .set({ isActive: 1 })
+                    .where(and(inArray(sharedQuizzes.classId, siblingIds), eq(sharedQuizzes.isActive, 0)));
+            }
+        } catch (quizErr) {
+            console.error("Error auto-starting class quizzes on board join:", quizErr);
+        }
+
         /* ─── START OF END SESSION REDIRECT LOGIC ──── */
         if (teacherSession.isClassEnded === 1) {
             return redirect("/class-ended");
@@ -109,6 +128,8 @@ export default async function LiveSlugPage({
                     allowQuiz={teacherSession.allowQuiz !== 0}
                     allowChats={teacherSession.allowChats !== 0}
                     allowScreenSharing={teacherSession.allowScreenSharing !== 0}
+                    showWelcomeImage={teacherSession.showWelcomeImage !== 0}
+                    welcomeImageUrl={teacherSession.welcomeImageUrl}
                 />
             </div>
         );
@@ -176,6 +197,8 @@ export default async function LiveSlugPage({
                     allowQuiz={studentSession.allowQuiz !== 0}
                     allowChats={studentSession.allowChats !== 0}
                     allowScreenSharing={studentSession.allowScreenSharing !== 0}
+                    showWelcomeImage={studentSession.showWelcomeImage !== 0}
+                    welcomeImageUrl={studentSession.welcomeImageUrl}
                 />
             </div>
         );

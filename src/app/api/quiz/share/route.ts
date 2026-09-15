@@ -97,7 +97,8 @@ export async function POST(req: Request) {
 
     const shareToken = crypto.randomBytes(16).toString("hex");
     const expiryTime = expiryHours ? parseFloat(expiryHours) : 24;
-    const expiresAt = new Date(Date.now() + expiryTime * 60 * 60 * 1000);
+    const baseTime = session.startTime ? new Date(session.startTime).getTime() : Date.now();
+    const expiresAt = new Date(baseTime + expiryTime * 60 * 60 * 1000);
 
     await db.insert(sharedQuizzes).values({
       shareToken,

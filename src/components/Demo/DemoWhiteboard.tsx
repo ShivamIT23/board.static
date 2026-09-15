@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useCallback, useState } from "react"
 import { Canvas, PencilBrush, Path, FabricImage, IText, Line, FabricObject, Rect, Ellipse, Polygon, Group } from "fabric"
-import type { BoardFabricObject, BoardIText, WhiteboardProps, ShapePayload, TextPayload, ImagePayload, StoredBoardObject, StrokePayload, LaserPayload, LiveStroke, FullStrokePayload } from "@/types/board"
+import type { BoardFabricObject, BoardIText, WhiteboardProps, ShapePayload,  ImagePayload, StoredBoardObject } from "@/types/board"
 
 import { cn } from "@/lib/utils"
 import { PENCIL_CURSOR, ERASER_CURSOR, TEXT_CURSOR } from "@/lib/cursors"
@@ -35,12 +35,10 @@ function DemoWhiteboard({ sessionId, role, tool, color, boardColor, bgImages, br
     const currentPageRef = useRef(currentPage)
 
     const pagesDataRef = useRef<Record<number, Record<string, unknown>[]>>({})
-    const liveStrokesRef = useRef<Record<string, LiveStroke>>({})
 
     // Track active text editing for UI overlay
     const [editingTextPos, setEditingTextPos] = useState<{ x: number, y: number } | null>(null)
     const activeTextObjRef = useRef<BoardIText | null>(null)
-    const liveFabricObjsRef = useRef<Record<string, Path>>({})
     const boardFileObjsRef = useRef<Record<string, FabricImage>>({})
     const textObjsRef = useRef<Record<string, IText>>({})
     const shapeObjsRef = useRef<Record<string, FabricObject>>({})
@@ -92,7 +90,6 @@ function DemoWhiteboard({ sessionId, role, tool, color, boardColor, bgImages, br
     const [editingFontFamily, setEditingFontFamily] = useState(fontFamily || "Inter, sans-serif")
 
     const localStrokePointsRef = useRef<{ x: number; y: number }[]>([])
-    const liveStrokesNormRef = useRef<Record<string, { x: number; y: number }[]>>({})
 
     const undoStackRef = useRef<string[]>([])
     const redoStackRef = useRef<string[]>([])
@@ -297,11 +294,6 @@ function DemoWhiteboard({ sessionId, role, tool, color, boardColor, bgImages, br
         y: cw > 0 ? py / cw : 0,
     }), [])
 
-    const fromNorm = useCallback((nx: number, ny: number, cw: number) => ({
-        x: nx * cw,
-        y: ny * cw,
-    }), [])
-
     useEffect(() => {
         const handler = (e: MouseEvent) => {
             const target = e.target as HTMLElement
@@ -380,15 +372,6 @@ function DemoWhiteboard({ sessionId, role, tool, color, boardColor, bgImages, br
             canvas.requestRenderAll()
         }
     }, [fontSize, fontFamily])
-
-    const buildPathStr = useCallback((pts: Array<{ x: number; y: number }>) => {
-        if (pts.length === 0) return "M 0 0"
-        let d = `M ${pts[0].x} ${pts[0].y}`
-        for (let i = 1; i < pts.length; i++) {
-            d += ` L ${pts[i].x} ${pts[i].y}`
-        }
-        return d
-    }, [])
 
     const showLaserPoint = useCallback((x: number, y: number, prevX?: number, prevY?: number) => {
         const canvas = fabricRef.current
@@ -1299,7 +1282,7 @@ function DemoWhiteboard({ sessionId, role, tool, color, boardColor, bgImages, br
                                     setShowFontFamilyDropdown(false)
                                 }}
                                 className={cn(
-                                    "h-6 px-1.5 min-w-[30px] border rounded border-white/20 text-[11px] font-bold flex items-center justify-center transition-colors",
+                                    "h-6 px-1.5 min-w-7.5 border rounded border-white/20 text-[11px] font-bold flex items-center justify-center transition-colors",
                                     showFontSizeDropdown ? "bg-indigo-600 text-white" : "bg-white/10 text-white hover:bg-white/20"
                                 )}
                                 title={`Font Size: ${editingFontSize}`}
@@ -1311,7 +1294,7 @@ function DemoWhiteboard({ sessionId, role, tool, color, boardColor, bgImages, br
                                 <div data-font-control>
                                     <div className="fixed inset-0 z-9998" data-font-control onClick={() => setShowFontSizeDropdown(false)} />
                                     <div
-                                        className="fixed z-9999 flex flex-col gap-px p-1 bg-zinc-900 border border-white/20 rounded shadow-2xl max-h-[180px] overflow-y-auto no-scrollbar"
+                                        className="fixed z-9999 flex flex-col gap-px p-1 bg-zinc-900 border border-white/20 rounded shadow-2xl max-h-45 overflow-y-auto no-scrollbar"
                                         style={{
                                             top: fontSizeDropdownPos.top,
                                             left: fontSizeDropdownPos.left
@@ -1358,12 +1341,12 @@ function DemoWhiteboard({ sessionId, role, tool, color, boardColor, bgImages, br
                                     setShowFontSizeDropdown(false)
                                 }}
                                 className={cn(
-                                    "h-6 px-1.5 min-w-[56px] border rounded border-white/20 text-[11px] font-medium flex items-center gap-1 transition-colors",
+                                    "h-6 px-1.5 min-w-14 border rounded border-white/20 text-[11px] font-medium flex items-center gap-1 transition-colors",
                                     showFontFamilyDropdown ? "bg-indigo-600 text-white" : "bg-white/10 text-white hover:bg-white/20"
                                 )}
                                 title={`Font: ${FONT_FAMILIES.find(f => f.id === editingFontFamily)?.label ?? "Inter"}`}
                             >
-                                <span className="truncate max-w-[44px]" style={{ fontFamily: editingFontFamily }}>
+                                <span className="truncate max-w-11" style={{ fontFamily: editingFontFamily }}>
                                     {FONT_FAMILIES.find(f => f.id === editingFontFamily)?.label ?? "Inter"}
                                 </span>
                                 <ChevronDown size={10} className="opacity-50 shrink-0" />

@@ -144,7 +144,7 @@ export default function UserList({
                                     <div className="w-6 h-6 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-600 text-[10px] font-black uppercase border border-orange-500/20">
                                         {user.username.charAt(0)}
                                     </div>
-                                    <span className="text-[11px] font-bold text-foreground/90 truncate max-w-[80px]">
+                                    <span className="text-[11px] font-bold text-foreground/90 truncate max-w-20">
                                         {user.username}_{user.visitor_id}
                                     </span>
                                 </div>
@@ -181,7 +181,7 @@ export default function UserList({
                                     <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-card shadow-sm" />
                                 </div>
                                 <div className="flex flex-col min-w-0">
-                                    <span className="text-[11px] font-bold text-foreground/90 truncate max-w-[85px] sm:max-w-[100px]" title={user.username}>
+                                    <span className="text-[11px] font-bold text-foreground/90 truncate max-w-21.25 sm:max-w-25" title={user.username}>
                                         {user.username}{role === "teacher" && user.role !== "teacher" && user.visitor_id && `_${user.visitor_id}`}
                                     </span>
                                     <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tight">

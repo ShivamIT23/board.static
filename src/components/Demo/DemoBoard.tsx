@@ -307,7 +307,7 @@ export default function DemoBoard() {
             cancelButtonText: "Stay in Demo",
         }).then((result) => {
             if (result.isConfirmed) {
-                window.location.href = "https://tutorarc.cloud";
+                window.location.href = "https://whiteboardzone.com";
             }
         });
     };
@@ -339,7 +339,7 @@ export default function DemoBoard() {
                     const mainSiteUrl = process.env.NEXT_PUBLIC_MAIN_SITE_URL ||
                         (typeof window !== "undefined" && window.location.hostname === "localhost"
                             ? "http://localhost:3000"
-                            : "https://tutorarc.cloud");
+                            : "https://whiteboardzone.com");
                     res = await fetch(`${mainSiteUrl}/api/site-settings`, { cache: "no-store" });
                 }
                 if (res.ok) {

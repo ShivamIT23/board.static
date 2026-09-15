@@ -359,6 +359,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 const img = new Image()
                 img.crossOrigin = "anonymous"
                 img.onload = () => resolve(img)
+                img.onerror = () => resolve(img)
                 img.src = url
             }))
         )
@@ -369,6 +370,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
         const drawCommands: { img: HTMLImageElement, top: number, scale: number }[] = []
 
         images.forEach(img => {
+            if (!img.width) return
             const scale = containerWidth / img.width
             drawCommands.push({ img, top: totalHeight, scale })
             totalHeight += img.height * scale
@@ -2105,7 +2107,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                                     setShowFontFamilyDropdown(false)
                                 }}
                                 className={cn(
-                                    "h-6 px-1.5 min-w-[30px] border rounded border-white/20 text-[11px] font-bold flex items-center justify-center transition-colors",
+                                    "h-6 px-1.5 min-w-7.5 border rounded border-white/20 text-[11px] font-bold flex items-center justify-center transition-colors",
                                     showFontSizeDropdown ? "bg-indigo-600 text-white" : "bg-white/10 text-white hover:bg-white/20"
                                 )}
                                 title={`Font Size: ${editingFontSize}`}
@@ -2117,7 +2119,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                                 <div data-font-control>
                                     <div className="fixed inset-0 z-9998" data-font-control onClick={() => setShowFontSizeDropdown(false)} />
                                     <div
-                                        className="fixed z-9999 flex flex-col gap-px p-1 bg-zinc-900 border border-white/20 rounded shadow-2xl max-h-[180px] overflow-y-auto no-scrollbar"
+                                        className="fixed z-9999 flex flex-col gap-px p-1 bg-zinc-900 border border-white/20 rounded shadow-2xl max-h-45 overflow-y-auto no-scrollbar"
                                         style={{
                                             top: (fontSizeButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
                                             left: fontSizeButtonRef.current?.getBoundingClientRect().left ?? 0
@@ -2162,12 +2164,12 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                                     setShowFontSizeDropdown(false)
                                 }}
                                 className={cn(
-                                    "h-6 px-1.5 min-w-[56px] border rounded border-white/20 text-[11px] font-medium flex items-center gap-1 transition-colors",
+                                    "h-6 px-1.5 min-w-14 border rounded border-white/20 text-[11px] font-medium flex items-center gap-1 transition-colors",
                                     showFontFamilyDropdown ? "bg-indigo-600 text-white" : "bg-white/10 text-white hover:bg-white/20"
                                 )}
                                 title={`Font: ${FONT_FAMILIES.find(f => f.id === editingFontFamily)?.label ?? "Inter"}`}
                             >
-                                <span className="truncate max-w-[44px]" style={{ fontFamily: editingFontFamily }}>
+                                <span className="truncate max-w-11" style={{ fontFamily: editingFontFamily }}>
                                     {FONT_FAMILIES.find(f => f.id === editingFontFamily)?.label ?? "Inter"}
                                 </span>
                                 <ChevronDown size={10} className="opacity-50 shrink-0" />

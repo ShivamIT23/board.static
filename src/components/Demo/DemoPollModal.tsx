@@ -1,9 +1,10 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { BarChart2, CheckCircle2, Plus, Trash2, X, Play, StopCircle, RotateCcw, History, Clock } from "lucide-react"
+import { BarChart2, CheckCircle2, Plus, Trash2, X, Play, StopCircle, RotateCcw, History, Clock, BookOpen } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Poll } from "@/types/chat"
+import { DEFAULT_DEMO_QUESTIONS, type FetchedQuizQuestion } from "./DemoQuizModal"
 
 interface PollModalProps {
     isOpen: boolean
@@ -57,8 +58,53 @@ export default function DemoPollModal({
     onVotePoll,
 }: PollModalProps) {
     const [isCreating, setIsCreating] = useState(false)
+    const [createTab, setCreateTab] = useState<"custom" | "quiz">("custom")
     const [question, setQuestion] = useState("How clear is today's topic on Whiteboard tools?")
     const [options, setOptions] = useState(["Completely Clear! 👍", "Need a quick review 🤔", "Please re-explain ❓"])
+
+    // Demo quiz questions for "From Quiz" tab (defaults to same questions as DemoQuizModal)
+    const [demoQuizQuestions, setDemoQuizQuestions] = useState<FetchedQuizQuestion[]>(DEFAULT_DEMO_QUESTIONS)
+
+    // Sync quiz questions from session if available, falling back to DEFAULT_DEMO_QUESTIONS
+    useEffect(() => {
+        if (!isCreating || createTab !== "quiz" || role !== "teacher" || !sessionId) return
+
+        const fetchQuiz = async () => {
+            try {
+                const res = await fetch(`/api/quiz?sessionId=${sessionId}`)
+                if (res.ok) {
+                    const data = await res.json()
+                    if (data.questions && data.questions.length > 0) {
+                        setDemoQuizQuestions(data.questions)
+                    }
+                }
+            } catch {
+                // Keep DEFAULT_DEMO_QUESTIONS on failure
+            }
+        }
+
+        fetchQuiz()
+    }, [isCreating, createTab, role, sessionId])
+
+    // Launch a quiz question as a poll (demo version)
+    const handleLaunchQuizAsPoll = (q: { question: string; options: string[] }, now: number) => {
+        if (onLaunchPoll) {
+            const newPoll: Poll = {
+                id: `demo-poll-${now}`,
+                question: q.question,
+                options: q.options.map((opt, idx) => ({
+                    id: `opt-${idx}`,
+                    text: opt,
+                    votes: [],
+                })),
+                isActive: true,
+                createdAt: now,
+                createdBy: "Teacher",
+            }
+            onLaunchPoll(newPoll)
+        }
+        setIsCreating(false)
+    }
 
     const handleAddOption = () => {
         if (options.length < 5) {
@@ -144,7 +190,7 @@ export default function DemoPollModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-I 2 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-            <div className="relative w-[480px] max-w-[94vw] min-h-[340px] bg-card border border-border rounded-[5px] shadow-2xl overflow-hidden flex flex-col max-h-[88vh] transition-all duration-300">
+            <div className="relative w-120 max-w-[94vw] min-h-85 bg-card border border-border rounded-[5px] shadow-2xl overflow-hidden flex flex-col max-h-[88vh] transition-all duration-300">
                 
                 {/* Header matching user wireframe with comfortable padding */}
                 <div className="flex items-center justify-between px-2 gap-3 py-2 border-b border-border/80 bg-muted/40">
@@ -179,71 +225,150 @@ export default function DemoPollModal({
                 {/* Main Content Area with generous padding */}
                 <div className="p-4 overflow-y-auto space-y-5 flex-1">
                     
-                    {/* Mode 1: Create Poll Form */}
+                    {/* Mode 1: Create Poll — Tabbed Interface */}
                     {isCreating && role === "teacher" ? (
-                        <form onSubmit={handleLaunchPoll} className="space-y-6 animate-in fade-in duration-200">
-                            <div className="flex items-center justify-between pb-2">
-                                <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Create New Poll</span>
-                            </div>
-
-                            <div className="space-y-3">
-                                <label className="text-xs font-bold text-muted-foreground">Question</label>
-                                <input
-                                    type="text"
-                                    value={question}
-                                    onChange={(e) => setQuestion(e.target.value)}
-                                    placeholder="e.g. Do you understand this topic?"
-                                    className="w-full px-2 py-1.5 rounded-[5px] bg-muted/40 border border-border text-sm font-medium outline-none focus:border-primary text-foreground"
-                                    required
-                                />
-                            </div>
-
-                            <div className="space-y-3.5">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-xs font-bold text-muted-foreground">Options</label>
-                                    {options.length < 5 && (
-                                        <button
-                                            type="button"
-                                            onClick={handleAddOption}
-                                            className="text-xs text-primary hover:underline font-bold flex items-center gap-1"
-                                        >
-                                            <Plus size={14} /> Add Option
-                                        </button>
+                        <div className="space-y-4 animate-in fade-in duration-200">
+                            {/* Tab Switcher */}
+                            <div className="flex rounded-[5px] bg-muted/40 border border-border p-0.5 gap-0.5">
+                                <button
+                                    type="button"
+                                    onClick={() => setCreateTab("custom")}
+                                    className={cn(
+                                        "flex-1 py-1.5 rounded-[4px] text-xs font-extrabold transition-all flex items-center justify-center gap-1.5",
+                                        createTab === "custom"
+                                            ? "bg-background text-foreground shadow-sm border border-border/60"
+                                            : "text-muted-foreground hover:text-foreground"
                                     )}
-                                </div>
+                                >
+                                    <Plus size={13} /> Create Custom
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCreateTab("quiz")}
+                                    className={cn(
+                                        "flex-1 py-1.5 rounded-[4px] text-xs font-extrabold transition-all flex items-center justify-center gap-1.5",
+                                        createTab === "quiz"
+                                            ? "bg-background text-foreground shadow-sm border border-border/60"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    <BookOpen size={13} /> From Quiz
+                                </button>
+                            </div>
 
-                                {options.map((opt, idx) => (
-                                    <div key={idx} className="flex items-center gap-3">
-                                        <span className="w-6 text-center text-xs font-extrabold text-muted-foreground">{String.fromCharCode(65 + idx)}</span>
+                            {/* Tab Content: Create Custom */}
+                            {createTab === "custom" && (
+                                <form onSubmit={handleLaunchPoll} className="space-y-6 animate-in fade-in duration-200">
+                                    <div className="flex items-center justify-between pb-2">
+                                        <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Create New Poll</span>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <label className="text-xs font-bold text-muted-foreground">Question</label>
                                         <input
                                             type="text"
-                                            value={opt}
-                                            onChange={(e) => handleOptionChange(idx, e.target.value)}
-                                            placeholder={`Option ${idx + 1}`}
-                                            className="flex-1 px-2 py-1 rounded-[5px] bg-muted/40 border border-border text-xs font-medium outline-none focus:border-primary text-foreground"
+                                            value={question}
+                                            onChange={(e) => setQuestion(e.target.value)}
+                                            placeholder="e.g. Do you understand this topic?"
+                                            className="w-full px-2 py-1.5 rounded-[5px] bg-muted/40 border border-border text-sm font-medium outline-none focus:border-primary text-foreground"
                                             required
                                         />
-                                        {options.length > 2 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRemoveOption(idx)}
-                                                className="p-2 text-muted-foreground hover:text-destructive transition-colors"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        )}
                                     </div>
-                                ))}
-                            </div>
 
-                            <button
-                                type="submit"
-                                disabled={!question.trim() || options.filter(o => o.trim()).length < 2}
-                                className="w-full mt-2 py-2 rounded-[5px] bg-primary text-primary-foreground font-bold text-xs hover:opacity-90 transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
-                            >
-                                <Play size={15} fill="currentColor" /> Launch Poll
-                            </button>
-                        </form>
+                                    <div className="space-y-3.5">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-xs font-bold text-muted-foreground">Options</label>
+                                            {options.length < 5 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAddOption}
+                                                    className="text-xs text-primary hover:underline font-bold flex items-center gap-1"
+                                                >
+                                                    <Plus size={14} /> Add Option
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {options.map((opt, idx) => (
+                                            <div key={idx} className="flex items-center gap-3">
+                                                <span className="w-6 text-center text-xs font-extrabold text-muted-foreground">{String.fromCharCode(65 + idx)}</span>
+                                                <input
+                                                    type="text"
+                                                    value={opt}
+                                                    onChange={(e) => handleOptionChange(idx, e.target.value)}
+                                                    placeholder={`Option ${idx + 1}`}
+                                                    className="flex-1 px-2 py-1 rounded-[5px] bg-muted/40 border border-border text-xs font-medium outline-none focus:border-primary text-foreground"
+                                                    required
+                                                />
+                                                {options.length > 2 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveOption(idx)}
+                                                        className="p-2 text-muted-foreground hover:text-destructive transition-colors"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        disabled={!question.trim() || options.filter(o => o.trim()).length < 2}
+                                        className="w-full mt-2 py-2 rounded-[5px] bg-primary text-primary-foreground font-bold text-xs hover:opacity-90 transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                                    >
+                                        <Play size={15} fill="currentColor" /> Launch Poll
+                                    </button>
+                                </form>
+                            )}
+
+                            {/* Tab Content: From Quiz */}
+                            {createTab === "quiz" && (
+                                <div className="space-y-3 animate-in fade-in duration-200">
+                                    <div className="p-2 rounded-[5px] bg-primary/5 border border-primary/10 text-primary text-[11px] font-semibold">
+                                        {demoQuizQuestions.length} questions available — launch any as a standalone poll.
+                                    </div>
+                                    <div className="max-h-80 overflow-y-auto pr-1 space-y-2.5 no-scrollbar">
+                                        {demoQuizQuestions.map((q, idx) => (
+                                            <div
+                                                key={q.id}
+                                                className="p-2.5 rounded-[5px] bg-card border border-border/80 hover:border-border transition-all space-y-2 shadow-2xs"
+                                            >
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <p className="font-bold text-xs text-foreground leading-snug flex-1">
+                                                        <span className="text-muted-foreground mr-1">Q{idx + 1}.</span> {q.question}
+                                                    </p>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-1.5">
+                                                    {q.options.map((opt, optIdx) => (
+                                                        <div
+                                                            key={optIdx}
+                                                            className={cn(
+                                                                "px-2 py-1 rounded-[4px] text-[10px] font-medium border truncate",
+                                                                optIdx === q.correctOption
+                                                                    ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400"
+                                                                    : "bg-muted/30 border-border text-muted-foreground"
+                                                            )}
+                                                            title={opt}
+                                                        >
+                                                            <span className="font-bold mr-0.5">{String.fromCharCode(65 + optIdx)}.</span> {opt}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleLaunchQuizAsPoll(q, Date.now())}
+                                                    className="w-full py-1.5 rounded-[5px] bg-primary/10 text-primary hover:bg-primary/20 font-bold text-[11px] flex items-center justify-center gap-1.5 border border-primary/20 transition-colors"
+                                                >
+                                                    <Play size={12} fill="currentColor" /> Launch as Poll
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     ) : (
                         /* Mode 2: Live Poll + History (Matches User Diagram) */
                         <div className="space-y-4 animate-in fade-in duration-200">
@@ -324,7 +449,7 @@ export default function DemoPollModal({
                                     </div>
 
                                     {/* Scrollable History List */}
-                                    <div className="max-h-[240px] overflow-y-auto pr-1 w-full space-y-3 no-scrollbar">
+                                    <div className="max-h-60 overflow-y-auto pr-1 w-full space-y-3 no-scrollbar">
                                         {pollsHistory.length > 0 ? (
                                             pollsHistory.map((histPoll) => {
                                                 const hTotal = histPoll.options.reduce((s, o) => s + o.votes.length, 0)

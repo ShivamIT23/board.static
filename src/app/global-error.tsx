@@ -2,6 +2,7 @@
 
 import { AlertCircle, RefreshCcw } from "lucide-react";
 import { Geist, Geist_Mono } from "next/font/google";
+import { useEffect } from "react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,6 +21,10 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    // Log the error to an error reporting service
+    console.error(error);
+  }, [error]);
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="min-h-screen bg-white dark:bg-black font-sans antialiased flex items-center justify-center p-4">

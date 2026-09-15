@@ -254,6 +254,8 @@ export const classes = mysqlTable('tb_classes', {
   allowQuiz: tinyint('allow_quiz').default(1),
   allowChats: tinyint('allow_chats').default(1),
   allowScreenSharing: tinyint('allow_screen_sharing').default(1),
+  showWelcomeImage: tinyint('show_welcome_image').default(0),
+  welcomeImageUrl: varchar('welcome_image_url', { length: 500 }),
 });
 
 export const notifications = mysqlTable('tb_notifications', {
@@ -292,8 +294,10 @@ export const contact = mysqlTable('tb_contact', {
   userId: varchar('user_id', { length: 255 }),
   name: varchar('name', { length: 255 }),
   email: varchar('email', { length: 255 }),
+  phone: varchar('phone', { length: 50 }),
   subject: varchar('subject', { length: 255 }).notNull(),
-  message: varchar('message', { length: 500 }).notNull(),
+  message: text('message').notNull(),
+  source: varchar('source', { length: 50 }).default('contact').notNull(),
   status: mysqlEnum("status", ["unseen", "seen", "connected"]).default('unseen'), 
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
@@ -522,9 +526,38 @@ export const siteSettings = mysqlTable('tb_site_settings', {
   id: int('id').primaryKey().autoincrement(),
   settingKey: varchar('setting_key', { length: 100 }).default('default').notNull().unique(),
   whatsappNumber: varchar('whatsapp_number', { length: 50 }).default('+91-7503663732').notNull(),
-  supportEmail: varchar('support_email', { length: 255 }).default('digital@tutorarc.com').notNull(),
+  supportEmail: varchar('support_email', { length: 255 }).default('whiteboardzone26@gmail.com').notNull(),
   marqueeText: text('marquee_text'),
   contactPhone: varchar('contact_phone', { length: 50 }).default('+91-7503663732').notNull(),
+  testimonialTitle: varchar('testimonial_title', { length: 255 }).default('Trusted by 500+ Educators'),
+  testimonialHighlight: varchar('testimonial_highlight', { length: 100 }).default('500+'),
+  testimonialSubtitle: text('testimonial_subtitle'),
+  testimonialRating: varchar('testimonial_rating', { length: 50 }).default('4.9/5'),
+  testimonialReviewsCount: varchar('testimonial_reviews_count', { length: 100 }).default('480+ reviews'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+});
+
+export const welcomeImages = mysqlTable('tb_welcome_images', {
+  id: int('id').autoincrement().primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => users.id),
+  name: varchar('name', { length: 255 }).notNull(),
+  imageUrl: varchar('image_url', { length: 500 }).notNull(),
+  isDefault: tinyint('is_default').default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+});
+
+export const testimonials = mysqlTable('tb_testimonials', {
+  id: int('id').primaryKey().autoincrement(),
+  name: varchar('name', { length: 255 }).notNull(),
+  role: varchar('role', { length: 255 }).notNull(),
+  institution: varchar('institution', { length: 255 }).notNull(),
+  rating: int('rating').default(5).notNull(),
+  text: text('text').notNull(),
+  avatar: varchar('avatar', { length: 255 }).default('').notNull(),
+  displayOrder: int('display_order').default(0).notNull(),
+  status: tinyint('status').default(1).notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
 });

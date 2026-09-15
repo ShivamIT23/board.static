@@ -195,7 +195,7 @@ export default function DemoUserList({
                                     <div className="w-6 h-6 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-600 text-[10px] font-black uppercase border border-orange-500/20">
                                         {user.name.charAt(0)}
                                     </div>
-                                    <span className="text-[11px] font-bold text-foreground/90 truncate max-w-[100px]">
+                                    <span className="text-[11px] font-bold text-foreground/90 truncate max-w-25">
                                         {user.name}
                                     </span>
                                 </div>

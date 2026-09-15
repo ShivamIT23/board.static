@@ -15,9 +15,14 @@ export async function GET() {
 
     const data = {
       whatsappNumber: record?.whatsappNumber || "+91-7503663732",
-      supportEmail: record?.supportEmail || "digital@tutorarc.com",
+      supportEmail: record?.supportEmail || "whiteboardzone26@gmail.com",
       marqueeText: record?.marqueeText || DEFAULT_MARQUEE_TEXT,
       contactPhone: record?.contactPhone || "+91-7503663732",
+      testimonialTitle: record?.testimonialTitle || "Trusted by 500+ Educators",
+      testimonialHighlight: record?.testimonialHighlight || "500+",
+      testimonialSubtitle: record?.testimonialSubtitle || "Real stories from teachers and institutes who run their classrooms on WhiteboardZone every day.",
+      testimonialRating: record?.testimonialRating || "4.9/5",
+      testimonialReviewsCount: record?.testimonialReviewsCount || "480+ reviews",
     };
 
     return NextResponse.json(data, {
@@ -32,7 +37,7 @@ export async function GET() {
     return NextResponse.json(
       {
         whatsappNumber: "+91-7503663732",
-        supportEmail: "digital@tutorarc.com",
+        supportEmail: "whiteboardzone26@gmail.com",
         marqueeText: DEFAULT_MARQUEE_TEXT,
         contactPhone: "+91-7503663732",
       },

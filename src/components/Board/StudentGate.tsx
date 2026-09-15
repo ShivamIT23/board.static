@@ -23,7 +23,7 @@ function RejectedScreen() {
                     <Lock className="text-red-500 animate-pulse" size={40} />
                 </div>
                 <h2 className="text-2xl font-black text-white tracking-tight">Request Declined</h2>
-                <p className="text-zinc-400 text-sm mt-2 max-w-[280px]">
+                <p className="text-zinc-400 text-sm mt-2 max-w-70">
                     Your request to join this session was declined by the teacher.
                 </p>
             </div>
@@ -75,7 +75,7 @@ function WaitingScreen() {
                     <div className="absolute inset-0 rounded-full border-2 border-orange-500/20 border-t-orange-500 animate-spin" />
                 </div>
                 <h2 className="text-2xl font-black text-white tracking-tight">Waiting for Approval</h2>
-                <p className="text-zinc-400 text-sm mt-2 max-w-[280px]">
+                <p className="text-zinc-400 text-sm mt-2 max-w-70">
                     The teacher has been notified. Please stay on this screen while we verify your request.
                 </p>
             </div>
@@ -146,7 +146,7 @@ export default function StudentGate({ sessionId, isRestricted, className, isWait
         }
     };
 
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://socket.tutorarc.cloud";
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://board-server.whiteboardzone.com";
     const isRejected = authData?.approvalStatus === "rejected";
 
     return (
@@ -277,7 +277,7 @@ export default function StudentGate({ sessionId, isRestricted, className, isWait
                     )}
 
                     <div className="pt-2">
-                        <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-wide">Powered by TutorArc Digital</p>
+                        <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-wide">Powered by WhiteBoardZone</p>
                     </div>
                 </div>
             </div>

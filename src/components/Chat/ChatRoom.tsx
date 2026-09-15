@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react"
-import { MessageCircle, Minimize2, User2, Settings, MessageSquareOff, File as FileIcon, FileX, BarChart2, Video, Lock, X } from "lucide-react"
+import { MessageCircle, Minimize2, User2, Settings, MessageSquareOff, File as FileIcon, FileX, BarChart2, Video, Mic, Lock, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSocket } from "../providers/socket-provider"
 import { getHistoricalChats } from "@/app/actions/auth"
@@ -11,6 +11,7 @@ import MessageList from "./MessageList"
 import ChatInput from "./ChatInput"
 import UserList from "./UserList"
 import LiveKitStream from "../Board/LiveKitStream"
+import TeacherAiModal from "./TeacherAiModal"
 import Swal from "sweetalert2"
 
 import type { Attachment, ChatMessage, RoomUser, Visitor } from "@/types/chat"
@@ -100,6 +101,7 @@ export default function ChatRoom({
     const [isAtBottom, setIsAtBottom] = useState(true)
 
     const [isVideoExpanded, setIsVideoExpanded] = useState(false)
+    const [selectedAiMessage, setSelectedAiMessage] = useState<ChatMessage | null>(null)
 
     // Socket listeners
     useEffect(() => {
@@ -431,6 +433,7 @@ export default function ChatRoom({
                     canLoadMore={canLoadMore}
                     resolveAttachmentUrl={resolveAttachmentUrl}
                     role={role}
+                    onAiHelp={(msg) => setSelectedAiMessage(msg)}
                 />
                 {Object.keys(typingUsers).length > 0 && (
                     <div className="px-4 py-1.5 bg-muted/30 border-t border-border/50">
@@ -460,6 +463,17 @@ export default function ChatRoom({
                     roomUser={roomUsers.find(u => u.socket_id === socket?.id)}
                     socket={socket}
                 />
+                {role === "teacher" && (
+                    <TeacherAiModal
+                        isOpen={!!selectedAiMessage}
+                        onClose={() => setSelectedAiMessage(null)}
+                        message={selectedAiMessage}
+                        onInsertIntoChat={(text) => {
+                            setInputMessage(text)
+                            setSelectedAiMessage(null)
+                        }}
+                    />
+                )}
             </div>
         )
     }
@@ -518,15 +532,21 @@ export default function ChatRoom({
             {!isOpen ? (
                 /* Collapsed Toolbar View when Chat is closed */
                 <div className="flex flex-col items-center py-4 gap-4 w-full h-full">
-                    {/* Video Icon Button - Opens Chatroom */}
+                    {/* Video / Audio Icon Button - Opens Chatroom */}
                     {(allowAudio || allowVideo) && (
                         <button
                             type="button"
                             onClick={() => setIsOpen(true)}
                             className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-all relative group"
-                            title="Open Video & Audio Stream"
+                            title={
+                                allowAudio && allowVideo
+                                    ? "Open Video & Audio Stream"
+                                    : allowVideo
+                                    ? "Open Video Stream"
+                                    : "Open Audio Stream"
+                            }
                         >
-                            <Video size={20} />
+                            {allowVideo ? <Video size={20} /> : <Mic size={20} />}
                             <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                         </button>
                     )}
@@ -729,6 +749,7 @@ export default function ChatRoom({
                 isLoadingMore={isLoadingMore}
                 canLoadMore={canLoadMore}
                 resolveAttachmentUrl={resolveAttachmentUrl}
+                onAiHelp={(msg) => setSelectedAiMessage(msg)}
             />
 
             {/* Typing Indicator */}
@@ -770,6 +791,17 @@ export default function ChatRoom({
         </>
     )}
 </aside>
+{role === "teacher" && (
+    <TeacherAiModal
+        isOpen={!!selectedAiMessage}
+        onClose={() => setSelectedAiMessage(null)}
+        message={selectedAiMessage}
+        onInsertIntoChat={(text) => {
+            setInputMessage(text)
+            setSelectedAiMessage(null)
+        }}
+    />
+)}
 </>
     )
 }

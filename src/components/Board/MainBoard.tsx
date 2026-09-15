@@ -18,7 +18,6 @@ import { MessageCircle } from "lucide-react"
 import { endSessionAction } from "@/app/actions/auth"
 import { toast } from "sonner"
 import Swal from "sweetalert2"
-import { cn } from "@/lib/utils"
 
 interface MainBoardProps {
     duration: number
@@ -40,9 +39,11 @@ interface MainBoardProps {
     allowQuiz?: boolean
     allowChats?: boolean
     allowScreenSharing?: boolean
+    showWelcomeImage?: boolean
+    welcomeImageUrl?: string | null
 }
 
-function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId, isClassEnded, setIsClassEnded, endedAt, setEndedAt, durationAdded, startTime, hasQuiz, classId, allowAudio = true, allowVideo = true, allowRecording = true, allowPolls = true, allowQuiz = true, allowChats = true, allowScreenSharing = true }: MainBoardProps & {
+function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId, isClassEnded, setIsClassEnded, endedAt, setEndedAt, durationAdded, startTime, hasQuiz, classId, allowAudio = true, allowVideo = true, allowRecording = true, allowPolls = true, allowQuiz = true, allowChats = true, allowScreenSharing = true, showWelcomeImage = false, welcomeImageUrl = null }: MainBoardProps & {
     setIsClassEnded: React.Dispatch<React.SetStateAction<boolean | undefined>>,
     setEndedAt: React.Dispatch<React.SetStateAction<number | undefined>>
 }) {
@@ -51,8 +52,20 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
     const [imageStampData, setImageStampData] = useState<string | null>(null)
     const [color, setColor] = useState("#FFFFFF")
     const [pageBgColors, setPageBgColors] = useState<Record<number, string>>({ 1: "#18181b" })
-    const [pageBgImages, setPageBgImages] = useState<Record<number, string[]>>({})
-    const [pageNames, setPageNames] = useState<Record<number, string>>({})
+    const [pageBgImages, setPageBgImages] = useState<Record<number, string[]>>(() => {
+        const initial: Record<number, string[]> = {}
+        if (showWelcomeImage && welcomeImageUrl) {
+            initial[1] = [welcomeImageUrl]
+        }
+        return initial
+    })
+    const [pageNames, setPageNames] = useState<Record<number, string>>(() => {
+        const initial: Record<number, string> = {}
+        if (showWelcomeImage && welcomeImageUrl) {
+            initial[1] = "Welcome Image"
+        }
+        return initial
+    })
     const [brushSize, setBrushSize] = useState(3)
     const [drawingEnabled, setDrawingEnabled] = useState(role === "teacher")
     const [userCount, setUserCount] = useState(1)
@@ -311,7 +324,9 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
             const isPdf = !!(pageBgImages[i] && pageBgImages[i].length > 0);
             if (isPdf) {
                 const name = pageNames[i];
-                if (name) {
+                if (i === 1 && showWelcomeImage && welcomeImageUrl && pageBgImages[1]?.[0] === welcomeImageUrl) {
+                    labels[i] = "Welcome";
+                } else if (name) {
                     // Show first 4 chars of filename (without extension) + "..."
                     const baseName = name.replace(/\.pdf$/i, "");
                     labels[i] = baseName.length > 8 ? `${baseName.slice(0, 8)}...` : baseName;
@@ -324,7 +339,7 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
             }
         }
         return labels;
-    }, [totalPages, pageBgImages, pageNames])
+    }, [totalPages, pageBgImages, pageNames, showWelcomeImage, welcomeImageUrl])
 
     const updateBoardBackground = (newColor: string) => {
         setPageBgColors(prev => ({ ...prev, [currentPage]: newColor }))
@@ -911,7 +926,7 @@ function MainBoardInner({ duration, sessionId, role, userName, userId, visitorId
     )
 }
 
-export default function MainBoard({ duration, sessionId, role, userName, userId, visitorId, isClassEnded: initialIsClassEnded, endedAt: initialEndedAt, durationAdded, startTime, hasQuiz, classId, allowAudio = true, allowVideo = true, allowRecording = true, allowPolls = true, allowQuiz = true, allowChats = true, allowScreenSharing = true }: MainBoardProps) {
+export default function MainBoard({ duration, sessionId, role, userName, userId, visitorId, isClassEnded: initialIsClassEnded, endedAt: initialEndedAt, durationAdded, startTime, hasQuiz, classId, allowAudio = true, allowVideo = true, allowRecording = true, allowPolls = true, allowQuiz = true, allowChats = true, allowScreenSharing = true, showWelcomeImage = false, welcomeImageUrl = null }: MainBoardProps) {
     const [isClassEnded, setIsClassEnded] = useState(initialIsClassEnded)
     const [endedAt, setEndedAt] = useState(initialEndedAt)
 
@@ -966,6 +981,8 @@ export default function MainBoard({ duration, sessionId, role, userName, userId,
                 allowQuiz={allowQuiz}
                 allowChats={allowChats}
                 allowScreenSharing={allowScreenSharing}
+                showWelcomeImage={showWelcomeImage}
+                welcomeImageUrl={welcomeImageUrl}
             />
         </SocketProvider>
     )

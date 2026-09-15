@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TutorArc - Advanced Digital Boards for Institutes",
+  title: "WhiteBoardZone - Advanced Digital Boards for Institutes",
   description: "Advanced interactive digital boards for institutes and tutors, enabling seamless online teaching—delivering smart, engaging learning experiences.",
 };
 

@@ -132,10 +132,10 @@ export default function LiveKitStream({
             console.log(`[LiveKit] Subscribed to ${track.kind} from ${participant.identity}`);
             setTeacherName(participant.name || "Teacher");
 
-            if (track.kind === Track.Kind.Video && remoteVideoRef.current) {
+            if (track.kind === Track.Kind.Video && remoteVideoRef.current && allowVideo !== false) {
               track.attach(remoteVideoRef.current);
               setHasRemoteVideo(true);
-            } else if (track.kind === Track.Kind.Audio && audioRef.current) {
+            } else if (track.kind === Track.Kind.Audio && audioRef.current && allowAudio !== false) {
               track.attach(audioRef.current);
               setIsTeacherAudioActive(true);
             }
@@ -169,7 +169,7 @@ export default function LiveKitStream({
         activeRoom.disconnect();
       }
     };
-  }, [roomId, userId, userName, isTeacher, socketUrl]);
+  }, [roomId, userId, userName, isTeacher, socketUrl, allowAudio, allowVideo]);
 
   // Toggle Microphone (Teacher only)
   const toggleMic = async () => {
@@ -364,153 +364,177 @@ export default function LiveKitStream({
               </button>
             </div>
           </div>
-          {((isTeacher && !isCameraOn) || (!isTeacher && !hasRemoteVideo)) && (
+          {((isTeacher && (!isCameraOn || allowVideo === false)) || (!isTeacher && (!hasRemoteVideo || allowVideo === false))) && (
             <div className="flex flex-col items-center justify-center gap-3 sm:gap-4 my-auto z-10">
               <div className="flex items-center justify-center gap-3 sm:gap-4">
                 {isTeacher ? (
                   <>
-                    <button
-                      type="button"
-                      onClick={toggleMic}
-                      className={cn(
-                        "p-3.5 sm:p-4 rounded-2xl border flex items-center justify-center transition-all shadow-2xl cursor-pointer hover:scale-105 active:scale-95",
-                        isMicOn
-                          ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/30"
-                          : "bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
-                      )}
-                      title={isMicOn ? "Mute Microphone" : "Unmute Microphone"}
-                    >
-                      {isMicOn ? (
-                        <Mic className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-500 dark:text-emerald-400 animate-pulse" />
-                      ) : (
-                        <MicOff className="w-7 h-7 sm:w-8 sm:h-8" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={toggleCamera}
-                      className={cn(
-                        "p-3.5 sm:p-4 rounded-2xl border flex items-center justify-center shadow-2xl transition-all cursor-pointer hover:scale-105 active:scale-95",
-                        isCameraOn
-                          ? "bg-blue-500/20 border-blue-500/50 text-blue-600 dark:text-blue-400 hover:bg-blue-500/30"
-                          : "bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
-                      )}
-                      title={isCameraOn ? "Stop Camera" : "Start Camera"}
-                    >
-                      {isCameraOn ? (
-                        <VideoIcon className="w-7 h-7 sm:w-8 sm:h-8" />
-                      ) : (
-                        <VideoOff className="w-7 h-7 sm:w-8 sm:h-8" />
-                      )}
-                    </button>
+                    {allowAudio !== false && (
+                      <button
+                        type="button"
+                        onClick={toggleMic}
+                        className={cn(
+                          "p-3.5 sm:p-4 rounded-2xl border flex items-center justify-center transition-all shadow-2xl cursor-pointer hover:scale-105 active:scale-95",
+                          isMicOn
+                            ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/30"
+                            : "bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
+                        )}
+                        title={isMicOn ? "Mute Microphone" : "Unmute Microphone"}
+                      >
+                        {isMicOn ? (
+                          <Mic className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-500 dark:text-emerald-400 animate-pulse" />
+                        ) : (
+                          <MicOff className="w-7 h-7 sm:w-8 sm:h-8" />
+                        )}
+                      </button>
+                    )}
+                    {allowVideo !== false && (
+                      <button
+                        type="button"
+                        onClick={toggleCamera}
+                        className={cn(
+                          "p-3.5 sm:p-4 rounded-2xl border flex items-center justify-center shadow-2xl transition-all cursor-pointer hover:scale-105 active:scale-95",
+                          isCameraOn
+                            ? "bg-blue-500/20 border-blue-500/50 text-blue-600 dark:text-blue-400 hover:bg-blue-500/30"
+                            : "bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
+                        )}
+                        title={isCameraOn ? "Stop Camera" : "Start Camera"}
+                      >
+                        {isCameraOn ? (
+                          <VideoIcon className="w-7 h-7 sm:w-8 sm:h-8" />
+                        ) : (
+                          <VideoOff className="w-7 h-7 sm:w-8 sm:h-8" />
+                        )}
+                      </button>
+                    )}
                   </>
                 ) : (
                   <>
-                    <button
-                      type="button"
-                      onClick={toggleStudentMute}
-                      className={cn(
-                        "p-3.5 sm:p-4 rounded-2xl border flex items-center justify-center transition-all shadow-2xl cursor-pointer hover:scale-105 active:scale-95",
-                        !isMutedByStudent && isTeacherAudioActive
-                          ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/30"
-                          : "bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-                      )}
-                      title={isMutedByStudent ? "Unmute Teacher Audio" : "Mute Teacher Audio"}
-                    >
-                      {isMutedByStudent ? (
-                        <VolumeX className="w-7 h-7 sm:w-8 sm:h-8 text-red-400" />
-                      ) : isTeacherAudioActive ? (
-                        <Volume2 className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-500 animate-pulse" />
-                      ) : (
-                        <MicOff className="w-7 h-7 sm:w-8 sm:h-8" />
-                      )}
-                    </button>
-                    <div
-                      className="p-3.5 sm:p-4 rounded-2xl border bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 flex items-center justify-center shadow-2xl"
-                      title="Teacher video is off"
-                    >
-                      <VideoOff className="w-7 h-7 sm:w-8 sm:h-8" />
-                    </div>
+                    {allowAudio !== false && (
+                      <button
+                        type="button"
+                        onClick={toggleStudentMute}
+                        className={cn(
+                          "p-3.5 sm:p-4 rounded-2xl border flex items-center justify-center transition-all shadow-2xl cursor-pointer hover:scale-105 active:scale-95",
+                          !isMutedByStudent && isTeacherAudioActive
+                            ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/30"
+                            : "bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        )}
+                        title={isMutedByStudent ? "Unmute Teacher Audio" : "Mute Teacher Audio"}
+                      >
+                        {isMutedByStudent ? (
+                          <VolumeX className="w-7 h-7 sm:w-8 sm:h-8 text-red-400" />
+                        ) : isTeacherAudioActive ? (
+                          <Volume2 className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-500 animate-pulse" />
+                        ) : (
+                          <MicOff className="w-7 h-7 sm:w-8 sm:h-8" />
+                        )}
+                      </button>
+                    )}
+                    {allowVideo !== false && (
+                      <div
+                        className="p-3.5 sm:p-4 rounded-2xl border bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 flex items-center justify-center shadow-2xl"
+                        title="Teacher video is off"
+                      >
+                        <VideoOff className="w-7 h-7 sm:w-8 sm:h-8" />
+                      </div>
+                    )}
                   </>
                 )}
               </div>
               <p className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 tracking-wide">
-                Audio:{" "}
-                <span
-                  className={
-                    (isTeacher ? isMicOn : !isMutedByStudent && isTeacherAudioActive)
-                      ? "text-emerald-500 dark:text-emerald-400"
-                      : "text-slate-400 dark:text-slate-500"
-                  }
-                >
-                  {(isTeacher ? isMicOn : !isMutedByStudent && isTeacherAudioActive) ? "ON" : "OFF"}
-                </span>
-                {" • "}
-                Video:{" "}
-                <span
-                  className={
-                    (isTeacher ? isCameraOn : hasRemoteVideo)
-                      ? "text-blue-500 dark:text-blue-400"
-                      : "text-slate-400 dark:text-slate-500"
-                  }
-                >
-                  {(isTeacher ? isCameraOn : hasRemoteVideo) ? "ON" : "OFF"}
-                </span>
+                {allowAudio !== false && (
+                  <>
+                    Audio:{" "}
+                    <span
+                      className={
+                        (isTeacher ? isMicOn : !isMutedByStudent && isTeacherAudioActive)
+                          ? "text-emerald-500 dark:text-emerald-400"
+                          : "text-slate-400 dark:text-slate-500"
+                      }
+                    >
+                      {(isTeacher ? isMicOn : !isMutedByStudent && isTeacherAudioActive) ? "ON" : "OFF"}
+                    </span>
+                  </>
+                )}
+                {allowAudio !== false && allowVideo !== false && " • "}
+                {allowVideo !== false && (
+                  <>
+                    Video:{" "}
+                    <span
+                      className={
+                        (isTeacher ? isCameraOn : hasRemoteVideo)
+                          ? "text-blue-500 dark:text-blue-400"
+                          : "text-slate-400 dark:text-slate-500"
+                      }
+                    >
+                      {(isTeacher ? isCameraOn : hasRemoteVideo) ? "ON" : "OFF"}
+                    </span>
+                  </>
+                )}
               </p>
             </div>
           )}
           <div className="flex items-center justify-center gap-4 z-10 mt-auto bg-white/90 dark:bg-slate-950/90 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 mx-auto shadow-2xl">
             {isTeacher ? (
               <>
-                <button
-                  type="button"
-                  onClick={toggleMic}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs transition-all cursor-pointer",
-                    isMicOn
-                      ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/30"
-                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
-                  )}
-                >
-                  {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-                  <span>{isMicOn ? "Mic ON" : "Mic OFF"}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleCamera}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs transition-all cursor-pointer",
-                    isCameraOn
-                      ? "bg-blue-500/20 border-blue-500/50 text-blue-600 dark:text-blue-400 hover:bg-blue-500/30"
-                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
-                  )}
-                >
-                  {isCameraOn ? <VideoIcon className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
-                  <span>{isCameraOn ? "Camera ON" : "Camera OFF"}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleScreenShare}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs transition-all cursor-pointer",
-                    isScreenSharing
-                      ? "bg-purple-500/20 border-purple-500/50 text-purple-600 dark:text-purple-400 hover:bg-purple-500/30"
-                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
-                  )}
-                >
-                  {isScreenSharing ? <MonitorOff className="w-4 h-4" /> : <MonitorUp className="w-4 h-4" />}
-                  <span>{isScreenSharing ? "Stop Share" : "Share Screen"}</span>
-                </button>
+                {allowAudio !== false && (
+                  <button
+                    type="button"
+                    onClick={toggleMic}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs transition-all cursor-pointer",
+                      isMicOn
+                        ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/30"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
+                    )}
+                  >
+                    {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                    <span>{isMicOn ? "Mic ON" : "Mic OFF"}</span>
+                  </button>
+                )}
+                {allowVideo !== false && (
+                  <button
+                    type="button"
+                    onClick={toggleCamera}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs transition-all cursor-pointer",
+                      isCameraOn
+                        ? "bg-blue-500/20 border-blue-500/50 text-blue-600 dark:text-blue-400 hover:bg-blue-500/30"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
+                    )}
+                  >
+                    {isCameraOn ? <VideoIcon className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
+                    <span>{isCameraOn ? "Camera ON" : "Camera OFF"}</span>
+                  </button>
+                )}
+                {allowScreenSharing !== false && (
+                  <button
+                    type="button"
+                    onClick={toggleScreenShare}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs transition-all cursor-pointer",
+                      isScreenSharing
+                        ? "bg-purple-500/20 border-purple-500/50 text-purple-600 dark:text-purple-400 hover:bg-purple-500/30"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
+                    )}
+                  >
+                    {isScreenSharing ? <MonitorOff className="w-4 h-4" /> : <MonitorUp className="w-4 h-4" />}
+                    <span>{isScreenSharing ? "Stop Share" : "Share Screen"}</span>
+                  </button>
+                )}
               </>
             ) : (
-              <button
-                type="button"
-                onClick={toggleStudentMute}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-bold transition-all cursor-pointer"
-              >
-                {isMutedByStudent ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
-                <span>{isMutedByStudent ? "Unmute Teacher" : "Mute Teacher"}</span>
-              </button>
+              allowAudio !== false && (
+                <button
+                  type="button"
+                  onClick={toggleStudentMute}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-bold transition-all cursor-pointer"
+                >
+                  {isMutedByStudent ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
+                  <span>{isMutedByStudent ? "Unmute Teacher" : "Mute Teacher"}</span>
+                </button>
+              )
             )}
             <button
               type="button"
@@ -660,7 +684,7 @@ export default function LiveKitStream({
             </div>
 
             <div className="flex items-center gap-1.5">
-              {(isMicOn || isCameraOn) && (
+              {((allowAudio !== false && isMicOn) || (allowVideo !== false && isCameraOn)) && (
                 <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-red-500/20 text-red-500 dark:text-red-400 border border-red-500/40 animate-pulse backdrop-blur-md shadow-sm">
                   <Radio className="h-3 w-3" />
                   LIVE
@@ -678,56 +702,66 @@ export default function LiveKitStream({
             </div>
           </div>
 
-          {!isCameraOn && (
+          {(!isCameraOn || allowVideo === false) && (
             <div className="flex flex-col items-center justify-center gap-2 my-auto z-10">
               <div className="flex items-center justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={toggleMic}
-                  className={cn(
-                    "flex items-center justify-center p-3 rounded-2xl border transition-all duration-200 shadow-xl cursor-pointer",
-                    isMicOn
-                      ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/30"
-                      : "bg-white dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-                  )}
-                  title={isMicOn ? "Mute Microphone" : "Unmute Microphone"}
-                >
-                  {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5 text-slate-500" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleCamera}
-                  className={cn(
-                    "flex items-center justify-center p-3 rounded-2xl border transition-all duration-200 shadow-xl cursor-pointer",
-                    isCameraOn
-                      ? "bg-blue-500/20 border-blue-500/50 text-blue-600 dark:text-blue-400 hover:bg-blue-500/30"
-                      : "bg-white dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-                  )}
-                  title={isCameraOn ? "Stop Camera" : "Start Camera"}
-                >
-                  {isCameraOn ? <VideoIcon className="w-5 h-5" /> : <VideoOff className="w-5 h-5 text-slate-500" />}
-                </button>
+                {allowAudio !== false && (
+                  <button
+                    type="button"
+                    onClick={toggleMic}
+                    className={cn(
+                      "flex items-center justify-center p-3 rounded-2xl border transition-all duration-200 shadow-xl cursor-pointer",
+                      isMicOn
+                        ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/30"
+                        : "bg-white dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    )}
+                    title={isMicOn ? "Mute Microphone" : "Unmute Microphone"}
+                  >
+                    {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5 text-slate-500" />}
+                  </button>
+                )}
+                {allowVideo !== false && (
+                  <button
+                    type="button"
+                    onClick={toggleCamera}
+                    className={cn(
+                      "flex items-center justify-center p-3 rounded-2xl border transition-all duration-200 shadow-xl cursor-pointer",
+                      isCameraOn
+                        ? "bg-blue-500/20 border-blue-500/50 text-blue-600 dark:text-blue-400 hover:bg-blue-500/30"
+                        : "bg-white dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    )}
+                    title={isCameraOn ? "Stop Camera" : "Start Camera"}
+                  >
+                    {isCameraOn ? <VideoIcon className="w-5 h-5" /> : <VideoOff className="w-5 h-5 text-slate-500" />}
+                  </button>
+                )}
               </div>
               <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 tracking-wide">
-                Audio: <span className={isMicOn ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-slate-500"}>{isMicOn ? "ON" : "OFF"}</span>
-                {" • "}
-                Video: <span className="text-slate-500">OFF</span>
+                {allowAudio !== false && (
+                  <>Audio: <span className={isMicOn ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-slate-500"}>{isMicOn ? "ON" : "OFF"}</span></>
+                )}
+                {allowAudio !== false && allowVideo !== false && " • "}
+                {allowVideo !== false && (
+                  <>Video: <span className="text-slate-500">OFF</span></>
+                )}
               </p>
             </div>
           )}
 
-          {isCameraOn && (
+          {isCameraOn && allowVideo !== false && (
             <div className="flex items-center justify-center gap-3 z-10 mt-auto bg-white/90 dark:bg-slate-950/80 backdrop-blur-md p-1.5 rounded-xl border border-slate-200 dark:border-slate-800/80 mx-auto shadow-lg">
-              <button
-                type="button"
-                onClick={toggleMic}
-                className={cn(
-                  "p-2 rounded-lg border transition-all cursor-pointer",
-                  isMicOn ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-400" : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-                )}
-              >
-                {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-              </button>
+              {allowAudio !== false && (
+                <button
+                  type="button"
+                  onClick={toggleMic}
+                  className={cn(
+                    "p-2 rounded-lg border transition-all cursor-pointer",
+                    isMicOn ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-400" : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  )}
+                >
+                  {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={toggleCamera}
@@ -765,20 +799,22 @@ export default function LiveKitStream({
             <span>{teacherName}&apos;s Stream</span>
           </div>
           <div className="flex items-center gap-1.5">
-            {hasRemoteVideo && (
+            {hasRemoteVideo && allowVideo !== false && (
               <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-red-500/20 text-red-500 dark:text-red-400 border border-red-500/40 animate-pulse backdrop-blur-md shadow-sm">
                 <Radio className="h-3 w-3" />
                 LIVE
               </span>
             )}
-            <button
-              type="button"
-              onClick={toggleStudentMute}
-              className="p-1.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white backdrop-blur-md transition-colors cursor-pointer"
-              title={isMutedByStudent ? "Unmute Teacher Audio" : "Mute Teacher Audio"}
-            >
-              {isMutedByStudent ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
-            </button>
+            {allowAudio !== false && (
+              <button
+                type="button"
+                onClick={toggleStudentMute}
+                className="p-1.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white backdrop-blur-md transition-colors cursor-pointer"
+                title={isMutedByStudent ? "Unmute Teacher Audio" : "Mute Teacher Audio"}
+              >
+                {isMutedByStudent ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
+              </button>
+            )}
             {/* Fullscreen Video Button (Replaces Whiteboard) */}
             <button
               type="button"
@@ -786,52 +822,64 @@ export default function LiveKitStream({
               className="p-1.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white backdrop-blur-md transition-all cursor-pointer"
               title="Expand Video (Replace Whiteboard)"
             >
-              <Maximize2 className="w-4 h-4" />
+              <Maximize2 className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
-        {!hasRemoteVideo && (
+        {(!hasRemoteVideo || allowVideo === false) && (
           <div className="flex flex-col items-center justify-center gap-2 my-auto z-10 text-center">
             <div className="flex items-center justify-center gap-3">
-              <button
-                type="button"
-                onClick={toggleStudentMute}
-                className={cn(
-                  "p-3 rounded-2xl border flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-md",
-                  !isMutedByStudent && isTeacherAudioActive
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                    : "bg-white/90 dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 text-slate-500"
-                )}
-                title={isMutedByStudent ? "Unmute Teacher Audio" : "Mute Teacher Audio"}
-              >
-                {isMutedByStudent ? (
-                  <VolumeX className="w-5 h-5 text-red-400" />
-                ) : isTeacherAudioActive ? (
-                  <Mic className="w-5 h-5 text-emerald-500" />
-                ) : (
-                  <MicOff className="w-5 h-5" />
-                )}
-              </button>
-              <div
-                className="p-3 rounded-2xl border bg-white/90 dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 text-slate-500 flex items-center justify-center shadow-md"
-                title="Teacher video is off"
-              >
-                <VideoOff className="w-5 h-5" />
-              </div>
+              {allowAudio !== false && (
+                <button
+                  type="button"
+                  onClick={toggleStudentMute}
+                  className={cn(
+                    "p-3 rounded-2xl border flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-md",
+                    !isMutedByStudent && isTeacherAudioActive
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                      : "bg-white/90 dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 text-slate-500"
+                  )}
+                  title={isMutedByStudent ? "Unmute Teacher Audio" : "Mute Teacher Audio"}
+                >
+                  {isMutedByStudent ? (
+                    <VolumeX className="w-5 h-5 text-red-400" />
+                  ) : isTeacherAudioActive ? (
+                    <Mic className="w-5 h-5 text-emerald-500" />
+                  ) : (
+                    <MicOff className="w-5 h-5" />
+                  )}
+                </button>
+              )}
+              {allowVideo !== false && (
+                <div
+                  className="p-3 rounded-2xl border bg-white/90 dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 text-slate-500 flex items-center justify-center shadow-md"
+                  title="Teacher video is off"
+                >
+                  <VideoOff className="w-5 h-5" />
+                </div>
+              )}
             </div>
             <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 tracking-wide">
-              Audio:{" "}
-              <span
-                className={
-                  !isMutedByStudent && isTeacherAudioActive
-                    ? "text-emerald-600 dark:text-emerald-400 font-bold"
-                    : "text-slate-500"
-                }
-              >
-                {!isMutedByStudent && isTeacherAudioActive ? "ON" : "OFF"}
-              </span>
-              {" • "}
-              Video: <span className="text-slate-500">OFF</span>
+              {allowAudio !== false && (
+                <>
+                  Audio:{" "}
+                  <span
+                    className={
+                      !isMutedByStudent && isTeacherAudioActive
+                        ? "text-emerald-600 dark:text-emerald-400 font-bold"
+                        : "text-slate-500"
+                    }
+                  >
+                    {!isMutedByStudent && isTeacherAudioActive ? "ON" : "OFF"}
+                  </span>
+                </>
+              )}
+              {allowAudio !== false && allowVideo !== false && " • "}
+              {allowVideo !== false && (
+                <>
+                  Video: <span className="text-slate-500">OFF</span>
+                </>
+              )}
             </p>
           </div>
         )}

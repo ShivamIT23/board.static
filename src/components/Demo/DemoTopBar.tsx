@@ -21,6 +21,7 @@ import { toast } from "sonner"
 import Swal from "sweetalert2"
 import Image from "next/image"
 import logo from "../../../public/logo.png"
+import logo1 from "../../../public/logo1.png"
 
 interface DemoTopBarProps {
     tool: string
@@ -459,7 +460,8 @@ export default function DemoTopBar({
             <div className="relative z-50 flex w-full items-center h-10 bg-sidebar backdrop-blur-xl border-b border-border/50 shadow-md shrink-0 overflow-hidden">
                 {/* Logo */}
                 <div className="flex items-center px-2 h-full border-r border-border/50 shrink-0">
-                    <Image alt="Board" src={logo} height={18} width={44} priority />
+                    <Image alt="Board" src={logo1} height={28} width={64} priority className="dark:hidden" />
+                    <Image alt="Board" src={logo} height={28} width={64} priority className="hidden dark:block" />
                 </div>
 
                 {/* Spacer */}
@@ -484,7 +486,7 @@ export default function DemoTopBar({
                         onClick={async () => {
                             const { isConfirmed } = await Swal.fire({
                                 title: "Exit Demo Session?",
-                                text: "You will be redirected back to the TutorArc website.",
+                                text: "You will be redirected back to the WhiteBoardZone website.",
                                 icon: "question",
                                 showCancelButton: true,
                                 confirmButtonColor: "#f97316",
@@ -509,7 +511,8 @@ export default function DemoTopBar({
         <div className="relative z-50 flex w-full items-center min-h-12 bg-sidebar backdrop-blur-xl border-b border-border/50 shadow-md animate-in fade-in slide-in-from-top-4 duration-500 overflow-hidden">
             {/* Fixed Left Section — Logo */}
             <div className="flex items-center px-1 sm:px-2 h-8 border-r border-border/50 bg-sidebar shrink-0 z-40">
-                <Image alt="Board" src={logo} height={20} width={50} priority />
+                <Image alt="Board" src={logo1} height={40} width={80} priority className="dark:hidden" />
+                <Image alt="Board" src={logo} height={40} width={80} priority className="hidden dark:block" />
             </div>
 
             {/* Scrollable Area */}
@@ -568,7 +571,7 @@ export default function DemoTopBar({
                                     <>
                                         <div className="fixed inset-0 z-9998" onClick={() => setShowShapeDropdown(false)} />
                                         <div
-                                            className="fixed z-9999 grid grid-cols-4 gap-1 p-1.5 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-[150px]"
+                                            className="fixed z-9999 grid grid-cols-4 gap-1 p-1.5 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-37.5"
                                             style={{ top: shapeDropdownPos.top, left: shapeDropdownPos.left, transform: "translateX(-50%)" }}
                                         >
                                             {SHAPE_TOOLS.map((shape) => {
@@ -623,7 +626,7 @@ export default function DemoTopBar({
                                     <>
                                         <div className="fixed inset-0 z-9998" onClick={() => setShowFilledShapeDropdown(false)} />
                                         <div
-                                            className="fixed z-9999 grid grid-cols-4 gap-1 p-1.5 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-[150px]"
+                                            className="fixed z-9999 grid grid-cols-4 gap-1 p-1.5 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-37.5"
                                             style={{ top: filledShapeDropdownPos.top, left: filledShapeDropdownPos.left, transform: "translateX(-50%)" }}
                                         >
                                             {SHAPE_TOOLS.map((shape) => {
@@ -725,7 +728,7 @@ export default function DemoTopBar({
                                     <>
                                         <div className="fixed inset-0 z-9998" onClick={() => setShowMathDropdown(false)} />
                                         <div
-                                            className="fixed z-9999 grid grid-cols-4 gap-1 p-2 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-[160px]"
+                                            className="fixed z-9999 grid grid-cols-4 gap-1 p-2 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-40"
                                             style={{ top: mathDropdownPos.top, left: mathDropdownPos.left, transform: "translateX(-50%)" }}
                                         >
                                             {MATH_SYMBOLS.map((s) => (
@@ -768,7 +771,7 @@ export default function DemoTopBar({
                                     <>
                                         <div className="fixed inset-0 z-9998" onClick={() => setShowEmojiDropdown(false)} />
                                         <div
-                                            className="fixed z-9999 grid grid-cols-4 gap-1 p-2 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-[160px]"
+                                            className="fixed z-9999 grid grid-cols-4 gap-1 p-2 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-40"
                                             style={{ top: emojiDropdownPos.top, left: emojiDropdownPos.left, transform: "translateX(-50%)" }}
                                         >
                                             {EMOJIS.map((e) => (
@@ -964,7 +967,7 @@ export default function DemoTopBar({
                         onClick={async () => {
                             const { isConfirmed } = await Swal.fire({
                                 title: "Exit Demo Session?",
-                                text: "You will be redirected back to the TutorArc website.",
+                                text: "You will be redirected back to the WhiteBoardZone website.",
                                 icon: "question",
                                 showCancelButton: true,
                                 confirmButtonColor: "#f97316",

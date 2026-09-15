@@ -746,7 +746,7 @@ export default function ScreenRecorderButton({
           {showRecsDropdown && createPortal(
             <div
               ref={recsMenuRef}
-              className="fixed z-[9999] w-64 p-2 rounded-[5px] bg-white dark:bg-slate-950 border border-border shadow-2xl animate-in fade-in slide-in-from-top-1 duration-150"
+              className="fixed z-9999 w-64 p-2 rounded-[5px] bg-white dark:bg-slate-950 border border-border shadow-2xl animate-in fade-in slide-in-from-top-1 duration-150"
               style={{ top: recsDropdownPos.top, left: recsDropdownPos.left }}
             >
               <div className="px-2 py-1.5 border-b border-border/50 mb-1 flex items-center justify-between">

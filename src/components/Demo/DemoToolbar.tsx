@@ -116,7 +116,7 @@ export default function DemoToolbar({
                                         ref={colorButtonRef}
                                         type="button"
                                         onClick={() => toggleColorPicker()}
-                                        className="p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 flex items-center justify-center transition-all duration-300 cursor-pointer shadow-sm"
+                                        className="p-1.5 w-7.5 h-7.5 border rounded-[5px] border-primary/40 flex items-center justify-center transition-all duration-300 cursor-pointer shadow-sm"
                                         style={{
                                             backgroundColor: color,
                                             color: getContrastColor(color)
@@ -151,7 +151,7 @@ export default function DemoToolbar({
                             type="button"
                             onClick={() => setTool("pen:pen")}
                             className={cn(
-                                "p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
+                                "p-1.5 w-7.5 h-7.5 border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
                                 tool === "pen:pen" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent"
                             )}
                             title="Pen"
@@ -164,7 +164,7 @@ export default function DemoToolbar({
                             type="button"
                             onClick={() => setTool("pen:highlighter")}
                             className={cn(
-                                "p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
+                                "p-1.5 w-7.5 h-7.5 border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
                                 tool === "pen:highlighter" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent"
                             )}
                             title="Highlighter"
@@ -177,7 +177,7 @@ export default function DemoToolbar({
                             type="button"
                             onClick={() => setTool("line")}
                             className={cn(
-                                "p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
+                                "p-1.5 w-7.5 h-7.5 border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
                                 tool === "line" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent"
                             )}
                             title="Line"
@@ -194,7 +194,7 @@ export default function DemoToolbar({
                                         key={size}
                                         type="button"
                                         onClick={() => setBrushSize(size)}
-                                        className={cn("flex items-center justify-center relative group border rounded-[5px] border-primary/40 transition-all duration-300 p-1.5 py-0.5 shadow-sm w-[30px] h-[20px]", brushSize === size ? "bg-primary text-primary-foreground" : "hover:bg-accent text-muted-foreground hover:text-foreground")}
+                                        className={cn("flex items-center justify-center relative group border rounded-[5px] border-primary/40 transition-all duration-300 p-1.5 py-0.5 shadow-sm w-7.5 h-5", brushSize === size ? "bg-primary text-primary-foreground" : "hover:bg-accent text-muted-foreground hover:text-foreground")}
                                         title={`Size ${size}`}
                                     >
                                         <div className="w-full rounded-[2px] bg-current transition-all" style={{ height: `${Math.max(1.5, size / 2.5)}px` }} />
@@ -207,7 +207,7 @@ export default function DemoToolbar({
                             type="button"
                             onClick={() => setTool("eraser")}
                             className={cn(
-                                "p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
+                                "p-1.5 w-7.5 h-7.5 border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
                                 tool === "eraser" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent"
                             )}
                             title="Object Eraser"
@@ -220,7 +220,7 @@ export default function DemoToolbar({
                             type="button"
                             onClick={() => setTool("partial-eraser")}
                             className={cn(
-                                "p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
+                                "p-1.5 w-7.5 h-7.5 border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center",
                                 tool === "partial-eraser" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent"
                             )}
                             title="Selective Eraser"
@@ -231,11 +231,11 @@ export default function DemoToolbar({
                                 <path d="m5 11 9 9" />
                             </svg>
                         </button>
-                        <button type="button" onClick={() => setTool("text")} className={cn("p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center", tool === "text" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Text Tool">
+                        <button type="button" onClick={() => setTool("text")} className={cn("p-1.5 w-7.5 h-7.5 border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center", tool === "text" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Text Tool">
                             <Type size={18} />
                         </button>
 
-                        <button type="button" onClick={() => setTool("laser")} className={cn("p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center", tool === "laser" ? "bg-red-500 text-white shadow-lg shadow-red-500/30" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Laser Pointer">
+                        <button type="button" onClick={() => setTool("laser")} className={cn("p-1.5 w-7.5 h-7.5 border rounded-[5px] border-primary/40 transition-all duration-300 shadow-sm flex items-center justify-center", tool === "laser" ? "bg-red-500 text-white shadow-lg shadow-red-500/30" : "text-muted-foreground hover:text-foreground hover:bg-accent")} title="Laser Pointer">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.8" />
                                 <path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" opacity="0.5" />
@@ -260,7 +260,7 @@ export default function DemoToolbar({
                                     })
                                     if (isConfirmed) onClearCanvas()
                                 }}
-                                className="p-1.5 w-[30px] h-[30px] border rounded-[5px] border-primary/40 transition-all duration-300 text-red-500 hover:text-red-400 hover:bg-red-500/10 shadow-sm flex items-center justify-center"
+                                className="p-1.5 w-7.5 h-7.5 border rounded-[5px] border-primary/40 transition-all duration-300 text-red-500 hover:text-red-400 hover:bg-red-500/10 shadow-sm flex items-center justify-center"
                                 title="Clear Canvas (All Users)"
                             >
                                 <Trash2 size={18} />

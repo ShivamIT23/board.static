@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { MessageCircle, Minimize2, User2, Settings, MessageSquareOff, FileText, FileX, BarChart2, Video, Paperclip, Send, ExternalLink, X } from "lucide-react";
+import { MessageCircle, Minimize2, User2, Settings, MessageSquareOff, FileText, FileX, BarChart2, Video, Paperclip, Send, ExternalLink, X, Sparkles, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import DemoStream from "./DemoStream";
 import DemoUserList from "./DemoUserList";
+import TeacherAiModal from "../Chat/TeacherAiModal";
 import type { ChatMessage, Attachment } from "@/types/chat";
 import { toast } from "sonner";
 import Image from "next/image";
@@ -45,6 +46,7 @@ export default function DemoChatRoom({
     });
 
     const [inputText, setInputText] = useState("");
+    const [selectedAiMessage, setSelectedAiMessage] = useState<ChatMessage | null>(null);
     const [pendingAttachment, setPendingAttachment] = useState<Attachment | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -393,9 +395,9 @@ export default function DemoChatRoom({
                     )}
 
                     {/* Messages Body */}
-                    <div className="flex-1 overflow-y-auto p-3 flex flex-col justify-start">
+                    <div className="flex-1 overflow-y-auto p-0 flex flex-col space-y-4 bg-muted/30 relative no-scrollbar">
                         {messages.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center gap-3 my-auto text-muted-foreground/40 select-none">
+                            <div className="flex flex-col items-center justify-center gap-3 my-auto text-muted-foreground/40 select-none py-12">
                                 <div className="w-16 h-16 rounded-full border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
                                     <MessageCircle className="w-8 h-8 opacity-40" />
                                 </div>
@@ -404,63 +406,120 @@ export default function DemoChatRoom({
                                 </span>
                             </div>
                         ) : (
-                            <div className="space-y-3 w-full">
+                            <div className="space-y-4 w-full">
                                 {messages.map((msg) => {
-                                    const isMe = msg.user.name === userName;
+                                    const isMe = msg.user.name === userName || msg.user.id === "demo-teacher";
+                                    const timeStr = msg.timestamp
+                                        ? new Date(msg.timestamp).toLocaleTimeString([], {
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            second: '2-digit'
+                                        })
+                                        : "";
+
                                     return (
                                         <div
                                             key={msg.id}
                                             className={cn(
-                                                "p-2.5 rounded-xl text-xs max-w-[92%] space-y-1.5 shadow-sm transition-all",
-                                                isMe
-                                                    ? "ml-auto bg-primary text-primary-foreground rounded-br-none"
-                                                    : "mr-auto bg-muted/60 text-foreground border border-border/40 rounded-bl-none"
+                                                "flex flex-col w-full",
+                                                isMe ? "ml-auto items-end" : "mr-auto items-start"
                                             )}
                                         >
-                                            <div className="flex items-center justify-between gap-2 text-[10px] opacity-75">
-                                                <span className="font-bold flex items-center gap-1">
-                                                    {msg.user.name}
-                                                    {msg.user.isTeacher && <span className="text-[9px] bg-primary-foreground/20 px-1 rounded">Host</span>}
-                                                </span>
-                                                <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                                            </div>
-
-                                            {/* Attachment Preview Card */}
-                                            {msg.attachments && msg.attachments.length > 0 && (
-                                                <div className="space-y-1.5 my-1">
-                                                    {msg.attachments.map((att) => (
-                                                        <div
-                                                            key={att.id}
-                                                            onClick={() => handleOpenAttachment(att)}
+                                            <div
+                                                className={cn(
+                                                    "overflow-hidden border-b border-border w-full",
+                                                    isMe
+                                                        ? "border-r-2 border-r-primary"
+                                                        : msg.user.isTeacher
+                                                            ? "border-l-2 border-l-amber-500"
+                                                            : "border-l-2 border-l-emerald-500"
+                                                )}
+                                            >
+                                                <div
+                                                    className={cn(
+                                                        "flex items-center justify-between px-3 py-2 border-b border-border/50",
+                                                        isMe
+                                                            ? "bg-primary/10"
+                                                            : msg.user.isTeacher
+                                                                ? "bg-amber-500/10"
+                                                                : "bg-emerald-500/10"
+                                                    )}
+                                                >
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <span
                                                             className={cn(
-                                                                "flex items-center gap-2 p-2 rounded-lg border transition-all cursor-pointer",
+                                                                "text-[12px] font-extrabold tracking-wide truncate",
                                                                 isMe
-                                                                    ? "bg-primary-foreground/10 border-primary-foreground/20 hover:bg-primary-foreground/20"
-                                                                    : "bg-background/80 border-border hover:bg-background"
+                                                                    ? "text-primary"
+                                                                    : msg.user.isTeacher
+                                                                        ? "text-amber-500"
+                                                                        : "text-emerald-600 dark:text-emerald-400"
                                                             )}
                                                         >
-                                                            {att.type === "image" ? (
-                                                                <div className="relative w-10 h-10 rounded overflow-hidden shrink-0 border border-black/10">
-                                                                    <Image src={att.url} alt={att.name} fill className="object-cover" />
-                                                                </div>
-                                                            ) : (
-                                                                <div className="w-8 h-8 rounded bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                                                                    <FileText size={18} />
-                                                                </div>
-                                                            )}
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className="text-[11px] font-bold truncate">{att.name}</p>
-                                                                <p className="text-[9px] opacity-70">
-                                                                    {att.size ? `${(att.size / 1024).toFixed(1)} KB` : "Document"}
-                                                                </p>
-                                                            </div>
-                                                            <ExternalLink size={14} className="shrink-0 opacity-50" />
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
+                                                            {msg.user.name}{!msg.user.isTeacher && msg.user.visitorId ? `_${msg.user.visitorId}` : ""}{isMe ? " (You)" : msg.user.isTeacher ? " (Instructor)" : ""} says :
+                                                        </span>
+                                                        {msg.recipient === "teacher" && (
+                                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
+                                                                <Lock size={9} /> Private to Teacher
+                                                            </span>
+                                                        )}
+                                                    </div>
 
-                                            {msg.message && <p className="leading-relaxed break-words">{msg.message}</p>}
+                                                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                                                        {!isMe && msg.message && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setSelectedAiMessage(msg)}
+                                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-linear-to-r from-purple-500/15 to-indigo-500/15 hover:from-purple-500/25 hover:to-indigo-500/25 text-purple-600 dark:text-purple-400 border border-purple-500/30 hover:border-purple-500/50 shadow-sm transition-all active:scale-95 cursor-pointer"
+                                                                title="Get AI Hint & Answer"
+                                                            >
+                                                                <Sparkles size={11} className="text-purple-500 shrink-0" />
+                                                                <span>AI</span>
+                                                            </button>
+                                                        )}
+                                                        <span className="text-[10px] text-muted-foreground font-semibold">{timeStr}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div
+                                                    className={cn(
+                                                        "px-4 py-3 text-sm leading-relaxed text-foreground bg-card",
+                                                        isMe ? "text-right" : "text-left"
+                                                    )}
+                                                >
+                                                    {/* Attachment Preview Card */}
+                                                    {msg.attachments && msg.attachments.length > 0 && (
+                                                        <div className="space-y-1.5 my-1 text-left">
+                                                            {msg.attachments.map((att) => (
+                                                                <div
+                                                                    key={att.id}
+                                                                    onClick={() => handleOpenAttachment(att)}
+                                                                    className="flex items-center gap-2 p-2 rounded-lg border border-border bg-background/80 hover:bg-background transition-all cursor-pointer"
+                                                                >
+                                                                    {att.type === "image" ? (
+                                                                        <div className="relative w-10 h-10 rounded overflow-hidden shrink-0 border border-black/10">
+                                                                            <Image src={att.url} alt={att.name} fill className="object-cover" />
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="w-8 h-8 rounded bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                                                            <FileText size={18} />
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="text-[11px] font-bold truncate">{att.name}</p>
+                                                                        <p className="text-[9px] opacity-70">
+                                                                            {att.size ? `${(att.size / 1024).toFixed(1)} KB` : "Document"}
+                                                                        </p>
+                                                                    </div>
+                                                                    <ExternalLink size={14} className="shrink-0 opacity-50" />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
+                                                    {msg.message && <p className="leading-relaxed wrap-break-word">{msg.message}</p>}
+                                                </div>
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -573,6 +632,18 @@ export default function DemoChatRoom({
                         </div>
                     </div>
                 </div>
+            )}
+            {/* Teacher AI Modal */}
+            {selectedAiMessage && (
+                <TeacherAiModal
+                    isOpen={!!selectedAiMessage}
+                    onClose={() => setSelectedAiMessage(null)}
+                    message={selectedAiMessage}
+                    onInsertIntoChat={(text) => {
+                        setInputText((prev) => (prev ? `${prev} ${text}` : text));
+                        setSelectedAiMessage(null);
+                    }}
+                />
             )}
         </aside>
     </>

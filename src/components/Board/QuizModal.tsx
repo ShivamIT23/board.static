@@ -271,7 +271,7 @@ export default function QuizModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
-            <div className="relative w-[540px] max-w-[94vw] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] transition-all duration-300">
+            <div className="relative w-135 max-w-[94vw] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] transition-all duration-300">
                 
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/40 shrink-0">
@@ -326,7 +326,7 @@ export default function QuizModal({
                                                 A quiz with {fetchedQuestions.length} questions is ready to launch.
                                             </div>
                                             
-                                            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                                            <div className="space-y-3 max-h-75 overflow-y-auto pr-1">
                                                 {fetchedQuestions.map((q, idx) => (
                                                     <div key={q.id || idx} className="p-3 rounded-lg bg-muted/40 border border-border space-y-2">
                                                         <h4 className="font-bold text-xs text-foreground">{idx + 1}. {q.question}</h4>
@@ -456,7 +456,7 @@ export default function QuizModal({
                                     )}
 
                                     {/* Questions Results */}
-                                    <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1">
+                                    <div className="space-y-4 max-h-87.5 overflow-y-auto pr-1">
                                         {currentQuiz.questions.map((q, idx) => {
                                             const totalVotesForQ = q.options.reduce((sum, o) => sum + o.votes.length, 0)
 
@@ -583,7 +583,7 @@ export default function QuizModal({
                                         <span>Answer all questions below and submit. Double-check your choices!</span>
                                     </div>
 
-                                    <div className="space-y-5 max-h-[380px] overflow-y-auto pr-1">
+                                    <div className="space-y-5 max-h-95 overflow-y-auto pr-1">
                                         {currentQuiz.questions.map((q, idx) => (
                                             <div key={q.id} className="p-4 rounded-lg bg-muted/40 border border-border space-y-3">
                                                 <h4 className="font-bold text-sm text-foreground">{idx + 1}. {q.question}</h4>
@@ -655,7 +655,7 @@ export default function QuizModal({
                                     </div>
 
                                     {/* Live question-by-question breakdown */}
-                                    <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1">
+                                    <div className="space-y-4 max-h-87.5 overflow-y-auto pr-1">
                                         {currentQuiz.questions.map((q, idx) => {
                                             const studentVotedOpt = q.options.find(opt => opt.votes.includes(studentVoterId))
                                             const studentVotedIdx = studentVotedOpt ? q.options.indexOf(studentVotedOpt) : -1
@@ -734,7 +734,7 @@ export default function QuizModal({
                                     )}
 
                                     {/* Questions and correct answers review */}
-                                    <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+                                    <div className="space-y-4 max-h-75 overflow-y-auto pr-1">
                                         {currentQuiz.questions.map((q, idx) => {
                                             const totalVotesForQ = q.options.reduce((sum, o) => sum + o.votes.length, 0)
                                             // Find option voted by student
@@ -794,7 +794,7 @@ export default function QuizModal({
             {/* Results Overlay Panel */}
             {showResults && sharedToken && (
                 <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
-                    <div className="relative w-[540px] max-w-[94vw] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                    <div className="relative w-135 max-w-[94vw] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
                         {/* Results Header */}
                         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/40 shrink-0">
                             <div className="flex items-center gap-3">

@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { MessageCircle, Download, FileText, ChevronDown, Lock, BarChart2 } from "lucide-react"
+import { MessageCircle, Download, FileText, ChevronDown, Lock, BarChart2, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ChatMessage } from "@/types/chat"
 
@@ -16,6 +16,7 @@ interface MessageListProps {
     canLoadMore: boolean
     resolveAttachmentUrl: (url: string) => string
     role: "teacher" | "student"
+    onAiHelp?: (msg: ChatMessage) => void
 }
 
 export default function MessageList({
@@ -28,7 +29,8 @@ export default function MessageList({
     isLoadingMore,
     canLoadMore,
     resolveAttachmentUrl,
-    role
+    role,
+    onAiHelp
 }: MessageListProps) {
     return (
         <div
@@ -101,7 +103,20 @@ export default function MessageList({
                                             </span>
                                         )}
                                     </div>
-                                    <span className="text-[10px] text-muted-foreground font-semibold shrink-0 ml-4">{timeStr}</span>
+                                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                                        {role === "teacher" && !msg.user.isTeacher && msg.message && onAiHelp && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onAiHelp(msg)}
+                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-linear-to-r from-purple-500/15 to-indigo-500/15 hover:from-purple-500/25 hover:to-indigo-500/25 text-purple-600 dark:text-purple-400 border border-purple-500/30 hover:border-purple-500/50 shadow-sm transition-all active:scale-95 cursor-pointer"
+                                                title="Get AI Hint & Answer"
+                                            >
+                                                <Sparkles size={11} className="text-purple-500 shrink-0" />
+                                                <span>AI</span>
+                                            </button>
+                                        )}
+                                        <span className="text-[10px] text-muted-foreground font-semibold">{timeStr}</span>
+                                    </div>
                                 </div>
                                 <div className={cn(
                                     "px-4 py-3 text-sm leading-relaxed text-foreground bg-card",
@@ -179,7 +194,7 @@ export default function MessageList({
                                                             <img
                                                                 src={resolveAttachmentUrl(att.url)}
                                                                 alt={att.name}
-                                                                className="max-w-full max-h-[160px] h-auto rounded-[3px] cursor-zoom-in hover:opacity-95 transition-opacity"
+                                                                className="max-w-full max-h-40 h-auto rounded-[3px] cursor-zoom-in hover:opacity-95 transition-opacity"
                                                                 onClick={() => window.open(resolveAttachmentUrl(att.url), '_blank')}
                                                             />
                                                             <a

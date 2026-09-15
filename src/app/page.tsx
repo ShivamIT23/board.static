@@ -2,9 +2,9 @@ import { Metadata } from "next";
 import HomePageClient from "@/components/Home/HomePageClient";
 
 export const metadata: Metadata = {
-  title: "Online Teaching Board & Virtual Classroom | TutorArc Board",
+  title: "Online Teaching Board & Virtual Classroom | WhiteBoardZone Board",
   description:
-    "Teach online with TutorArc Board, an interactive virtual classroom and digital whiteboard with live chat, file sharing, drawing tools, math symbols, graphs, audio, video and more.",
+    "Teach online with WhiteBoardZone Board, an interactive virtual classroom and digital whiteboard with live chat, file sharing, drawing tools, math symbols, graphs, audio, video and more.",
   keywords: [
     "online teaching board",
     "online whiteboard for teachers",
@@ -22,18 +22,18 @@ export const metadata: Metadata = {
     "digital whiteboard for virtual classrooms",
     "online whiteboard for math teachers",
     "online teaching platform with live chat",
-    "TutorArc Board"
+    "WhiteBoardZone Board"
   ],
-  metadataBase: new URL("https://board.tutorarc.cloud"),
+  metadataBase: new URL("https://board.v"),
   alternates: {
-    canonical: "https://board.tutorarc.cloud"
+    canonical: "https://board.v"
   },
   openGraph: {
-    title: "Online Teaching Board & Virtual Classroom | TutorArc Board",
+    title: "Online Teaching Board & Virtual Classroom | WhiteBoardZone Board",
     description:
-      "Teach online with TutorArc Board, an interactive virtual classroom and digital whiteboard with live chat, file sharing, drawing tools, math symbols, graphs, audio, video and more.",
-    url: "https://board.tutorarc.cloud",
-    siteName: "TutorArc Board",
+      "Teach online with WhiteBoardZone Board, an interactive virtual classroom and digital whiteboard with live chat, file sharing, drawing tools, math symbols, graphs, audio, video and more.",
+    url: "https://board.v",
+    siteName: "WhiteBoardZone Board",
     type: "website",
     locale: "en_US",
     images: [
@@ -41,15 +41,15 @@ export const metadata: Metadata = {
         url: "/home1.png",
         width: 1200,
         height: 800,
-        alt: "TutorArc Board - Interactive Online Teaching Board and Virtual Classroom"
+        alt: "WhiteBoardZone Board - Interactive Online Teaching Board and Virtual Classroom"
       }
     ]
   },
   twitter: {
     card: "summary_large_image",
-    title: "Online Teaching Board & Virtual Classroom | TutorArc Board",
+    title: "Online Teaching Board & Virtual Classroom | WhiteBoardZone Board",
     description:
-      "Teach online with TutorArc Board, an interactive virtual classroom and digital whiteboard with live chat, file sharing, drawing tools, math symbols, graphs, audio, video and more.",
+      "Teach online with WhiteBoardZone Board, an interactive virtual classroom and digital whiteboard with live chat, file sharing, drawing tools, math symbols, graphs, audio, video and more.",
     images: ["/home1.png"]
   },
   robots: {
@@ -71,7 +71,7 @@ export default function RootPage() {
     "@graph": [
       {
         "@type": "SoftwareApplication",
-        "name": "TutorArc Board",
+        "name": "WhiteBoardZone Board",
         "applicationCategory": "EducationalApplication",
         "operatingSystem": "Web Browser",
         "offers": {
@@ -80,12 +80,12 @@ export default function RootPage() {
           "priceCurrency": "USD"
         },
         "description":
-          "TutorArc Board is an interactive online teaching board and virtual classroom for teachers, featuring collaborative vector whiteboards, precision math and graphing tools, live chat, file sharing, and teacher audio and video streaming.",
-        "url": "https://board.tutorarc.cloud",
+          "WhiteBoardZone Board is an interactive online teaching board and virtual classroom for teachers, featuring collaborative vector whiteboards, precision math and graphing tools, live chat, file sharing, and teacher audio and video streaming.",
+        "url": "https://board.v",
         "publisher": {
           "@type": "Organization",
-          "name": "TutorArc Cloud",
-          "url": "https://tutorarc.cloud"
+          "name": "WhiteBoardZone",
+          "url": "https://v"
         },
         "featureList": [
           "Interactive online whiteboard",
@@ -103,18 +103,18 @@ export default function RootPage() {
         "mainEntity": [
           {
             "@type": "Question",
-            "name": "What is TutorArc Board?",
+            "name": "What is WhiteBoardZone Board?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "TutorArc Board is an interactive online teaching board and virtual classroom platform built for educators, tutors, and schools. It combines a real-time collaborative digital whiteboard, high-precision math and graphing tools, live classroom chat, file sharing, and teacher live audio and video streaming in a single browser-based application."
+              "text": "WhiteBoardZone Board is an interactive online teaching board and virtual classroom platform built for educators, tutors, and schools. It combines a real-time collaborative digital whiteboard, high-precision math and graphing tools, live classroom chat, file sharing, and teacher live audio and video streaming in a single browser-based application."
             }
           },
           {
             "@type": "Question",
-            "name": "How does TutorArc Board support math, science, and STEM teachers?",
+            "name": "How does WhiteBoardZone Board support math, science, and STEM teachers?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "TutorArc Board includes specialized tools for STEM instruction, such as customizable coordinate graphing planes, mathematical symbols and notation, directional arrows, geometric shapes (rectangles, ellipses, triangles, parallelograms, stars), and a fluid vector drawing pen and highlighter."
+              "text": "WhiteBoardZone Board includes specialized tools for STEM instruction, such as customizable coordinate graphing planes, mathematical symbols and notation, directional arrows, geometric shapes (rectangles, ellipses, triangles, parallelograms, stars), and a fluid vector drawing pen and highlighter."
             }
           },
           {
@@ -122,7 +122,7 @@ export default function RootPage() {
             "name": "Can teachers control student permissions during class?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes. TutorArc Board features robust role-based access control. Teachers can toggle drawing permissions per student or globally, restrict or enable live chat, approve student admission, lock the student canvas view to follow the teacher, and manage audio/video interactions."
+              "text": "Yes. WhiteBoardZone Board features robust role-based access control. Teachers can toggle drawing permissions per student or globally, restrict or enable live chat, approve student admission, lock the student canvas view to follow the teacher, and manage audio/video interactions."
             }
           },
           {
@@ -130,7 +130,7 @@ export default function RootPage() {
             "name": "How do audio, video, and screen sharing work?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "TutorArc Board features integrated teacher-only live video and audio broadcasting powered by WebRTC (LiveKit). This one-way video model ensures students can see and hear the instructor with ultra-low latency while keeping the whiteboard front and center without bandwidth bottlenecks."
+              "text": "WhiteBoardZone Board features integrated teacher-only live video and audio broadcasting powered by WebRTC (LiveKit). This one-way video model ensures students can see and hear the instructor with ultra-low latency while keeping the whiteboard front and center without bandwidth bottlenecks."
             }
           },
           {
