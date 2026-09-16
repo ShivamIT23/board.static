@@ -486,6 +486,7 @@ export const quizSubmissions = mysqlTable('tb_quiz_submissions', {
   id: int('id').autoincrement().primaryKey(),
   quizLinkId: int('quiz_link_id').notNull(),
   studentName: varchar('student_name', { length: 255 }).notNull(),
+  phoneNumber: varchar('phone_number', { length: 50 }),
   answers: text('answers').notNull(), // JSON representation of chosen options
   score: int('score').notNull(),
   totalQuestions: int('total_questions').notNull(),

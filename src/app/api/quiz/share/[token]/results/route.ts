@@ -61,6 +61,7 @@ export async function GET(
         return {
           id: s.id,
           studentName: s.studentName,
+          phoneNumber: s.phoneNumber,
           answers: parsedAnswers,
           score: s.score,
           totalQuestions: s.totalQuestions,

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useCallback, useState } from "react"
 import { Canvas, PencilBrush, Path, FabricImage, IText, Line, FabricObject, Rect, Ellipse, Polygon, Group } from "fabric"
-import type { BoardFabricObject, BoardIText, WhiteboardProps, ShapePayload,  ImagePayload, StoredBoardObject } from "@/types/board"
+import type { BoardFabricObject, BoardIText, WhiteboardProps, ShapePayload, ImagePayload, StoredBoardObject } from "@/types/board"
 
 import { cn } from "@/lib/utils"
 import { PENCIL_CURSOR, ERASER_CURSOR, TEXT_CURSOR } from "@/lib/cursors"
@@ -660,13 +660,14 @@ function DemoWhiteboard({ sessionId, role, tool, color, boardColor, bgImages, br
                         const val = data.shapeType.split(":")[1]
                         const fontSize = Math.max(12, h)
                         const isEmoji = data.shapeType.startsWith("emoji:")
+                        const isCheck = val === "✓" || val === "✔"
                         const isThinSymbol = val === "[ ]" || val === "| |"
                         return new IText(val, {
                             ...common,
                             fontSize,
-                            fill: isEmoji ? "black" : stroke,
+                            fill: isEmoji ? (isCheck ? "#16a34a" : "black") : stroke,
                             fontFamily: isThinSymbol ? "'Courier New', monospace" : "Inter, sans-serif",
-                            fontWeight: isThinSymbol ? 100 : "normal",
+                            fontWeight: isThinSymbol ? 100 : (isCheck ? "bold" : "normal"),
                             stroke: isEmoji ? undefined : (isThinSymbol ? undefined : stroke),
                             strokeWidth: isEmoji ? 0 : (isThinSymbol ? 0 : strokeWidth * 0.1),
                             originX: "left",
@@ -879,7 +880,7 @@ function DemoWhiteboard({ sessionId, role, tool, color, boardColor, bgImages, br
 
                 const shapeType = toolRef.current
                 const stroke = colorRef.current
-                const fill = shapeType.startsWith("f-") ? stroke : "transparent"
+                const fill = shapeType.startsWith("f-") ? stroke : (shapeType === "emoji:✓" || shapeType === "emoji:✔" ? "#16a34a" : "transparent")
 
                 const previewData: ShapePayload & { dragDirX?: number; dragDirY?: number } = {
                     id: "preview",
@@ -999,7 +1000,7 @@ function DemoWhiteboard({ sessionId, role, tool, color, boardColor, bgImages, br
 
                 const shapeType = toolRef.current
                 const stroke = colorRef.current
-                const fill = shapeType.startsWith("f-") ? stroke : "transparent"
+                const fill = shapeType.startsWith("f-") ? stroke : (shapeType === "emoji:✓" || shapeType === "emoji:✔" ? "#16a34a" : "transparent")
 
                 const shapePayload: ShapePayload & { dragDirX?: number; dragDirY?: number } = {
                     id,

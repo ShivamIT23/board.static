@@ -84,6 +84,24 @@ function StudentQuizPageContent() {
   // Final Result state
   const [savedResult, setSavedResult] = useState<SavedResult | null>(null)
 
+  // Dynamically set document.title so PDF save filename is "WhiteBoardZone - Certificate of Attempt <name>"
+  useEffect(() => {
+    if (gameState === 'result' && savedResult?.studentName) {
+      const originalTitle = document.title
+      document.title = `WhiteBoardZone - Certificate of Attempt ${savedResult.studentName}`
+      return () => {
+        document.title = originalTitle
+      }
+    }
+  }, [gameState, savedResult])
+
+  const handlePrint = () => {
+    if (savedResult?.studentName) {
+      document.title = `WhiteBoardZone - Certificate of Attempt ${savedResult.studentName}`
+    }
+    window.print()
+  }
+
   // 1. Fetch Shared Quiz & Check LocalStorage
   useEffect(() => {
     if (!token) return
@@ -577,11 +595,11 @@ function StudentQuizPageContent() {
             </div>
 
             <div className="text-[10px] text-zinc-500 bg-zinc-950/30 px-3 py-1 rounded border border-zinc-850/60">
-              🔒 Score saved in localStorage. Re-taking this quiz link is disabled.
+              🔒 Score is saved. Re-taking this quiz is disabled.
             </div>
 
             <button
-              onClick={() => window.print()}
+              onClick={handlePrint}
               className="print:hidden inline-flex items-center gap-2 px-5 py-2.5 rounded-[4px] bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold transition-all shadow-lg shadow-indigo-500/20 cursor-pointer mt-2"
             >
               <Printer size={16} /> Print Results

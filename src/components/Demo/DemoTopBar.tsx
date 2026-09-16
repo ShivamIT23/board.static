@@ -88,23 +88,77 @@ const MATH_SYMBOLS = [
     { id: "approx", label: "≈", value: "≈" },
     { id: "ge", label: "≥", value: "≥" },
     { id: "le", label: "≤", value: "≤" },
-    { id: "matrix", label: "[ ]", value: "[ ]" },
-    { id: "determinant", label: "| |", value: "| |" },
+    { id: "matrix", label: "[  ]", value: "[  ]" },
+    { id: "determinant", label: "|  |", value: "|  |" },
 ] as const
 
 const EMOJIS = [
-    { id: "smile", label: "Smile", value: "😊" },
-    { id: "heart", label: "Heart", value: "❤️" },
-    { id: "thumb", label: "Thumbs Up", value: "👍" },
-    { id: "clap", label: "Clap", value: "👏" },
-    { id: "star-eye", label: "Star Eye", value: "🤩" },
-    { id: "fire", label: "Fire", value: "🔥" },
-    { id: "rocket", label: "Rocket", value: "🚀" },
-    { id: "check", label: "Check", value: "✅" },
-    { id: "warn", label: "Warning", value: "⚠️" },
-    { id: "idea", label: "Idea", value: "💡" },
-    { id: "party", label: "Party", value: "🎉" },
-    { id: "cry", label: "Cry", value: "😭" },
+  { id: "smile", label: "Smile", value: "😊" },
+  { id: "grin", label: "Grin", value: "😀" },
+  { id: "joy", label: "Joy", value: "😂" },
+  { id: "laugh", label: "Laugh", value: "🤣" },
+  { id: "wink", label: "Wink", value: "😉" },
+  { id: "thinking", label: "Thinking", value: "🤔" },
+  { id: "mind-blown", label: "Mind Blown", value: "🤯" },
+  { id: "star-eye", label: "Star Eyes", value: "🤩" },
+  { id: "cool", label: "Cool", value: "😎" },
+  { id: "party", label: "Party", value: "🥳" },
+  { id: "relieved", label: "Relieved", value: "😌" },
+  { id: "neutral", label: "Neutral", value: "😐" },
+  { id: "confused", label: "Confused", value: "😕" },
+  { id: "surprised", label: "Surprised", value: "😮" },
+  { id: "shocked", label: "Shocked", value: "😲" },
+  { id: "cry", label: "Cry", value: "😭" },
+  { id: "sad", label: "Sad", value: "😢" },
+  { id: "angry", label: "Angry", value: "😡" },
+  { id: "sweat", label: "Nervous", value: "😅" },
+  { id: "thumb-up", label: "Thumbs Up", value: "👍" },
+  { id: "thumb-down", label: "Thumbs Down", value: "👎" },
+  { id: "clap", label: "Clap", value: "👏" },
+  { id: "pray", label: "Please / Thanks", value: "🙏" },
+  { id: "raise-hand", label: "Raise Hand", value: "🙋" },
+  { id: "ok", label: "OK", value: "👌" },
+  { id: "muscle", label: "Strong", value: "💪" },
+  { id: "wave", label: "Wave", value: "👋" },
+  { id: "point-up", label: "Point Up", value: "☝️" },
+  { id: "eyes", label: "Eyes", value: "👀" },
+  { id: "heart-hands", label: "Heart Hands", value: "🫶" },
+  { id: "sparkles", label: "Sparkles", value: "✨" },
+  { id: "fire", label: "Fire", value: "🔥" },
+  { id: "rocket", label: "Rocket", value: "🚀" },
+  { id: "star", label: "Star", value: "⭐" },
+  { id: "glowing-star", label: "Glowing Star", value: "🌟" },
+  { id: "100", label: "100", value: "💯" },
+  { id: "check", label: "Correct", value: "✓" },
+  { id: "cross", label: "Wrong", value: "❌" },
+  { id: "question", label: "Question", value: "❓" },
+  { id: "exclamation", label: "Important", value: "❗" },
+  { id: "warn", label: "Warning", value: "⚠️" },
+  { id: "idea", label: "Idea", value: "💡" },
+  { id: "bulb", label: "Bright Idea", value: "🔆" },
+  { id: "book", label: "Book", value: "📖" },
+  { id: "pencil", label: "Pencil", value: "✏️" },
+  { id: "memo", label: "Note", value: "📝" },
+  { id: "graduation", label: "Graduation", value: "🎓" },
+  { id: "teacher", label: "Teacher", value: "👨‍🏫" },
+  { id: "student", label: "Student", value: "🧑‍🎓" },
+  { id: "brain", label: "Learning", value: "🧠" },
+  { id: "target", label: "Goal", value: "🎯" },
+  { id: "trophy", label: "Achievement", value: "🏆" },
+  { id: "medal", label: "Medal", value: "🏅" },
+  { id: "party-popper", label: "Celebrate", value: "🎉" },
+  { id: "confetti", label: "Confetti", value: "🎊" },
+  { id: "bell", label: "Reminder", value: "🔔" },
+  { id: "clock", label: "Time", value: "⏰" },
+  { id: "eyes-star", label: "Amazing", value: "🤩" },
+  { id: "handshake", label: "Agreement", value: "🤝" },
+  { id: "checkmark", label: "Done", value: "☑️" },
+  { id: "pin", label: "Pinned", value: "📌" },
+  { id: "bookmark", label: "Bookmark", value: "🔖" },
+  { id: "question-thought", label: "Need Help", value: "🙋‍♂️" },
+  { id: "sleep", label: "Tired", value: "😴" },
+  { id: "hot", label: "Hot Topic", value: "🥵" },
+  { id: "cold", label: "Cold", value: "🥶" },
 ] as const
 
 type GraphToolId = typeof GRAPH_TOOLS[number]["id"]
@@ -760,36 +814,50 @@ export default function DemoTopBar({
                                     onClick={() => toggleEmojiDropdown()}
                                     className={cn(
                                         "w-full h-full flex items-center justify-center rounded-[5px] transition-all duration-300 border border-transparent cursor-pointer",
-                                        isEmojiTool ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted/30 hover:bg-accent hover:border-border/50"
+                                        isEmojiTool
+                                            ? selectedEmoji === "✓"
+                                                ? "bg-primary/80 dark:bg-primary/50 text-green-600 dark:text-green-400 shadow-lg shadow-green-500/10 font-bold"
+                                                : "bg-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
+                                            : "bg-muted/30 hover:bg-accent hover:border-border/50"
                                     )}
                                     title={`Choose emoji (Current: ${selectedEmoji})`}
                                 >
-                                    <span className="text-xl leading-none">{selectedEmoji}</span>
+                                    <span className={cn("text-xl leading-none", selectedEmoji === "✓" && !isEmojiTool && "text-green-600 font-bold")}>
+                                        {selectedEmoji}
+                                    </span>
                                 </button>
 
                                 {showEmojiDropdown && emojiDropdownPos && ReactDOM.createPortal(
                                     <>
                                         <div className="fixed inset-0 z-9998" onClick={() => setShowEmojiDropdown(false)} />
                                         <div
-                                            className="fixed z-9999 grid grid-cols-4 gap-1 p-2 bg-sidebar border border-border rounded-[8px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-40"
+                                            className="fixed z-9999 grid grid-cols-4 gap-1 p-2 bg-sidebar  max-h-[30vh] overflow-y-scroll border border-border rounded-[5px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 w-50"
                                             style={{ top: emojiDropdownPos.top, left: emojiDropdownPos.left, transform: "translateX(-50%)" }}
                                         >
-                                            {EMOJIS.map((e) => (
-                                                <button
-                                                    key={e.id}
-                                                    type="button"
-                                                    onClick={() => handleEmojiClick(e.value)}
-                                                    className={cn(
-                                                        "p-1.5 flex items-center justify-center text-lg rounded-[5px] transition-all duration-200 cursor-pointer",
-                                                        selectedEmoji === e.value
-                                                            ? "bg-primary text-primary-foreground"
-                                                            : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                                                    )}
-                                                    title={e.label}
-                                                >
-                                                    {e.value}
-                                                </button>
-                                            ))}
+                                            {EMOJIS.map((e) => {
+                                                const isSelected = selectedEmoji === e.value
+                                                const isCheck = e.id === 'check'
+                                                return (
+                                                    <button
+                                                        key={e.id}
+                                                        type="button"
+                                                        onClick={() => handleEmojiClick(e.value)}
+                                                        className={cn(
+                                                            "p-1.5 flex items-center justify-center text-lg rounded-[5px] transition-all duration-200 cursor-pointer",
+                                                            isCheck && "text-green-600 font-bold",
+                                                            isSelected
+                                                                ? isCheck
+                                                                    ? "bg-green-100 text-green-600 dark:bg-green-950/60 dark:text-green-400 ring-1 ring-green-500/50"
+                                                                    : "bg-primary text-primary-foreground"
+                                                                : !isCheck && "text-muted-foreground hover:text-foreground hover:bg-accent",
+                                                            isCheck && !isSelected && "hover:bg-accent"
+                                                        )}
+                                                        title={e.label}
+                                                    >
+                                                        {e.value}
+                                                    </button>
+                                                )
+                                            })}
                                         </div>
                                     </>,
                                     document.body

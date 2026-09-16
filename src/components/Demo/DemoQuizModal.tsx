@@ -9,6 +9,7 @@ import Swal from "sweetalert2"
 interface QuizSubmission {
     id: number
     studentName: string
+    phoneNumber?: string | null
     score: number
     totalQuestions: number
     timeTaken: number
@@ -856,7 +857,12 @@ export default function DemoQuizModal({
                                         const pct = sub.totalQuestions > 0 ? Math.round((sub.score / sub.totalQuestions) * 100) : 0
                                         return (
                                             <div key={sub.id} className="grid grid-cols-[1fr_60px_60px_70px] gap-2 px-3 py-2.5 rounded-lg bg-muted/30 border border-border/60 items-center">
-                                                <span className="text-xs font-bold text-foreground truncate">{sub.studentName}</span>
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className="text-xs font-bold text-foreground truncate">{sub.studentName}</span>
+                                                    {sub.phoneNumber && (
+                                                        <span className="text-[10px] text-muted-foreground font-mono truncate">{sub.phoneNumber}</span>
+                                                    )}
+                                                </div>
                                                 <span className={cn(
                                                     "text-xs font-extrabold text-center",
                                                     pct >= 70 ? "text-emerald-500" : pct >= 40 ? "text-amber-500" : "text-red-500"

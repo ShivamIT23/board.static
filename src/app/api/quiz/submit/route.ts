@@ -11,7 +11,7 @@ interface QuizQuestion {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { shareToken, studentName, answers, timeTaken } = body;
+    const { shareToken, studentName, phoneNumber, answers, timeTaken } = body;
 
     if (!shareToken || !studentName?.trim() || !answers) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -70,6 +70,7 @@ export async function POST(req: Request) {
     await db.insert(quizSubmissions).values({
       quizLinkId: quiz.id,
       studentName: studentName.trim(),
+      phoneNumber: phoneNumber ? String(phoneNumber).trim() : null,
       answers: JSON.stringify(answers),
       score,
       totalQuestions,

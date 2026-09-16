@@ -617,14 +617,15 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                         const val = data.shapeType.split(":")[1]
                         const fontSize = Math.max(12, h)
                         const isEmoji = data.shapeType.startsWith("emoji:")
+                        const isCheck = val === "✓" || val === "✔"
                         // Matrix [ ] and determinant | | should be as thin as possible
                         const isThinSymbol = val === "[ ]" || val === "| |"
                         return new IText(val, {
                             ...common,
                             fontSize,
-                            fill: isEmoji ? "black" : stroke,
+                            fill: isEmoji ? (isCheck ? "#16a34a" : "black") : stroke,
                             fontFamily: isThinSymbol ? "'Courier New', monospace" : "Inter, sans-serif",
-                            fontWeight: isThinSymbol ? 100 : "normal",
+                            fontWeight: isThinSymbol ? 100 : (isCheck ? "bold" : "normal"),
                             stroke: isEmoji ? undefined : (isThinSymbol ? undefined : stroke),
                             strokeWidth: isEmoji ? 0 : (isThinSymbol ? 0 : strokeWidth * 0.1),
                             originX: "left",
@@ -933,7 +934,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 const shapeType = toolRef.current
                 const isFilled = shapeType.startsWith("f-")
                 const stroke = colorRef.current
-                const fill = isFilled ? stroke : "transparent"
+                const fill = isFilled ? stroke : (shapeType === "emoji:✓" || shapeType === "emoji:✔" ? "#16a34a" : "transparent")
 
                 const previewData: ShapePayload & { dragDirX?: number; dragDirY?: number } = {
                     id: "preview",
@@ -1087,7 +1088,7 @@ function Whiteboard({ sessionId, role, tool, color, boardColor, bgImages, brushS
                 const shapeType = toolRef.current
                 const isFilled = shapeType.startsWith("f-")
                 const stroke = colorRef.current
-                const fill = isFilled ? stroke : "transparent"
+                const fill = isFilled ? stroke : (shapeType === "emoji:✓" || shapeType === "emoji:✔" ? "#16a34a" : "transparent")
 
                 const shapePayload: ShapePayload & { dragDirX?: number; dragDirY?: number } = {
                     id,
